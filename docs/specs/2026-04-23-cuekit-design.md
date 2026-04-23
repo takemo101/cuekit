@@ -70,6 +70,8 @@ Proposed fields:
 - adapter-assigned `task_id`
 - `agent_kind` — `pi | claude-code | opencode | ...`
 - `objective`
+- `model` — optional; runtime-specific name (e.g. `sonnet`). Omitted ⇒ runtime default
+- `adapter_options` — optional; adapter-specific options bag
 - `context`
 - `constraints`
 - `inputs`
