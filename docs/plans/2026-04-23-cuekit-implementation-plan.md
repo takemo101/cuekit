@@ -421,14 +421,14 @@ Responsibilities:
 
 - [ ] **Step 5.5: Implement the shared `PaneBackend`**
 
-Before touching a specific adapter, build the shared tmux pane backend:
+Before touching a specific adapter, build the shared tmux pane backend. v0 layout is flat — 1 cuekit task = 1 tmux session. The cuekit orchestration session is a SQLite-only concept.
 
-- `createSession(session_id)` — lazily creates the `cuekit-{session_id}` tmux session if missing
-- `spawnTask({ session_id, task_id, launchCommand, cwd })` — `tmux new-window` + `pipe-pane` to `<worktree>/.cuekit/tasks/<id>/transcript.txt`, returns `{ pane_id, attach_hint }`
-- `isAlive(pane_id)` — liveness check via `tmux list-panes`
-- `sendKeys(pane_id, message)` — wraps `tmux send-keys` for steering
-- `killTask(session_id, task_id)` — `tmux kill-window`
-- `computeAttachHint(session_id, task_id)` — returns `tmux attach-session -t cuekit-{session_id}:task-{id}`
+- `spawnTask({ task_id, launchCommand, cwd })` — `tmux new-session -d -s cuekit-task-{id} -c <cwd> "<launchCommand>"` + `pipe-pane` to `<worktree>/.cuekit/tasks/<id>/transcript.txt`, returns `{ pane_id, tmux_session_name, attach_hint }`
+- `isAlive(task_id)` — liveness check via `tmux has-session -t cuekit-task-{id}`
+- `sendKeys(task_id, message)` — two-step `tmux send-keys -t cuekit-task-{id} -l "<msg>"` → short delay → `tmux send-keys -t cuekit-task-{id} Enter`
+- `killTask(task_id)` — `tmux kill-session -t cuekit-task-{id}`
+- `computeAttachHint(task_id)` — returns `tmux attach-session -t cuekit-task-{id}`
+- `reconcile(persistedTasks[])` — on startup, cross-check persisted running tasks against `tmux list-sessions` and mark orphans `failed`
 - graceful error if `tmux` is not on `PATH` → structured `submit_failed`
 
 - [ ] **Step 6: Pick one adapter as the first end-to-end spike**

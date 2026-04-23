@@ -119,8 +119,12 @@ Submit a new cuekit task to a target adapter.
 
 ```json
 {
-  "agent_kind": "pi",
+  "agent_kind": "claude-code",
   "objective": "Implement retry logic in the API client",
+  "model": "sonnet",
+  "adapter_options": {
+    "max_turns": 50
+  },
   "context": "Focus on src/api/client.ts and related tests.",
   "constraints": [
     "Do not modify package.json",
@@ -155,6 +159,11 @@ Submit a new cuekit task to a target adapter.
 
 - `agent_kind`
 - `objective`
+
+### 5.3.1 Model and Adapter Options
+
+- `model` is optional. If omitted, the adapter launches the runtime without a model flag and the runtime uses its own default. If the adapter declares `supports_model_selection: false`, passing `model` returns `invalid_input`. If the adapter exposes `available_models`, the value is validated against the list at submit time.
+- `adapter_options` is optional and adapter-specific. The target adapter validates and translates the shape at submit time.
 
 ### 5.4 Output
 
@@ -217,7 +226,7 @@ Retrieve the current normalized state of a task.
   "started_at": "2026-04-23T10:00:05Z",
   "supports_steering": true,
   "supports_attach": true,
-  "attach_hint": "tmux attach-session -t cuekit-sess_42:task-task_123",
+  "attach_hint": "tmux attach-session -t cuekit-task-task_123",
   "artifacts": [
     {
       "kind": "transcript",
@@ -515,6 +524,7 @@ Describe installed or available adapters and their capabilities.
       "agent_kind": "pi",
       "supports_steering": true,
       "supports_attach": true,
+      "supports_model_selection": false,
       "supports_artifacts": true,
       "supports_live_progress": true
     },
@@ -522,6 +532,8 @@ Describe installed or available adapters and their capabilities.
       "agent_kind": "claude-code",
       "supports_steering": false,
       "supports_attach": true,
+      "supports_model_selection": true,
+      "available_models": ["haiku", "sonnet", "opus"],
       "supports_artifacts": true,
       "supports_live_progress": false
     },
@@ -529,6 +541,7 @@ Describe installed or available adapters and their capabilities.
       "agent_kind": "opencode",
       "supports_steering": true,
       "supports_attach": true,
+      "supports_model_selection": true,
       "supports_artifacts": true,
       "supports_live_progress": true
     }
@@ -536,7 +549,9 @@ Describe installed or available adapters and their capabilities.
 }
 ```
 
-All three MVP adapters ride on the v0 tmux pane backend (see adapter spec Section 3.7), so `supports_attach` is `true` across the board. `get_task_status` surfaces an `attach_hint` such as `tmux attach-session -t cuekit-{session_id}:task-{id}` that a user can run to drop directly into the live child pane.
+All three MVP adapters ride on the v0 tmux pane backend (see adapter spec Section 3.7), so `supports_attach` is `true` across the board. `get_task_status` surfaces an `attach_hint` such as `tmux attach-session -t cuekit-task-{task_id_short}` that a user can run to drop directly into the live child pane.
+
+`available_models` is only surfaced when the adapter can enumerate its models reliably (e.g. claude-code). Adapters that cannot (or choose not to) publish a list omit the field; callers should then pass `model` at their own risk and handle `submit_failed` if the runtime rejects it. cuekit does not synthesize a default on the caller's behalf.
 
 ### 11.4 Semantics
 

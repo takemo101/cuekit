@@ -116,36 +116,39 @@ Adapters should preserve at least one of:
 - patch file
 - structured JSON metadata
 
-### 3.7 Execution Backend (v0: tmux pane)
+### 3.7 Execution Backend (v0: tmux session-per-task)
 
-In v0, cuekit child agents are not headless one-shot subprocesses. Every delegated task runs inside a **tmux pane** so the orchestrator can submit, cancel, and steer programmatically *and* so a human can `tmux attach-session` to the live child for debugging. This mirrors the pane backend in Claude Code's Agent Teams.
+In v0, cuekit child agents are not headless one-shot subprocesses. Every delegated task runs inside its own **dedicated tmux session** so the orchestrator can submit, cancel, and steer programmatically *and* so a human can `tmux attach-session` to the live child for debugging. The cuekit orchestration session is a logical grouping (persisted in SQLite) only, not mirrored in tmux — this keeps attach and cleanup as single-command operations.
+
+This layout is the flat one proven by isuner (1 issue = 1 tmux session). Claude Code's Agent Teams uses a grouped layout instead; we defer grouping to a future opt-in feature.
 
 #### 3.7.1 Layout
 
-- one tmux session per cuekit orchestration session
-  - name: `cuekit-{session_id}`
-  - created lazily on first `submit` for that session
-- one tmux window per cuekit task
-  - name: `task-{task_id_short}` (stable for the life of the task)
+- one tmux session per cuekit task
+  - name: `cuekit-task-{task_id_short}` (stable for the life of the task)
+  - created at `submit` time, killed at terminal state
   - holds exactly one pane running the child runtime
+- the cuekit orchestration session is **not** represented in tmux; it only lives as a `session_id` foreign key on the task row
 - the pane id is captured at submit time and stored as the task's `native_task_ref`
 
 #### 3.7.2 Protocol → tmux mapping
 
 | cuekit op | pane backend implementation |
 |---|---|
-| `submit` | `tmux new-window -t cuekit-{session_id} -n task-{id} "<runtime launch command>"`; record `pane_id` |
-| `status` | `tmux list-panes -t {pane_id}` for liveness; tail transcript file for `progress_text` |
+| `submit` | `tmux new-session -d -s cuekit-task-{id} -c <cwd> "<runtime launch command>"`; capture `pane_id` |
+| `status` | `tmux has-session -t cuekit-task-{id}` for liveness; tail transcript file for `progress_text` |
 | `collect` | parse `<worktree>/.cuekit/tasks/<id>/result.json`; attach transcript ref |
-| `cancel` | `tmux kill-window -t cuekit-{session_id}:task-{id}` |
-| `steer` | `tmux send-keys -t {pane_id} "<message>" Enter` (if capability supports) |
+| `cancel` | `tmux kill-session -t cuekit-task-{id}` |
+| `steer` | `tmux send-keys -t cuekit-task-{id} -l "<message>"` → short delay → `tmux send-keys -t cuekit-task-{id} Enter` |
 | transcript capture | `tmux pipe-pane -t {pane_id} 'cat > <worktree>/.cuekit/tasks/<id>/transcript.txt'` on submit |
+
+The two-step `send-keys` pattern (`-l` for literal text, then a separate `Enter`) is the TUI-safe steering shape proven by isuner; a single-shot `send-keys "<msg>" Enter` can drop characters on rich TUIs.
 
 #### 3.7.3 Cleanup
 
-- on terminal state the adapter is responsible for tearing down the child window (`tmux kill-window`).
-- transcript and result files persist under `<worktree>/.cuekit/tasks/` even after pane cleanup.
-- when the cuekit orchestration session ends, the adapter may kill the tmux session if no live tasks remain. It must not leak panes across parent restarts.
+- on terminal state the adapter is responsible for killing the task's tmux session (`tmux kill-session -t cuekit-task-{id}`)
+- transcript and result files persist under `<worktree>/.cuekit/tasks/` even after tmux cleanup
+- adapter must not leak tmux sessions across parent restarts; on startup the adapter should reconcile persisted task state against live tmux sessions
 
 #### 3.7.4 Environment Requirements
 
@@ -172,7 +175,7 @@ The pane backend makes debug attach a first-class v0 capability.
 Each live task exposes an `attach_hint` string that a human (or a parent tool) can run to drop directly into the live child pane:
 
 ```text
-tmux attach-session -t cuekit-{session_id}:task-{id}
+tmux attach-session -t cuekit-task-{task_id_short}
 ```
 
 `attach_hint` is returned from `status()` while the task is non-terminal and `supports_attach` is `true`.
@@ -209,12 +212,12 @@ Adapters may store runtime-specific metadata, but they should converge on a comm
 interface PersistedTaskRecord {
   task_id: string;
   agent_kind: string;
+  model?: string;
   spec: TaskSpec;
   status: TaskStatus;
   native: {
-    // v0 pane backend (tmux)
-    tmux_session_name?: string;   // e.g. "cuekit-{session_id}"
-    tmux_window_name?: string;    // e.g. "task-{task_id_short}"
+    // v0 pane backend (tmux), 1 task = 1 tmux session
+    tmux_session_name?: string;   // e.g. "cuekit-task-{task_id_short}"
     tmux_pane_id?: string;        // also surfaced as native_task_ref
     // runtime-native identifiers, if the child runtime exposes them
     runtime_session_id?: string;

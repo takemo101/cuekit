@@ -71,6 +71,8 @@ interface TaskSpec {
 
 ```ts
 interface TaskSpec {
+  model?: string;
+  adapter_options?: Record<string, unknown>;
   context?: string;
   constraints?: string[];
   inputs?: InputRef[];
@@ -84,8 +86,22 @@ interface TaskSpec {
 
 ### 3.4 Field Guidance
 
+#### `model`
+Runtime-specific model name (e.g. `sonnet`, `opus`, `haiku` for claude-code).
+
+- If omitted, cuekit launches the child runtime **without passing a model flag**. The child runtime picks its own internal default. cuekit does not carry or impose a `default_model` on the caller's behalf.
+- If present and the adapter exposes `available_models` in its capabilities, cuekit validates membership at submit time and returns `invalid_input` on mismatch. Adapters that do not know the full model list skip this check and let the runtime itself fail at launch.
+- If present and the adapter declares `supports_model_selection: false`, cuekit returns `invalid_input`.
+
+#### `adapter_options`
+Free-form bag of runtime-specific options (e.g. `temperature`, `max_tokens`, extra CLI flags). Typed as `Record<string, unknown>` because shape is adapter-specific; the target adapter validates and translates these at submit time.
+
+This is the escape hatch for knobs that do not deserve first-class protocol fields. Frequently-used options should be promoted to `TaskSpec` proper over time.
+
 #### `context`
 Additional guidance, background, or upstream findings.
+
+
 
 #### `constraints`
 Rules the worker should follow.
@@ -426,6 +442,7 @@ Once terminal, the adapter must not resume the same task in place.
 ```ts
 interface AgentAdapter {
   kind: string;
+  capabilities(): AdapterCapabilities;
   submit(spec: TaskSpec): Promise<TaskHandle>;
   status(task_id: string): Promise<TaskStatusView>;
   steer(message: SteeringMessage): Promise<Ack>;
@@ -434,6 +451,8 @@ interface AgentAdapter {
   list(filter?: TaskListFilter): Promise<TaskSummary[]>;
 }
 ```
+
+`capabilities()` is the source of truth for `list_adapters` output and for control-surface-level pre-flight validation (e.g. checking `TaskSpec.model` against `available_models` before calling `submit`).
 
 ### 14.2 Responsibilities
 
@@ -664,12 +683,22 @@ interface AdapterCapabilities {
   agent_kind: string;
   supports_steering: boolean;
   supports_attach: boolean;
+  supports_model_selection: boolean;
+  available_models?: string[];
   supports_artifacts?: boolean;
   supports_live_progress?: boolean;
 }
 ```
 
 `supports_attach` is required, not optional, because v0 commits to the tmux pane backend as the primary execution model (see adapter spec Section 3.7). An adapter that cannot expose an attachable pane must declare `supports_attach: false` explicitly.
+
+`supports_model_selection` is also required:
+- `true` means the adapter can route `TaskSpec.model` to the child runtime
+- `false` means the adapter ignores or rejects `TaskSpec.model`; passing one produces `invalid_input`
+
+`available_models` is optional by design. Adapters that can enumerate their models (e.g. claude-code listing `["haiku", "sonnet", "opus"]`) should surface the list so callers can pre-flight. Adapters that cannot (or choose not to) maintain a list omit the field; in that case `TaskSpec.model` is passed through and the runtime itself fails at launch if the value is bad.
+
+cuekit does **not** carry a `default_model`. If `TaskSpec.model` is omitted the adapter launches the runtime without a model flag and the runtime uses whatever its own internal default is.
 
 Recommended MCP tool:
 
@@ -688,6 +717,7 @@ Example response:
       "agent_kind": "pi",
       "supports_steering": true,
       "supports_attach": true,
+      "supports_model_selection": false,
       "supports_artifacts": true,
       "supports_live_progress": true
     },
@@ -695,6 +725,8 @@ Example response:
       "agent_kind": "claude-code",
       "supports_steering": false,
       "supports_attach": true,
+      "supports_model_selection": true,
+      "available_models": ["haiku", "sonnet", "opus"],
       "supports_artifacts": true,
       "supports_live_progress": false
     }
