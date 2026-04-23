@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.cuekit/
+*.db
+*.db-shm
+*.db-wal
+bun.lockb
+.DS_Store
+*.log
+.env
+.env.*
+!.env.example

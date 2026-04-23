@@ -1,0 +1,21 @@
+{
+	"name": "@cuekit/mcp",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"exports": {
+		".": "./src/index.ts"
+	},
+	"bin": {
+		"cuekit": "./src/cli.ts"
+	},
+	"scripts": {
+		"typecheck": "tsc --noEmit",
+		"test": "bun test"
+	},
+	"dependencies": {
+		"@cuekit/adapters": "workspace:*",
+		"@cuekit/core": "workspace:*",
+		"@cuekit/store": "workspace:*"
+	}
+}
