@@ -9,7 +9,7 @@ cuekit は **coding agent 向けの lightweight delegation substrate** であり
 - task delegation protocol
 - adapter contract
 - persistent state model
-- MCP control surface
+- CLI/MCP control surface
 
 そのため、mimicui と同様に **Clean Architecture 系の依存方向**を採用しつつ、cuekit 向けに以下の4パッケージへ分割する。
 
@@ -20,7 +20,7 @@ cuekit は **coding agent 向けの lightweight delegation substrate** であり
 | `@cuekit/core` | pure domain / protocol | なし | task/session model, status, result, error, schema, state transition |
 | `@cuekit/store` | persistence adapter | SQLite / file refs | sessions/tasks 永続化、row mapping |
 | `@cuekit/adapters` | runtime bindings | CLI / HTTP / MCP など | pi / Claude Code / OpenCode を cuekit protocol に適合 |
-| `@cuekit/mcp` | MCP surface | MCP transport | cuekit tools を公開し、core/store/adapters を接続 |
+| `@cuekit/mcp` | incur-based control surface | CLI / MCP transport | cuekit command/tool surface を公開し、core/store/adapters を接続 |
 
 補助的に将来 `@cuekit/cli` を足してもよいが、MVP の中心ではない。
 
@@ -30,13 +30,14 @@ cuekit は **coding agent 向けの lightweight delegation substrate** であり
 2. orchestration は cuekit 自体ではなく、**cuekit を使う上位 layer** の責務である
 3. storage は独立責務であり、runtime adapter と分けたほうが進化しやすい
 4. MCP は重要だが **core そのものではなく reference control surface** である
+5. v0 では `incur` を使って CLI と MCP を同じ command 定義から公開し、surface 実装の重複を避ける
 
 ## レイヤー構成
 
 ```text
 ┌───────────────────────────────────────┐
-│ MCP Surface (packages/mcp)           │
-│ submit/status/collect/cancel/list    │
+│ Control Surface (packages/mcp)       │
+│ incur command tree -> CLI + MCP      │
 ├───────────────────────────────────────┤
 │ Adapters (packages/adapters)         │
 │ Pi / Claude Code / OpenCode bindings │
@@ -52,8 +53,8 @@ cuekit は **coding agent 向けの lightweight delegation substrate** であり
 ## 依存方向
 
 ```text
-MCP → Adapters → Core
-    → Store    → Core
+MCP/CLI Surface → Adapters → Core
+            → Store    → Core
 ```
 
 より厳密には:
@@ -62,11 +63,12 @@ MCP → Adapters → Core
 - `store` は `core` の型・schema に依存してよい
 - `adapters` は `core` の protocol に依存してよい
 - `mcp` は `core` / `store` / `adapters` を利用する
+- `mcp` パッケージ内部では `incur` command 定義が surface の source of truth になる
 
 ### 禁止
 
 ```text
-❌ core が bun:sqlite や MCP SDK に依存する
+❌ core が bun:sqlite や `incur` / MCP SDK に依存する
 ❌ core が pi / Claude Code / OpenCode の runtime 差分を知る
 ❌ store が adapter を import する
 ❌ adapter が別 adapter に依存する
@@ -78,12 +80,13 @@ MCP → Adapters → Core
 - `TaskSpec`, `TaskStatus`, `TaskResult`, `JobError` などの定義
 - required / optional capability の整理
 - state transition helpers
-- Zod schema
+- Zod schema を canonical contract として定義
 
 ### Store
 - `sessions`, `tasks` の最小 state model
 - `~/.cuekit/state.db` の管理
 - `<worktree>/.cuekit/` への result/transcript refs 管理
+- row decode / encode 時に core の Zod schema を利用
 
 ### Adapters
 - target runtime への submit
@@ -91,8 +94,11 @@ MCP → Adapters → Core
 - result normalization
 - cancellation
 - optional steering
+- runtime 境界の input/output を Zod で検証し、曖昧な native data をそのまま通さない
 
-### MCP
+### Control Surface (`@cuekit/mcp`)
+- `incur` command tree を定義する
+- 同じ command 定義から CLI と MCP を公開する
 - `submit_task`
 - `get_task_status`
 - `get_task_result`
@@ -130,7 +136,7 @@ v0 では project/worktree/session/task を完全正規化しすぎない。
 ## 開発順序
 
 ```text
-Core → Store → Adapters → MCP
+Core → Store → Adapters → Control Surface
 ```
 
 理由:
@@ -138,12 +144,12 @@ Core → Store → Adapters → MCP
 1. protocol が先に固まらないと store も adapter も安定しない
 2. store がないと session/task の運用が曖昧になる
 3. adapters は core + store の上で現実 runtime を吸収する
-4. MCP は最後に control surface として被せる
+4. 最後に `incur` ベースの control surface を被せ、CLI と MCP の両方を有効化する
 
 ## まとめ
 
 cuekit のアーキテクチャは、Clean Architecture の依存方向を維持しつつ、
-**protocol / state / runtime binding / MCP surface** の4責務へ明確に分割する。
+**protocol / state / runtime binding / control surface** の4責務へ明確に分割する。
 
 この分離により、cuekit は小さく始めつつ、将来:
 

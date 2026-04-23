@@ -8,7 +8,7 @@
 
 cuekit is a protocol-first foundation for coordinating coding agents such as pi, Claude Code, and OpenCode. Its core value is not a particular orchestrator implementation, but a shared job protocol and adapter model that let one agent session delegate work to another, monitor progress, steer execution, and collect normalized results.
 
-Orchestration skills, MCP servers, CLIs, and UIs are treated as optional control surfaces built on top of this core.
+Orchestration skills, MCP servers, CLIs, and UIs are treated as optional control surfaces built on top of this core. In v0, the primary reference surface is implemented with `incur`, so the same command definitions can be exposed both as CLI commands and as MCP tools.
 
 ## 2. Problem
 
@@ -38,6 +38,7 @@ What is missing is a small common layer that answers:
 - Support optional mid-flight steering.
 - Normalize child results so orchestration logic can be portable.
 - Make orchestration implementable in multiple surfaces: skill, MCP, CLI, HTTP, or UI.
+- Use schema-first definitions with Zod so protocol, persistence, adapters, and control surfaces share one source of truth for validation and typing.
 - Support MVP adapters for pi, Claude Code, and OpenCode.
 
 ## 4. Non-goals
@@ -55,8 +56,9 @@ What is missing is a small common layer that answers:
 3. **Async by default** — child work is treated as a job, not a blocking call.
 4. **Steer when needed** — long-running jobs must be redirectable.
 5. **Normalized results** — parent logic should not parse raw transcripts by default.
-6. **Control-surface agnostic at the core** — skills, MCP, CLI, and other surfaces are consumers of the core, not the core itself. For v0, MCP is the primary reference control surface.
+6. **Control-surface agnostic at the core** — skills, MCP, CLI, and other surfaces are consumers of the core, not the core itself. For v0, an `incur`-based command surface is the primary reference implementation, with MCP as the default agent-facing transport.
 7. **Human checkpoint friendliness** — v1 should stop when ambiguity is high.
+8. **Schema as the contract** — Zod schemas define the public boundary, and TypeScript types should be inferred from them instead of maintained separately when possible.
 
 ## 6. Core Abstractions
 
@@ -140,7 +142,7 @@ cuekit’s minimal contract is the following logical API:
 - `cancel(job_id) -> Ack`
 - `list() -> JobSummary[]`
 
-This is the protocol whether the transport is MCP, HTTP, local process control, or a file-backed runtime.
+This is the protocol whether the transport is MCP, CLI, HTTP, local process control, or a file-backed runtime.
 
 ## 8. Adapter Contract
 
@@ -185,6 +187,19 @@ cuekit should treat transports as interchangeable.
 
 Important: adapters are not identical to MCP. MCP is one possible exposure or transport layer.
 
+## 9.1 Command Surface Model
+
+In v0, cuekit should define its reference control surface as typed commands implemented with `incur`.
+
+This means:
+
+- the command tree is the primary definition of callable operations
+- CLI commands and MCP tools are generated from the same command definitions
+- input and output schemas are expressed with Zod and attached directly to commands
+- orchestration clients may use either CLI or MCP without changing the underlying protocol semantics
+
+The `@cuekit/mcp` package therefore acts as a control-surface package even though its primary practical role remains MCP exposure for agent callers.
+
 ## 10. Reference Adapters for MVP
 
 ### 10.1 PiAdapter
@@ -220,6 +235,8 @@ Needs:
 ## 11. Result Normalization
 
 Parents should consume normalized child outputs instead of parsing raw transcripts.
+
+Normalization should be validated with Zod at the adapter boundary so malformed runtime output is detected explicitly rather than leaking inward as loosely typed data.
 
 ### MVP result shape
 
@@ -285,6 +302,8 @@ cuekit itself is not the orchestrator. It enables orchestrators.
 - **CLI** for manual submission and inspection
 - **HTTP API** for external controllers
 
+In v0, the MCP server and CLI should be implemented from one `incur` command tree rather than as separate hand-maintained surfaces.
+
 The orchestrator skill is therefore an optional reference layer that explains how a parent agent should use adapters and protocol operations. It should be explicit-invocation only, never auto-activated during ordinary coding work.
 
 ## 15. MVP Scope
@@ -313,7 +332,7 @@ The orchestrator skill is therefore an optional reference layer that explains ho
 2. Implement local job store and state model.
 3. Build one adapter end to end.
 4. Add remaining MVP adapters.
-5. Expose the primary MCP control surface.
+5. Expose the primary `incur`-based command surface and publish it as MCP.
 6. Add an explicit-invocation orchestrator skill as a reference integration.
 
 ## 17. Open Questions
@@ -330,4 +349,4 @@ See [Related Work and Implementation References](2026-04-23-cuekit-related-work.
 
 ## 19. Recommendation
 
-cuekit should proceed as a protocol-and-adapter project first. The first design and implementation pass should optimize for stable contracts and portable orchestration logic, not for a single orchestrator UX. Skills, MCP servers, and other surfaces should be developed as thin consumers of the core.
+cuekit should proceed as a protocol-and-adapter project first. The first design and implementation pass should optimize for stable contracts and portable orchestration logic, not for a single orchestrator UX. Skills and other surfaces should remain thin consumers of the core, while the v0 reference CLI/MCP surface should be implemented through `incur` with Zod-backed command schemas.

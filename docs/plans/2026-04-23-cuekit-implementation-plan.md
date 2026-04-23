@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED: execute this plan in order, keep steps small, and preserve the package boundaries in `docs/architecture/`. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build cuekit v0 as a Bun/TypeScript monorepo with a minimal delegation protocol, SQLite-backed session/task state, an MCP control surface, and one end-to-end working adapter path.
+**Goal:** Build cuekit v0 as a Bun/TypeScript monorepo with a minimal delegation protocol, SQLite-backed session/task state, an `incur`-based CLI/MCP control surface, and one end-to-end working adapter path.
 
-**Architecture:** cuekit is implemented as four packages: `@cuekit/core` for pure protocol/schema logic, `@cuekit/store` for SQLite persistence, `@cuekit/adapters` for runtime bindings, and `@cuekit/mcp` for the MCP tool surface. v0 is delegation-first: submit, status, result, cancel are required; steering is optional.
+**Architecture:** cuekit is implemented as four packages: `@cuekit/core` for pure protocol/schema logic, `@cuekit/store` for SQLite persistence, `@cuekit/adapters` for runtime bindings, and `@cuekit/mcp` for an `incur`-based control surface that exposes the same command definitions as both CLI commands and MCP tools. v0 is delegation-first: submit, status, result, cancel are required; steering is optional.
 
-**Tech Stack:** Bun 1.2+, TypeScript 5.8+, Bun workspaces, Biome 2, Vitest, Zod, Bun SQLite, MCP TypeScript SDK.
+**Tech Stack:** Bun 1.2+, TypeScript 5.8+, Bun workspaces, Biome 2, Vitest, Zod, Bun SQLite, `incur`, MCP TypeScript SDK.
 
 ---
 
@@ -63,14 +63,15 @@
 - Create: `packages/mcp/package.json`
 - Create: `packages/mcp/tsconfig.json`
 - Create: `packages/mcp/src/index.ts`
-- Create: `packages/mcp/src/server.ts`
-- Create: `packages/mcp/src/tools/submit-task.ts`
-- Create: `packages/mcp/src/tools/get-task-status.ts`
-- Create: `packages/mcp/src/tools/get-task-result.ts`
-- Create: `packages/mcp/src/tools/cancel-task.ts`
-- Create: `packages/mcp/src/tools/list-tasks.ts`
-- Create: `packages/mcp/src/tools/list-adapters.ts`
-- Create: `packages/mcp/src/tools/steer-task.ts`
+- Create: `packages/mcp/src/cli.ts`
+- Create: `packages/mcp/src/commands/submit-task.ts`
+- Create: `packages/mcp/src/commands/get-task-status.ts`
+- Create: `packages/mcp/src/commands/get-task-result.ts`
+- Create: `packages/mcp/src/commands/cancel-task.ts`
+- Create: `packages/mcp/src/commands/list-tasks.ts`
+- Create: `packages/mcp/src/commands/list-adapters.ts`
+- Create: `packages/mcp/src/commands/steer-task.ts`
+- Create: `packages/mcp/src/command-context.ts`
 - Test: `packages/mcp/__tests__/`
 
 ---
@@ -245,7 +246,7 @@ Do not add future fields not in spec.
 
 - [ ] **Step 9: Export public API from `src/index.ts`**
 
-Re-export only the public protocol types and helpers.
+Re-export schema-first public API. Prefer types inferred from Zod schemas where possible instead of hand-maintaining parallel type declarations.
 
 - [ ] **Step 10: Run package tests and typecheck**
 
@@ -464,14 +465,15 @@ git commit -m "feat(adapters): add adapter contract and first runtime spike"
 - Create: `packages/mcp/package.json`
 - Create: `packages/mcp/tsconfig.json`
 - Create: `packages/mcp/src/index.ts`
-- Create: `packages/mcp/src/server.ts`
-- Create: `packages/mcp/src/tools/submit-task.ts`
-- Create: `packages/mcp/src/tools/get-task-status.ts`
-- Create: `packages/mcp/src/tools/get-task-result.ts`
-- Create: `packages/mcp/src/tools/cancel-task.ts`
-- Create: `packages/mcp/src/tools/list-tasks.ts`
-- Create: `packages/mcp/src/tools/list-adapters.ts`
-- Create: `packages/mcp/src/tools/steer-task.ts`
+- Create: `packages/mcp/src/cli.ts`
+- Create: `packages/mcp/src/commands/submit-task.ts`
+- Create: `packages/mcp/src/commands/get-task-status.ts`
+- Create: `packages/mcp/src/commands/get-task-result.ts`
+- Create: `packages/mcp/src/commands/cancel-task.ts`
+- Create: `packages/mcp/src/commands/list-tasks.ts`
+- Create: `packages/mcp/src/commands/list-adapters.ts`
+- Create: `packages/mcp/src/commands/steer-task.ts`
+- Create: `packages/mcp/src/command-context.ts`
 - Test: `packages/mcp/__tests__/tools.test.ts`
 
 - [ ] **Step 1: Create `packages/mcp/package.json`**
@@ -480,14 +482,16 @@ Include dependencies on:
 - `@cuekit/core`
 - `@cuekit/store`
 - `@cuekit/adapters`
+- `incur`
 - MCP TypeScript SDK
 
-- [ ] **Step 2: Implement the MCP server bootstrap**
+- [ ] **Step 2: Implement the `incur` command bootstrap**
 
 Responsibilities:
-- create MCP server
-- register tool handlers
-- wire store + adapter registry
+- create the shared command tree
+- attach Zod input/output schemas to each command
+- wire store + adapter registry through a command context
+- expose the same commands as CLI and MCP
 
 - [ ] **Step 3: Write failing tests for `submit_task`**
 
@@ -503,6 +507,7 @@ Responsibilities:
 - call adapter submit
 - persist state
 - return normalized acceptance payload
+- define the command output schema so CLI and MCP share one contract
 
 - [ ] **Step 5: Write failing tests for `get_task_status` and `get_task_result`**
 
@@ -521,13 +526,13 @@ Cover:
 - list returns summaries only
 - list adapters returns capability list
 
-- [ ] **Step 8: Implement the remaining required tools**
+- [ ] **Step 8: Implement the remaining required commands/tools**
 
 - [ ] **Step 9: Add `steer_task` as optional / experimental**
 
 If unsupported by the selected adapter, return structured `steering_unsupported`.
 
-- [ ] **Step 10: Run MCP package tests and typecheck**
+- [ ] **Step 10: Run control-surface package tests and typecheck**
 
 Run:
 ```bash
@@ -536,7 +541,11 @@ bun run --filter '@cuekit/mcp' typecheck
 ```
 Expected: all pass
 
-- [ ] **Step 11: Run workspace checks**
+- [ ] **Step 11: Verify CLI/MCP parity manually**
+
+Run representative flows through both surfaces and confirm they share the same validation and payload shapes.
+
+- [ ] **Step 12: Run workspace checks**
 
 Run:
 ```bash
@@ -546,7 +555,7 @@ bun run check
 ```
 Expected: all pass
 
-- [ ] **Step 12: Commit MCP package**
+- [ ] **Step 13: Commit MCP package**
 
 ```bash
 git add packages/mcp
@@ -576,6 +585,8 @@ submit_task
 
 Include cancel path if possible.
 
+Also validate the same flow through the CLI command surface.
+
 - [ ] **Step 2: Verify local result file refs are created where expected**
 
 Expected pattern:
@@ -587,6 +598,7 @@ Expected pattern:
 - [ ] **Step 3: Update root README with actual package usage**
 
 Include:
+- how to run the CLI
 - how to run the MCP server
 - how state is stored
 - what v0 supports
@@ -619,6 +631,8 @@ git commit -m "chore: validate cuekit v0 delegation flow"
 - Keep steering optional.
 - Prefer one strong adapter spike over three half-working adapters.
 - Preserve architecture boundaries from `docs/architecture/` even if a shortcut seems attractive.
+- Treat Zod schemas as the canonical public boundary and infer types from them where practical.
+- Keep `incur` confined to the control-surface package; do not leak it into core/store/adapters.
 
 ## Execution Handoff
 
