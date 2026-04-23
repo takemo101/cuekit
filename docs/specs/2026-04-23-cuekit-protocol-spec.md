@@ -209,6 +209,8 @@ interface JobStatusView {
   native_session_id?: string;
   native_task_id?: string;
   supports_steering?: boolean;
+  supports_attach?: boolean;
+  attach_hint?: string;
   error?: JobError;
   artifacts?: ArtifactRef[];
   metadata?: Record<string, unknown>;
@@ -219,6 +221,7 @@ interface JobStatusView {
 - `summary` is a short human-readable current state
 - `progress_text` may include recent output or a compact state description
 - `supports_steering` should reflect actual runtime capability, not theoretical support
+- `supports_attach` indicates whether the job is running on an attachable backend (e.g. the v0 tmux pane backend); `attach_hint` is a command string the user can run to drop into the live child. See `2026-04-23-cuekit-adapter-spec.md` Section 3.8.
 
 ---
 
@@ -660,10 +663,13 @@ Adapters should expose capabilities through a lightweight metadata surface.
 interface AdapterCapabilities {
   agent_kind: string;
   supports_steering: boolean;
+  supports_attach: boolean;
   supports_artifacts?: boolean;
   supports_live_progress?: boolean;
 }
 ```
+
+`supports_attach` is required, not optional, because v0 commits to the tmux pane backend as the primary execution model (see adapter spec Section 3.7). An adapter that cannot expose an attachable pane must declare `supports_attach: false` explicitly.
 
 Recommended MCP tool:
 

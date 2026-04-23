@@ -216,6 +216,8 @@ Retrieve the current normalized state of a job.
   "updated_at": "2026-04-23T10:02:00Z",
   "started_at": "2026-04-23T10:00:05Z",
   "supports_steering": true,
+  "supports_attach": true,
+  "attach_hint": "tmux attach-session -t cuekit-sess_42:job-job_123",
   "artifacts": [
     {
       "kind": "transcript",
@@ -223,7 +225,8 @@ Retrieve the current normalized state of a job.
     }
   ],
   "metadata": {
-    "native_session_id": "calm-reef"
+    "native_session_id": "calm-reef",
+    "tmux_pane_id": "%17"
   }
 }
 ```
@@ -511,24 +514,29 @@ Describe installed or available adapters and their capabilities.
     {
       "agent_kind": "pi",
       "supports_steering": true,
+      "supports_attach": true,
       "supports_artifacts": true,
       "supports_live_progress": true
     },
     {
       "agent_kind": "claude-code",
       "supports_steering": false,
+      "supports_attach": true,
       "supports_artifacts": true,
       "supports_live_progress": false
     },
     {
       "agent_kind": "opencode",
       "supports_steering": true,
+      "supports_attach": true,
       "supports_artifacts": true,
       "supports_live_progress": true
     }
   ]
 }
 ```
+
+All three MVP adapters ride on the v0 tmux pane backend (see adapter spec Section 3.7), so `supports_attach` is `true` across the board. `get_job_status` surfaces an `attach_hint` such as `tmux attach-session -t cuekit-{session_id}:job-{id}` that a user can run to drop directly into the live child pane.
 
 ### 11.4 Semantics
 

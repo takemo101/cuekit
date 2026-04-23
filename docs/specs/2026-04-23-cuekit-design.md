@@ -176,16 +176,25 @@ interface AgentAdapter {
 
 ## 9. Runtime Model
 
-cuekit should treat transports as interchangeable.
+cuekit should treat transports as interchangeable, but v0 commits to one primary execution backend so the first working adapter has a predictable substrate.
 
-### Possible runtime backends
+### 9.0 v0 primary backend: tmux pane
+
+All v0 adapters launch their child runtime inside a **tmux pane** owned by cuekit. This gives us, in one primitive:
+
+- programmatic submit/cancel/steer (tmux commands)
+- a real TTY the user can `tmux attach-session` to for live debugging
+- a natural per-task lifecycle (one window per cuekit job, killed on terminal state)
+
+Rationale and the exact protocol → tmux mapping live in `2026-04-23-cuekit-adapter-spec.md` Section 3.7. Claude Code's Agent Teams pane backend is the direct reference.
+
+### 9.1 Other runtime backends (deferred)
 
 - **MCP-backed adapter** — useful when an agent exposes callable tool surfaces.
 - **HTTP-backed adapter** — useful when an agent offers a server API.
-- **CLI-backed adapter** — useful when the runtime is best controlled as a local process/session.
-- **Hybrid adapter** — submit via CLI, observe via session store, steer via local socket or command channel.
+- **In-process / headless** — ephemeral subprocess with no attachable terminal; deferred from v0.
 
-Important: adapters are not identical to MCP. MCP is one possible exposure or transport layer.
+Important: adapters are not identical to MCP. MCP is one possible exposure or transport layer, not the execution model.
 
 ## 9.1 Command Surface Model
 
@@ -202,14 +211,16 @@ The `@cuekit/mcp` package therefore acts as a control-surface package even thoug
 
 ## 10. Reference Adapters for MVP
 
+All MVP adapters ride on the v0 pane backend (Section 9.0). Their only adapter-specific responsibility is providing the launch command, a result/transcript extractor, and runtime-specific status heuristics.
+
 ### 10.1 PiAdapter
 Goal: wrap pi child sessions/jobs into cuekit jobs.
 
 Needs:
 
-- spawn/dispatch child session
-- retrieve status/output
-- support steering if available
+- launch pi inside a cuekit task pane in interactive/dispatch mode
+- retrieve status/output via transcript tail + any pi-native handoff file
+- support steering via `tmux send-keys` if available
 - normalize result payload
 
 ### 10.2 ClaudeCodeAdapter
@@ -217,18 +228,18 @@ Goal: wrap Claude Code sessions/jobs into cuekit jobs.
 
 Needs:
 
-- child invocation strategy
-- session/job identity mapping
-- transcript/result capture
-- partial or full steering support depending on runtime limits
+- launch `claude` inside a cuekit task pane in **interactive mode** (not `-p`/print), so the pane remains attachable
+- pass the objective as initial prompt or via `send-keys` after launch
+- transcript capture via `tmux pipe-pane`
+- normalize end-of-run output into a stable `JobResult`
 
 ### 10.3 OpenCodeAdapter
 Goal: wrap OpenCode async/session primitives into cuekit jobs.
 
 Needs:
 
-- async task submission
-- session polling
+- launch OpenCode inside a cuekit task pane using its interactive/session mode
+- prefer OpenCode's async task API over transcript scraping for status when available
 - input/steering path if supported
 - normalized result extraction
 

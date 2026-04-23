@@ -167,6 +167,7 @@ type TaskStatus =
 - `summary` may be used for either the latest normalized status summary or the final result summary
 - `result_ref` and `transcript_ref` are optional because not all runtimes can guarantee both
 - `parent_task_id` is sufficient for simple lineage in v0; a dedicated lineage table is not needed yet
+- `native_task_ref` under the v0 tmux pane backend stores the tmux `pane_id` of the child (see adapter spec Section 3.7). The tmux session name (`cuekit-{session_id}`) and window name (`job-{task_id_short}`) are derivable from `session_id` and `id`, so they do not need their own columns.
 
 ---
 

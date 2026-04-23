@@ -116,6 +116,89 @@ Adapters should preserve at least one of:
 - patch file
 - structured JSON metadata
 
+### 3.7 Execution Backend (v0: tmux pane)
+
+In v0, cuekit child agents are not headless one-shot subprocesses. Every delegated job runs inside a **tmux pane** so the orchestrator can submit, cancel, and steer programmatically *and* so a human can `tmux attach-session` to the live child for debugging. This mirrors the pane backend in Claude Code's Agent Teams.
+
+#### 3.7.1 Layout
+
+- one tmux session per cuekit orchestration session
+  - name: `cuekit-{session_id}`
+  - created lazily on first `submit` for that session
+- one tmux window per cuekit job
+  - name: `job-{job_id_short}` (stable for the life of the job)
+  - holds exactly one pane running the child runtime
+- the pane id is captured at submit time and stored as the job's `native_task_ref`
+
+#### 3.7.2 Protocol → tmux mapping
+
+| cuekit op | pane backend implementation |
+|---|---|
+| `submit` | `tmux new-window -t cuekit-{session_id} -n job-{id} "<runtime launch command>"`; record `pane_id` |
+| `status` | `tmux list-panes -t {pane_id}` for liveness; tail transcript file for `progress_text` |
+| `collect` | parse `<worktree>/.cuekit/jobs/<id>/result.json`; attach transcript ref |
+| `cancel` | `tmux kill-window -t cuekit-{session_id}:job-{id}` |
+| `steer` | `tmux send-keys -t {pane_id} "<message>" Enter` (if capability supports) |
+| transcript capture | `tmux pipe-pane -t {pane_id} 'cat > <worktree>/.cuekit/jobs/<id>/transcript.txt'` on submit |
+
+#### 3.7.3 Cleanup
+
+- on terminal state the adapter is responsible for tearing down the child window (`tmux kill-window`).
+- transcript and result files persist under `<worktree>/.cuekit/jobs/` even after pane cleanup.
+- when the cuekit orchestration session ends, the adapter may kill the tmux session if no live jobs remain. It must not leak panes across parent restarts.
+
+#### 3.7.4 Environment Requirements
+
+- `tmux` must be installed and on `PATH` in the cuekit host environment.
+- if `tmux` is unavailable, the adapter must return `submit_failed` with an explicit hint to install tmux. No silent fallback in v0.
+- alternative backends (in-process, remote, fully headless) are deferred; v0 is pane-only.
+
+#### 3.7.5 Adapter responsibility split
+
+With the pane backend shared across adapters, each concrete adapter only provides:
+
+- the **launch command** to run inside the new pane (runtime-specific)
+- a **result/transcript extractor** that converts the child's output into a normalized `JobResult`
+- runtime-specific **status heuristics** (e.g. recognizing `input_required` by pattern-matching tail output)
+
+Spawning, pane lifecycle, cancellation, attach-hint production, and basic transcript capture are shared infrastructure, not per-adapter work.
+
+### 3.8 Debug Attach
+
+The pane backend makes debug attach a first-class v0 capability.
+
+#### 3.8.1 attach_hint
+
+Each live job exposes an `attach_hint` string that a human (or a parent tool) can run to drop directly into the live child pane:
+
+```text
+tmux attach-session -t cuekit-{session_id}:job-{id}
+```
+
+`attach_hint` is returned from `status()` while the job is non-terminal and `supports_attach` is `true`.
+
+#### 3.8.2 Capability declaration
+
+Adapters using the pane backend should declare:
+
+```json
+{ "supports_attach": true }
+```
+
+Adapters on an alternative backend that does not expose a real terminal must declare:
+
+```json
+{ "supports_attach": false }
+```
+
+No `attach_hint` should be surfaced in that case.
+
+#### 3.8.3 Semantics
+
+- `attach_hint` is best-effort: if the pane has already been torn down (e.g. right after a terminal transition), attach will fail harmlessly.
+- cuekit does not mediate attach itself; the user runs the command in their own terminal.
+- attach is purely observational unless the user types into the pane, which behaves like a manual steer.
+
 ---
 
 ## 4. Shared Internal Model
@@ -129,10 +212,15 @@ interface PersistedJobRecord {
   spec: JobSpec;
   status: JobStatus;
   native: {
-    session_id?: string;
-    task_id?: string;
+    // v0 pane backend (tmux)
+    tmux_session_name?: string;   // e.g. "cuekit-{session_id}"
+    tmux_window_name?: string;    // e.g. "job-{job_id_short}"
+    tmux_pane_id?: string;        // also surfaced as native_task_ref
+    // runtime-native identifiers, if the child runtime exposes them
+    runtime_session_id?: string;
+    runtime_task_id?: string;
     process_id?: string;
-    transport?: "cli" | "http" | "mcp" | "other";
+    transport?: "pane" | "cli" | "http" | "mcp" | "other";
     metadata?: Record<string, unknown>;
   };
   created_at: string;
@@ -140,6 +228,8 @@ interface PersistedJobRecord {
   started_at?: string;
   completed_at?: string;
   supports_steering: boolean;
+  supports_attach: boolean;
+  attach_hint?: string;
   transcript_path?: string;
   result_path?: string;
   error?: JobError;
@@ -244,12 +334,12 @@ The pi runtime is expected to support child or delegated session execution with 
 
 `PiAdapter` should:
 
-- submit a child pi run using the best available non-blocking mode
-- capture the returned runtime session identifier
+- launch pi inside a cuekit task pane (see Section 3.7) using the runtime's interactive dispatch entrypoint, not a headless one-shot
+- capture the pane id (`native_task_ref`) and any runtime-native session id pi exposes
 - map session lifecycle into cuekit job states
-- collect final session output into normalized result form
+- collect final session output into normalized result form by reading the piped transcript and/or a pi-native handoff file
 - expose transcript artifacts when available
-- support steering when the active transport supports sending input to the child session
+- support steering via `tmux send-keys` when the underlying pi session accepts live input
 
 ### 7.4 Steering Expectation
 
@@ -293,11 +383,11 @@ Claude Code is expected to be controllable through one of:
 
 `ClaudeCodeAdapter` should:
 
-- launch a child Claude Code run in a controlled working directory
-- capture the native session identifier if exposed
-- preserve the full terminal/session transcript when possible
-- provide `status()` based on process/session state
-- normalize end-of-run output into a stable `JobResult`
+- launch `claude` inside a cuekit task pane in **interactive mode** (not `-p`/print/headless mode) so the pane remains a real TTY that a human can attach to. The objective can be passed as the initial prompt (`claude "<objective>"`) or injected by `tmux send-keys` after launch.
+- capture the pane id and any native session identifier Claude Code exposes
+- preserve the full pane transcript via `tmux pipe-pane`
+- provide `status()` based on pane liveness plus transcript tailing heuristics
+- normalize end-of-run output into a stable `JobResult` by parsing transcript tail and, if available, any JSON/patch artifacts the run produces
 
 ### 8.4 Steering Expectation
 
@@ -345,11 +435,11 @@ OpenCode is expected to be the most naturally async of the MVP runtimes, potenti
 
 `OpenCodeAdapter` should:
 
-- submit asynchronous OpenCode work
-- record native task/session identifiers
-- map task states into cuekit states
+- launch OpenCode inside a cuekit task pane (see Section 3.7) using its interactive/session mode so the pane is attachable
+- record the pane id and OpenCode's native task/session identifiers
+- map OpenCode task states into cuekit states; when OpenCode exposes an async task API, prefer it for status over transcript scraping
 - expose `input_required` when OpenCode pauses for further input
-- collect final result and transcript artifacts
+- collect final result and transcript artifacts from the piped transcript plus OpenCode-native result endpoints if available
 
 ### 9.4 Steering Expectation
 
@@ -378,13 +468,13 @@ If it only supports response when input is explicitly requested, then:
 
 Initial planning matrix:
 
-| Adapter | Submit | Status | Collect | Cancel | Steering | Artifacts |
-|---|---:|---:|---:|---:|---:|---:|
-| PiAdapter | Yes | Yes | Yes | Yes | Partial/Expected | Yes |
-| ClaudeCodeAdapter | Yes | Yes | Yes | Yes | No or Partial | Yes |
-| OpenCodeAdapter | Yes | Yes | Yes | Yes | Partial/State-dependent | Yes |
+| Adapter | Submit | Status | Collect | Cancel | Steering | Attach | Artifacts |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| PiAdapter | Yes | Yes | Yes | Yes | Partial/Expected | Yes (tmux) | Yes |
+| ClaudeCodeAdapter | Yes | Yes | Yes | Yes | No or Partial | Yes (tmux) | Yes |
+| OpenCodeAdapter | Yes | Yes | Yes | Yes | Partial/State-dependent | Yes (tmux) | Yes |
 
-This matrix is aspirational for MVP and should be refined during implementation spikes. `Partial` means the adapter can expose the capability under some runtime paths or states, but not as a universal guarantee.
+This matrix is aspirational for MVP and should be refined during implementation spikes. `Partial` means the adapter can expose the capability under some runtime paths or states, but not as a universal guarantee. All three MVP adapters ride on the v0 pane backend (Section 3.7), so attach is universally `true` for v0.
 
 ---
 
@@ -519,6 +609,7 @@ In non-recoverable cases, adapters should surface `status_unavailable` or `colle
 - expose terminal `collect`
 - expose structured `cancel`
 - declare steering honestly
+- declare attach honestly (`supports_attach`) and surface `attach_hint` when true
 - preserve raw artifacts when possible
 
 ### A high-quality cuekit adapter should:
@@ -526,6 +617,7 @@ In non-recoverable cases, adapters should surface `status_unavailable` or `colle
 - support artifact-rich results
 - expose progress text usefully
 - avoid transcript parsing when runtime-native metadata is available
+- reuse the shared pane backend (Section 3.7) instead of re-implementing process/session management
 
 ---
 
