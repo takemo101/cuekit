@@ -210,7 +210,7 @@ cuekit should remain a lightweight delegation substrate centered on:
 
 The stable core is:
 
-- task/job model
+- task/task model
 - adapter contract
 - normalized result model
 - error model

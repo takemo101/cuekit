@@ -97,7 +97,7 @@ interface JobError {
 }
 ```
 
-> Note: protocol docs で `job_not_found` を使っていたとしても、task-centric surface へ寄せる時は命名を揃える。v0 実装では 1 系統に統一すること。
+> Note: protocol docs で `task_not_found` を使っていたとしても、task-centric surface へ寄せる時は命名を揃える。v0 実装では 1 系統に統一すること。
 
 ---
 
