@@ -2,7 +2,7 @@
 
 > MCP implementation constraints live in [`../architecture/README.md`](../architecture/README.md).
 
-> MCP control surface for cuekit job protocol operations.
+> MCP control surface for cuekit task protocol operations.
 
 ## 1. Purpose
 
@@ -12,7 +12,7 @@ cuekit is control-surface agnostic at the core, but MCP-first at the v0 referenc
 
 The MCP surface should:
 
-- expose cuekit jobs as stable tool operations
+- expose cuekit tasks as stable tool operations
 - hide adapter-specific runtime complexity
 - preserve protocol semantics faithfully
 - remain small and predictable
@@ -24,7 +24,7 @@ The MCP surface should:
 
 The cuekit MCP API is designed to be:
 
-1. **small** — a minimal set of tools covers the full job lifecycle
+1. **small** — a minimal set of tools covers the full task lifecycle
 2. **predictable** — each tool has clear input/output semantics
 3. **portable** — orchestrators can use the same tools regardless of child runtime
 4. **truthful** — capability differences are surfaced explicitly, not hidden
@@ -50,12 +50,12 @@ Implications:
 
 The v0 MCP API consists of seven tools:
 
-1. `submit_job`
-2. `get_job_status`
-3. `steer_job`
-4. `collect_job`
-5. `cancel_job`
-6. `list_jobs`
+1. `submit_task`
+2. `get_task_status`
+3. `steer_task`
+4. `get_task_result`
+5. `cancel_task`
+6. `list_tasks`
 7. `list_adapters`
 
 ---
@@ -78,7 +78,7 @@ or
   "ok": false,
   "error": {
     "code": "steering_unsupported",
-    "message": "This runtime does not support steering for active jobs.",
+    "message": "This runtime does not support steering for active tasks.",
     "retryable": false
   }
 }
@@ -102,18 +102,18 @@ or
 ```json
 {
   "kind": "transcript",
-  "ref": ".cuekit/jobs/job_123/transcript.md",
+  "ref": ".cuekit/tasks/task_123/transcript.md",
   "title": "Full transcript"
 }
 ```
 
 ---
 
-## 5. submit_job
+## 5. submit_task
 
 ### 5.1 Purpose
 
-Submit a new cuekit job to a target adapter.
+Submit a new cuekit task to a target adapter.
 
 ### 5.2 Input
 
@@ -162,7 +162,7 @@ Success:
 
 ```json
 {
-  "job_id": "job_123",
+  "task_id": "task_123",
   "agent_kind": "pi",
   "accepted": true
 }
@@ -183,23 +183,23 @@ Failure:
 
 ### 5.5 Semantics
 
-- successful submission does not imply the job is already running
-- a returned `job_id` must be stable
+- successful submission does not imply the task is already running
+- a returned `task_id` must be stable
 - initial state may be `queued` or `running`
 
 ---
 
-## 6. get_job_status
+## 6. get_task_status
 
 ### 6.1 Purpose
 
-Retrieve the current normalized state of a job.
+Retrieve the current normalized state of a task.
 
 ### 6.2 Input
 
 ```json
 {
-  "job_id": "job_123"
+  "task_id": "task_123"
 }
 ```
 
@@ -207,7 +207,7 @@ Retrieve the current normalized state of a job.
 
 ```json
 {
-  "job_id": "job_123",
+  "task_id": "task_123",
   "agent_kind": "pi",
   "status": "running",
   "summary": "Editing retry logic and updating tests.",
@@ -217,11 +217,11 @@ Retrieve the current normalized state of a job.
   "started_at": "2026-04-23T10:00:05Z",
   "supports_steering": true,
   "supports_attach": true,
-  "attach_hint": "tmux attach-session -t cuekit-sess_42:job-job_123",
+  "attach_hint": "tmux attach-session -t cuekit-sess_42:task-task_123",
   "artifacts": [
     {
       "kind": "transcript",
-      "ref": ".cuekit/jobs/job_123/transcript.md"
+      "ref": ".cuekit/tasks/task_123/transcript.md"
     }
   ],
   "metadata": {
@@ -246,7 +246,7 @@ Retrieve the current normalized state of a job.
 
 ```json
 {
-  "job_id": "job_123",
+  "task_id": "task_123",
   "status": "failed",
   "error": {
     "code": "status_unavailable",
@@ -258,17 +258,17 @@ Retrieve the current normalized state of a job.
 
 ---
 
-## 7. steer_job
+## 7. steer_task
 
 ### 7.1 Purpose
 
-Send a best-effort steering message to a running job.
+Send a best-effort steering message to a running task.
 
 ### 7.2 Input
 
 ```json
 {
-  "job_id": "job_123",
+  "task_id": "task_123",
   "message": "Also add exponential backoff coverage in the tests.",
   "reason": "Parent detected missing edge case"
 }
@@ -292,7 +292,7 @@ Unsupported:
   "ok": false,
   "error": {
     "code": "steering_unsupported",
-    "message": "This adapter does not support steering for active jobs.",
+    "message": "This adapter does not support steering for active tasks.",
     "retryable": false
   }
 }
@@ -305,7 +305,7 @@ Invalid state:
   "ok": false,
   "error": {
     "code": "invalid_state",
-    "message": "Cannot steer a terminal job.",
+    "message": "Cannot steer a terminal task.",
     "retryable": false
   }
 }
@@ -315,21 +315,21 @@ Invalid state:
 
 - steering is best-effort in v0
 - adapters may only support steering for certain states
-- orchestrators should inspect `supports_steering` from `get_job_status`
+- orchestrators should inspect `supports_steering` from `get_task_status`
 
 ---
 
-## 8. collect_job
+## 8. get_task_result
 
 ### 8.1 Purpose
 
-Collect the normalized result of a terminal job.
+Collect the normalized result of a terminal task.
 
 ### 8.2 Input
 
 ```json
 {
-  "job_id": "job_123"
+  "task_id": "task_123"
 }
 ```
 
@@ -339,7 +339,7 @@ Successful completion:
 
 ```json
 {
-  "job_id": "job_123",
+  "task_id": "task_123",
   "status": "completed",
   "summary": "Added retry logic with exponential backoff and updated the targeted tests.",
   "files_changed": [
@@ -349,28 +349,28 @@ Successful completion:
   "artifacts": [
     {
       "kind": "transcript",
-      "ref": ".cuekit/jobs/job_123/transcript.md"
+      "ref": ".cuekit/tasks/task_123/transcript.md"
     },
     {
       "kind": "json",
-      "ref": ".cuekit/jobs/job_123/result.json"
+      "ref": ".cuekit/tasks/task_123/result.json"
     }
   ]
 }
 ```
 
-Failed job:
+Failed task:
 
 ```json
 {
-  "job_id": "job_404",
+  "task_id": "task_404",
   "status": "failed",
   "summary": "The child runtime failed before making changes.",
   "files_changed": [],
   "artifacts": [
     {
       "kind": "log",
-      "ref": ".cuekit/jobs/job_404/error.log"
+      "ref": ".cuekit/tasks/task_404/error.log"
     }
   ],
   "error": {
@@ -383,13 +383,13 @@ Failed job:
 
 ### 8.4 Invalid State
 
-If the job is not terminal:
+If the task is not terminal:
 
 ```json
 {
   "error": {
     "code": "invalid_state",
-    "message": "collect_job requires a terminal state.",
+    "message": "get_task_result requires a terminal state.",
     "retryable": true
   }
 }
@@ -397,17 +397,17 @@ If the job is not terminal:
 
 ---
 
-## 9. cancel_job
+## 9. cancel_task
 
 ### 9.1 Purpose
 
-Cancel an active or pending job.
+Cancel an active or pending task.
 
 ### 9.2 Input
 
 ```json
 {
-  "job_id": "job_123"
+  "task_id": "task_123"
 }
 ```
 
@@ -427,7 +427,7 @@ Failure:
   "ok": false,
   "error": {
     "code": "invalid_state",
-    "message": "Job is already terminal.",
+    "message": "Task is already terminal.",
     "retryable": false
   }
 }
@@ -436,16 +436,16 @@ Failure:
 ### 9.4 Semantics
 
 - cancellation is request-based, not an instant guarantee
-- callers should re-check `get_job_status` after cancellation
+- callers should re-check `get_task_status` after cancellation
 - eventual terminal state should become `cancelled` or `failed` depending on runtime behavior and evidence
 
 ---
 
-## 10. list_jobs
+## 10. list_tasks
 
 ### 10.1 Purpose
 
-List known jobs, optionally filtered.
+List known tasks, optionally filtered.
 
 ### 10.2 Input
 
@@ -463,16 +463,16 @@ All fields are optional.
 
 ```json
 {
-  "jobs": [
+  "tasks": [
     {
-      "job_id": "job_555",
+      "task_id": "task_555",
       "agent_kind": "opencode",
       "status": "running",
       "summary": "Working on layout extraction",
       "updated_at": "2026-04-23T10:04:00Z"
     },
     {
-      "job_id": "job_556",
+      "task_id": "task_556",
       "agent_kind": "opencode",
       "status": "input_required",
       "summary": "Waiting for clarification on validation target",
@@ -484,9 +484,9 @@ All fields are optional.
 
 ### 10.4 Summary Shape
 
-Each returned job should include:
+Each returned task should include:
 
-- `job_id`
+- `task_id`
 - `agent_kind`
 - `status`
 - `summary` (optional)
@@ -536,7 +536,7 @@ Describe installed or available adapters and their capabilities.
 }
 ```
 
-All three MVP adapters ride on the v0 tmux pane backend (see adapter spec Section 3.7), so `supports_attach` is `true` across the board. `get_job_status` surfaces an `attach_hint` such as `tmux attach-session -t cuekit-{session_id}:job-{id}` that a user can run to drop directly into the live child pane.
+All three MVP adapters ride on the v0 tmux pane backend (see adapter spec Section 3.7), so `supports_attach` is `true` across the board. `get_task_status` surfaces an `attach_hint` such as `tmux attach-session -t cuekit-{session_id}:task-{id}` that a user can run to drop directly into the live child pane.
 
 ### 11.4 Semantics
 
@@ -558,7 +558,7 @@ Examples:
 - unsupported steering
 - non-terminal collect attempt
 - adapter launch failure
-- job not found
+- task not found
 
 Hard MCP tool failure should be reserved for:
 - malformed tool input
@@ -574,7 +574,7 @@ Recommended cuekit error codes:
 - `status_unavailable`
 - `steering_unsupported`
 - `collect_unavailable`
-- `job_not_found`
+- `task_not_found`
 - `invalid_state`
 - `runtime_crash`
 - `timeout`
@@ -596,10 +596,10 @@ Recommended cuekit error codes:
 
 ### 13.2 Behavioral Rules
 
-- `submit_job` must never block until completion
-- `get_job_status` must reflect persisted or observed truth as best as possible
-- `collect_job` must not fabricate success when terminal evidence is missing
-- `steer_job` must not claim success if the runtime rejected the message
+- `submit_task` must never block until completion
+- `get_task_status` must reflect persisted or observed truth as best as possible
+- `get_task_result` must not fabricate success when terminal evidence is missing
+- `steer_task` must not claim success if the runtime rejected the message
 
 ### 13.3 Truthfulness Principle
 
@@ -627,28 +627,28 @@ The CLI and MCP surfaces should not drift semantically.
 ### 14.1 Basic Flow
 
 1. call `list_adapters`
-2. call `submit_job`
-3. poll with `get_job_status`
-4. optionally call `steer_job`
-5. when terminal, call `collect_job`
+2. call `submit_task`
+3. poll with `get_task_status`
+4. optionally call `steer_task`
+5. when terminal, call `get_task_result`
 6. decide next action
 
 ### 14.2 Example
 
 ```text
-submit_job(agent_kind="pi", objective="Implement retry logic")
--> job_123
+submit_task(agent_kind="pi", objective="Implement retry logic")
+-> task_123
 
-get_job_status(job_123)
+get_task_status(task_123)
 -> running
 
-steer_job(job_123, "Also cover exponential backoff")
+steer_task(task_123, "Also cover exponential backoff")
 -> ok
 
-get_job_status(job_123)
+get_task_status(task_123)
 -> completed
 
-collect_job(job_123)
+get_task_result(task_123)
 -> normalized result
 ```
 
@@ -658,13 +658,13 @@ collect_job(job_123)
 
 Deferred from v0 but compatible with this API shape:
 
-- `subscribe_job_events`
-- `resume_job`
-- `retry_job`
-- `fork_job`
-- `get_job_artifact`
-- `get_job_transcript`
-- `wait_for_job`
+- `subscribe_task_events`
+- `resume_task`
+- `retry_task`
+- `fork_task`
+- `get_task_artifact`
+- `get_task_transcript`
+- `wait_for_task`
 - dependency-aware batch submission
 
 These should be added only when the core lifecycle proves stable.
@@ -679,4 +679,4 @@ For context on why cuekit uses MCP as a practical control surface while staying 
 
 The cuekit MCP API should remain intentionally small in v0.
 
-It should expose only the job lifecycle and capability discovery. More advanced orchestration features should be layered above the MCP surface rather than baked into the first release.
+It should expose only the task lifecycle and capability discovery. More advanced orchestration features should be layered above the MCP surface rather than baked into the first release.

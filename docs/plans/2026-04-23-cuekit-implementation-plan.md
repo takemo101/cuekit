@@ -29,7 +29,7 @@
 - Create: `packages/core/src/task-spec.ts`
 - Create: `packages/core/src/task-result.ts`
 - Create: `packages/core/src/task-summary.ts`
-- Create: `packages/core/src/job-error.ts`
+- Create: `packages/core/src/task-error.ts`
 - Create: `packages/core/src/adapter-capabilities.ts`
 - Create: `packages/core/src/task-refs.ts`
 - Create: `packages/core/src/task-lifecycle.ts`
@@ -171,7 +171,7 @@ git commit -m "feat(workspace): add cuekit monorepo scaffold"
 - Create: `packages/core/src/task-spec.ts`
 - Create: `packages/core/src/task-result.ts`
 - Create: `packages/core/src/task-summary.ts`
-- Create: `packages/core/src/job-error.ts`
+- Create: `packages/core/src/task-error.ts`
 - Create: `packages/core/src/adapter-capabilities.ts`
 - Create: `packages/core/src/task-refs.ts`
 - Create: `packages/core/src/task-lifecycle.ts`
@@ -368,7 +368,7 @@ git commit -m "feat(store): add sqlite session and task persistence"
 
 ### Task 4: Define adapter contract and one working adapter spike
 
-> **v0 execution model:** all adapters ride on a shared **tmux pane backend** — each job runs in a dedicated tmux window so the orchestrator can submit/cancel/steer programmatically and the user can `tmux attach-session` to debug the live child. See `docs/specs/2026-04-23-cuekit-adapter-spec.md` Section 3.7 for the contract. Build the pane backend first; per-adapter code is only launch command + result extractor.
+> **v0 execution model:** all adapters ride on a shared **tmux pane backend** — each task runs in a dedicated tmux window so the orchestrator can submit/cancel/steer programmatically and the user can `tmux attach-session` to debug the live child. See `docs/specs/2026-04-23-cuekit-adapter-spec.md` Section 3.7 for the contract. Build the pane backend first; per-adapter code is only launch command + result extractor.
 
 **Files:**
 - Create: `packages/adapters/package.json`
@@ -424,11 +424,11 @@ Responsibilities:
 Before touching a specific adapter, build the shared tmux pane backend:
 
 - `createSession(session_id)` — lazily creates the `cuekit-{session_id}` tmux session if missing
-- `spawnJob({ session_id, job_id, launchCommand, cwd })` — `tmux new-window` + `pipe-pane` to `<worktree>/.cuekit/jobs/<id>/transcript.txt`, returns `{ pane_id, attach_hint }`
+- `spawnTask({ session_id, task_id, launchCommand, cwd })` — `tmux new-window` + `pipe-pane` to `<worktree>/.cuekit/tasks/<id>/transcript.txt`, returns `{ pane_id, attach_hint }`
 - `isAlive(pane_id)` — liveness check via `tmux list-panes`
 - `sendKeys(pane_id, message)` — wraps `tmux send-keys` for steering
-- `killJob(session_id, job_id)` — `tmux kill-window`
-- `computeAttachHint(session_id, job_id)` — returns `tmux attach-session -t cuekit-{session_id}:job-{id}`
+- `killTask(session_id, task_id)` — `tmux kill-window`
+- `computeAttachHint(session_id, task_id)` — returns `tmux attach-session -t cuekit-{session_id}:task-{id}`
 - graceful error if `tmux` is not on `PATH` → structured `submit_failed`
 
 - [ ] **Step 6: Pick one adapter as the first end-to-end spike**
@@ -439,8 +439,8 @@ The first adapter only needs to prove:
 - submit works (launches via PaneBackend)
 - status can be observed (pane liveness + transcript tail)
 - collect returns normalized result
-- cancel is wired (PaneBackend.killJob)
-- `attach_hint` is returned from `status()` while the job is non-terminal
+- cancel is wired (PaneBackend.killTask)
+- `attach_hint` is returned from `status()` while the task is non-terminal
 
 - [ ] **Step 7: Write failing tests around that first adapter's contract**
 

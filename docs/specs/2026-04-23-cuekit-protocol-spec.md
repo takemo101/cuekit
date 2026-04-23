@@ -8,11 +8,11 @@
 
 This document defines the core protocol for cuekit.
 
-cuekit is designed to let one controller—an agent session, CLI, UI, or automation layer—delegate work to heterogeneous coding agents through a common job abstraction.
+cuekit is designed to let one controller—an agent session, CLI, UI, or automation layer—delegate work to heterogeneous coding agents through a common task abstraction.
 
 The protocol is intentionally:
 
-- **job-oriented**, not transcript-oriented
+- **task-oriented**, not transcript-oriented
 - **adapter-friendly**, not runtime-specific
 - **MCP-first** at the control surface
 - **runtime-agnostic** internally
@@ -27,38 +27,38 @@ This spec does not require ACP. Adapters may use CLI, HTTP, MCP, or other mechan
 
 cuekit defines six core entities:
 
-1. **JobSpec** — a request sent to an agent runtime
-2. **JobHandle** — a stable identifier returned after submission
-3. **JobStatusView** — the current observable state of a job
-4. **SteeringMessage** — a message sent to a running job
-5. **JobResult** — the normalized result of a terminal job
-6. **ArtifactRef** — a reference to outputs produced by a job
+1. **TaskSpec** — a request sent to an agent runtime
+2. **TaskHandle** — a stable identifier returned after submission
+3. **TaskStatusView** — the current observable state of a task
+4. **SteeringMessage** — a message sent to a running task
+5. **TaskResult** — the normalized result of a terminal task
+6. **ArtifactRef** — a reference to outputs produced by a task
 
 ### 2.2 Protocol Operations
 
 The minimal logical protocol is:
 
-- `submit(job_spec) -> JobHandle`
-- `status(job_id) -> JobStatusView`
-- `steer(job_id, steering_message) -> Ack`
-- `collect(job_id) -> JobResult`
-- `cancel(job_id) -> Ack`
-- `list(filter?) -> JobSummary[]`
+- `submit(task_spec) -> TaskHandle`
+- `status(task_id) -> TaskStatusView`
+- `steer(task_id, steering_message) -> Ack`
+- `collect(task_id) -> TaskResult`
+- `cancel(task_id) -> Ack`
+- `list(filter?) -> TaskSummary[]`
 
 ---
 
-## 3. JobSpec
+## 3. TaskSpec
 
 ### 3.1 Semantics
 
-A `JobSpec` is a normalized request for work to be executed by a child agent through an adapter.
+A `TaskSpec` is a normalized request for work to be executed by a child agent through an adapter.
 
 It should contain enough information that a child runtime can operate with minimal hidden assumptions.
 
 ### 3.2 Required Fields
 
 ```ts
-interface JobSpec {
+interface TaskSpec {
   agent_kind: string;
   objective: string;
 }
@@ -70,7 +70,7 @@ interface JobSpec {
 ### 3.3 Optional Fields
 
 ```ts
-interface JobSpec {
+interface TaskSpec {
   context?: string;
   constraints?: string[];
   inputs?: InputRef[];
@@ -105,7 +105,7 @@ Describes the shape the parent expects back.
 Working directory for the child runtime.
 
 #### `timeout_ms`
-Maximum runtime duration before cuekit marks the job as timed out.
+Maximum runtime duration before cuekit marks the task as timed out.
 
 #### `priority`
 Advisory scheduling hint.
@@ -149,27 +149,27 @@ This is advisory, not a hard validation contract in v0.
 
 ---
 
-## 6. JobHandle
+## 6. TaskHandle
 
 ```ts
-interface JobHandle {
-  job_id: string;
+interface TaskHandle {
+  task_id: string;
 }
 ```
 
 ### Requirements
-- `job_id` must be unique within a cuekit store
-- it must remain stable for the life of the job
+- `task_id` must be unique within a cuekit store
+- it must remain stable for the life of the task
 - adapters may map this to one or more native runtime IDs internally
 
 ---
 
-## 7. JobStatus
+## 7. TaskStatus
 
 ### 7.1 Status Enum
 
 ```ts
-type JobStatus =
+type TaskStatus =
   | "queued"
   | "running"
   | "input_required"
@@ -193,13 +193,13 @@ type JobStatus =
 
 ---
 
-## 8. JobStatusView
+## 8. TaskStatusView
 
 ```ts
-interface JobStatusView {
-  job_id: string;
+interface TaskStatusView {
+  task_id: string;
   agent_kind: string;
-  status: JobStatus;
+  status: TaskStatus;
   summary?: string;
   progress_text?: string;
   created_at: string;
@@ -221,7 +221,7 @@ interface JobStatusView {
 - `summary` is a short human-readable current state
 - `progress_text` may include recent output or a compact state description
 - `supports_steering` should reflect actual runtime capability, not theoretical support
-- `supports_attach` indicates whether the job is running on an attachable backend (e.g. the v0 tmux pane backend); `attach_hint` is a command string the user can run to drop into the live child. See `2026-04-23-cuekit-adapter-spec.md` Section 3.8.
+- `supports_attach` indicates whether the task is running on an attachable backend (e.g. the v0 tmux pane backend); `attach_hint` is a command string the user can run to drop into the live child. See `2026-04-23-cuekit-adapter-spec.md` Section 3.8.
 
 ---
 
@@ -229,13 +229,13 @@ interface JobStatusView {
 
 ### 9.1 Purpose
 
-A `SteeringMessage` lets a parent influence an already-running job without replacing the full job.
+A `SteeringMessage` lets a parent influence an already-running task without replacing the full task.
 
 ### 9.2 Shape
 
 ```ts
 interface SteeringMessage {
-  job_id: string;
+  task_id: string;
   message: string;
   reason?: string;
   metadata?: Record<string, unknown>;
@@ -273,13 +273,13 @@ interface Ack {
 
 ---
 
-## 10. JobResult
+## 10. TaskResult
 
 ### 10.1 MVP Shape
 
 ```ts
-interface JobResult {
-  job_id: string;
+interface TaskResult {
+  task_id: string;
   status: "completed" | "failed" | "cancelled" | "timed_out" | "blocked";
   summary: string;
   files_changed: string[];
@@ -294,7 +294,7 @@ interface JobResult {
 Potential future fields:
 
 ```ts
-interface FutureJobResultFields {
+interface FutureTaskResultFields {
   next_suggestion?: string;
   needs_human?: boolean;
   questions?: string[];
@@ -304,7 +304,7 @@ interface FutureJobResultFields {
 
 ### 10.3 Collection Rules
 
-- `collect(job_id)` should only succeed for terminal states; otherwise it should return `JobError { code: "invalid_state" }`
+- `collect(task_id)` should only succeed for terminal states; otherwise it should return `JobError { code: "invalid_state" }`
 - terminal states are: `completed`, `failed`, `cancelled`, `timed_out`, `blocked`
 - adapters should normalize partial transcripts into a stable `summary`
 - raw runtime output should be exposed through artifacts where possible
@@ -337,14 +337,14 @@ interface ArtifactRef {
 ```json
 {
   "kind": "transcript",
-  "ref": ".cuekit/jobs/job-123/transcript.md"
+  "ref": ".cuekit/tasks/task-123/transcript.md"
 }
 ```
 
 ```json
 {
   "kind": "patch",
-  "ref": ".cuekit/jobs/job-123/result.patch"
+  "ref": ".cuekit/tasks/task-123/result.patch"
 }
 ```
 
@@ -360,7 +360,7 @@ interface JobError {
     | "status_unavailable"
     | "steering_unsupported"
     | "collect_unavailable"
-    | "job_not_found"
+    | "task_not_found"
     | "invalid_state"
     | "runtime_crash"
     | "timeout"
@@ -415,7 +415,7 @@ Terminal states are:
 - `timed_out`
 - `blocked`
 
-Once terminal, the adapter must not resume the same job in place.
+Once terminal, the adapter must not resume the same task in place.
 
 ---
 
@@ -426,23 +426,23 @@ Once terminal, the adapter must not resume the same job in place.
 ```ts
 interface AgentAdapter {
   kind: string;
-  submit(spec: JobSpec): Promise<JobHandle>;
-  status(job_id: string): Promise<JobStatusView>;
+  submit(spec: TaskSpec): Promise<TaskHandle>;
+  status(task_id: string): Promise<TaskStatusView>;
   steer(message: SteeringMessage): Promise<Ack>;
-  collect(job_id: string): Promise<JobResult>;
-  cancel(job_id: string): Promise<Ack>;
-  list(filter?: JobListFilter): Promise<JobSummary[]>;
+  collect(task_id: string): Promise<TaskResult>;
+  cancel(task_id: string): Promise<Ack>;
+  list(filter?: TaskListFilter): Promise<TaskSummary[]>;
 }
 ```
 
 ### 14.2 Responsibilities
 
 Each adapter must:
-- translate `JobSpec` into runtime-native invocation
-- maintain mapping between `job_id` and native session/task identifiers
-- translate native runtime state into `JobStatus`
+- translate `TaskSpec` into runtime-native invocation
+- maintain mapping between `task_id` and native session/task identifiers
+- translate native runtime state into `TaskStatus`
 - expose steering honestly
-- normalize terminal output into `JobResult`
+- normalize terminal output into `TaskResult`
 - persist or expose raw artifacts where possible
 
 ### 14.3 Non-requirements
@@ -462,17 +462,17 @@ cuekit’s primary control surface in v0 is MCP.
 
 Recommended MCP tools:
 
-1. `submit_job`
-2. `get_job_status`
-3. `steer_job`
-4. `collect_job`
-5. `cancel_job`
-6. `list_jobs`
+1. `submit_task`
+2. `get_task_status`
+3. `steer_task`
+4. `get_task_result`
+5. `cancel_task`
+6. `list_tasks`
 7. `list_adapters`
 
 ### 15.2 Tool Definitions
 
-#### `submit_job`
+#### `submit_task`
 
 Input:
 
@@ -490,23 +490,23 @@ Output:
 
 ```json
 {
-  "job_id": "job_123"
+  "task_id": "task_123"
 }
 ```
 
-#### `get_job_status`
+#### `get_task_status`
 
 Input:
 
 ```json
-{ "job_id": "job_123" }
+{ "task_id": "task_123" }
 ```
 
 Output:
 
 ```json
 {
-  "job_id": "job_123",
+  "task_id": "task_123",
   "agent_kind": "pi",
   "status": "running",
   "summary": "Editing API client retry behavior",
@@ -516,13 +516,13 @@ Output:
 }
 ```
 
-#### `steer_job`
+#### `steer_task`
 
 Input:
 
 ```json
 {
-  "job_id": "job_123",
+  "task_id": "task_123",
   "message": "Also cover exponential backoff in tests",
   "reason": "Parent noticed missing edge case"
 }
@@ -534,19 +534,19 @@ Output:
 { "ok": true }
 ```
 
-#### `collect_job`
+#### `get_task_result`
 
 Input:
 
 ```json
-{ "job_id": "job_123" }
+{ "task_id": "task_123" }
 ```
 
 Output:
 
 ```json
 {
-  "job_id": "job_123",
+  "task_id": "task_123",
   "status": "completed",
   "summary": "Added retry logic with exponential backoff and updated tests.",
   "files_changed": [
@@ -556,18 +556,18 @@ Output:
   "artifacts": [
     {
       "kind": "transcript",
-      "ref": ".cuekit/jobs/job_123/transcript.md"
+      "ref": ".cuekit/tasks/task_123/transcript.md"
     }
   ]
 }
 ```
 
-#### `cancel_job`
+#### `cancel_task`
 
 Input:
 
 ```json
-{ "job_id": "job_123" }
+{ "task_id": "task_123" }
 ```
 
 Output:
@@ -576,7 +576,7 @@ Output:
 { "ok": true }
 ```
 
-#### `list_jobs`
+#### `list_tasks`
 
 Input:
 
@@ -591,9 +591,9 @@ Output:
 
 ```json
 {
-  "jobs": [
+  "tasks": [
     {
-      "job_id": "job_555",
+      "task_id": "task_555",
       "agent_kind": "opencode",
       "status": "running",
       "summary": "Working on layout extraction",
@@ -605,19 +605,19 @@ Output:
 
 ---
 
-## 16. JobSummary and Filters
+## 16. TaskSummary and Filters
 
 ```ts
-interface JobSummary {
-  job_id: string;
+interface TaskSummary {
+  task_id: string;
   agent_kind: string;
-  status: JobStatus;
+  status: TaskStatus;
   summary?: string;
   updated_at: string;
 }
 
-interface JobListFilter {
-  status?: JobStatus;
+interface TaskListFilter {
+  status?: TaskStatus;
   agent_kind?: string;
   cwd?: string;
 }
@@ -627,12 +627,12 @@ interface JobListFilter {
 
 ## 17. Persistence Model
 
-cuekit should persist job state independently of any one control surface.
+cuekit should persist task state independently of any one control surface.
 
 ### Minimum persisted fields
-- job_id
+- task_id
 - agent_kind
-- original job spec
+- original task spec
 - native ID mappings
 - timestamps
 - last observed status
@@ -647,10 +647,10 @@ Suggested directory shape:
 
 ```text
 .cuekit/
-  jobs/
-    job_123.json
-    job_123.result.json
-    job_123.transcript.md
+  tasks/
+    task_123.json
+    task_123.result.json
+    task_123.transcript.md
 ```
 
 ---
@@ -687,12 +687,14 @@ Example response:
     {
       "agent_kind": "pi",
       "supports_steering": true,
+      "supports_attach": true,
       "supports_artifacts": true,
       "supports_live_progress": true
     },
     {
       "agent_kind": "claude-code",
       "supports_steering": false,
+      "supports_attach": true,
       "supports_artifacts": true,
       "supports_live_progress": false
     }
@@ -706,14 +708,14 @@ Example response:
 
 ### A conforming cuekit adapter must:
 - support `submit`, `status`, `collect`, `cancel`
-- return a stable `job_id`
+- return a stable `task_id`
 - expose terminal states correctly
-- provide normalized `JobResult`
+- provide normalized `TaskResult`
 - return explicit structured errors
 
 ### A conforming cuekit control surface should:
 - preserve protocol semantics faithfully
-- not invent hidden job states
+- not invent hidden task states
 - distinguish terminal from non-terminal states
 - avoid collapsing failures into plain text only
 
@@ -740,7 +742,7 @@ Versioning principles:
 
 Explicitly deferred from v0:
 - DAG scheduling
-- multi-job transactions
+- multi-task transactions
 - parent-child lineage model
 - cost accounting
 - retry policies in protocol

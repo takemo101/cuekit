@@ -6,7 +6,7 @@
 
 ## 1. Summary
 
-cuekit is a protocol-first foundation for coordinating coding agents such as pi, Claude Code, and OpenCode. Its core value is not a particular orchestrator implementation, but a shared job protocol and adapter model that let one agent session delegate work to another, monitor progress, steer execution, and collect normalized results.
+cuekit is a protocol-first foundation for coordinating coding agents such as pi, Claude Code, and OpenCode. Its core value is not a particular orchestrator implementation, but a shared task protocol and adapter model that let one agent session delegate work to another, monitor progress, steer execution, and collect normalized results.
 
 Orchestration skills, MCP servers, CLIs, and UIs are treated as optional control surfaces built on top of this core. In v0, the primary reference surface is implemented with `incur`, so the same command definitions can be exposed both as CLI commands and as MCP tools.
 
@@ -32,7 +32,7 @@ What is missing is a small common layer that answers:
 
 ## 3. Goals
 
-- Define a minimal job-oriented protocol for agent-to-agent work delegation.
+- Define a minimal task-oriented protocol for agent-to-agent work delegation.
 - Define an adapter contract for wrapping heterogeneous coding agents.
 - Support asynchronous execution as the default model.
 - Support optional mid-flight steering.
@@ -53,8 +53,8 @@ What is missing is a small common layer that answers:
 
 1. **Protocol first** — orchestration depends on a stable contract, not prompt magic.
 2. **Adapter isolation** — agent-specific quirks stay behind adapters.
-3. **Async by default** — child work is treated as a job, not a blocking call.
-4. **Steer when needed** — long-running jobs must be redirectable.
+3. **Async by default** — child work is treated as a task, not a blocking call.
+4. **Steer when needed** — long-running tasks must be redirectable.
 5. **Normalized results** — parent logic should not parse raw transcripts by default.
 6. **Control-surface agnostic at the core** — skills, MCP, CLI, and other surfaces are consumers of the core, not the core itself. For v0, an `incur`-based command surface is the primary reference implementation, with MCP as the default agent-facing transport.
 7. **Human checkpoint friendliness** — v1 should stop when ambiguity is high.
@@ -62,12 +62,12 @@ What is missing is a small common layer that answers:
 
 ## 6. Core Abstractions
 
-### 6.1 JobSpec
+### 6.1 TaskSpec
 A parent’s request to a child runtime.
 
 Proposed fields:
 
-- adapter-assigned `job_id`
+- adapter-assigned `task_id`
 - `agent_kind` — `pi | claude-code | opencode | ...`
 - `objective`
 - `context`
@@ -78,8 +78,8 @@ Proposed fields:
 - `timeout_ms`
 - `metadata`
 
-### 6.2 JobStatus
-The current lifecycle state of a child job.
+### 6.2 TaskStatus
+The current lifecycle state of a child task.
 
 Initial state set:
 
@@ -93,17 +93,17 @@ Initial state set:
 - `blocked`
 
 ### 6.3 SteeringMessage
-An instruction sent to a running job.
+An instruction sent to a running task.
 
 Proposed fields:
 
-- `job_id`
+- `task_id`
 - `message`
 - `reason`
 - `metadata`
 
-### 6.4 JobResult
-Normalized output returned by a child job.
+### 6.4 TaskResult
+Normalized output returned by a child task.
 
 MVP fields:
 
@@ -120,7 +120,7 @@ Planned later fields:
 - `confidence`
 
 ### 6.5 ArtifactRef
-Reference to output produced by a child job.
+Reference to output produced by a child task.
 
 Examples:
 
@@ -135,12 +135,12 @@ Examples:
 
 cuekit’s minimal contract is the following logical API:
 
-- `submit(job_spec) -> { job_id }`
-- `status(job_id) -> JobStatusView`
-- `steer(job_id, steering_message) -> Ack`
-- `collect(job_id) -> JobResult`
-- `cancel(job_id) -> Ack`
-- `list() -> JobSummary[]`
+- `submit(task_spec) -> { task_id }`
+- `status(task_id) -> TaskStatusView`
+- `steer(task_id, steering_message) -> Ack`
+- `collect(task_id) -> TaskResult`
+- `cancel(task_id) -> Ack`
+- `list() -> TaskSummary[]`
 
 This is the protocol whether the transport is MCP, CLI, HTTP, local process control, or a file-backed runtime.
 
@@ -151,8 +151,8 @@ Each agent adapter must implement the cuekit protocol over a specific runtime.
 ### Responsibilities
 
 - start child execution
-- map native session/task IDs to `job_id`
-- translate native states into cuekit `JobStatus`
+- map native session/task IDs to `task_id`
+- translate native states into cuekit `TaskStatus`
 - accept steering where possible
 - collect and normalize results
 - expose artifacts and transcripts
@@ -165,12 +165,12 @@ Conceptually:
 ```ts
 interface AgentAdapter {
   kind: string;
-  submit(spec: JobSpec): Promise<JobHandle>;
-  status(job_id: string): Promise<JobStatusView>;
+  submit(spec: TaskSpec): Promise<TaskHandle>;
+  status(task_id: string): Promise<TaskStatusView>;
   steer(message: SteeringMessage): Promise<Ack>;
-  collect(job_id: string): Promise<JobResult>;
-  cancel(job_id: string): Promise<Ack>;
-  list(filter?: JobListFilter): Promise<JobSummary[]>;
+  collect(task_id: string): Promise<TaskResult>;
+  cancel(task_id: string): Promise<Ack>;
+  list(filter?: TaskListFilter): Promise<TaskSummary[]>;
 }
 ```
 
@@ -184,7 +184,7 @@ All v0 adapters launch their child runtime inside a **tmux pane** owned by cueki
 
 - programmatic submit/cancel/steer (tmux commands)
 - a real TTY the user can `tmux attach-session` to for live debugging
-- a natural per-task lifecycle (one window per cuekit job, killed on terminal state)
+- a natural per-task lifecycle (one window per cuekit task, killed on terminal state)
 
 Rationale and the exact protocol → tmux mapping live in `2026-04-23-cuekit-adapter-spec.md` Section 3.7. Claude Code's Agent Teams pane backend is the direct reference.
 
@@ -214,7 +214,7 @@ The `@cuekit/mcp` package therefore acts as a control-surface package even thoug
 All MVP adapters ride on the v0 pane backend (Section 9.0). Their only adapter-specific responsibility is providing the launch command, a result/transcript extractor, and runtime-specific status heuristics.
 
 ### 10.1 PiAdapter
-Goal: wrap pi child sessions/jobs into cuekit jobs.
+Goal: wrap pi child sessions/tasks into cuekit tasks.
 
 Needs:
 
@@ -224,17 +224,17 @@ Needs:
 - normalize result payload
 
 ### 10.2 ClaudeCodeAdapter
-Goal: wrap Claude Code sessions/jobs into cuekit jobs.
+Goal: wrap Claude Code sessions/tasks into cuekit tasks.
 
 Needs:
 
 - launch `claude` inside a cuekit task pane in **interactive mode** (not `-p`/print), so the pane remains attachable
 - pass the objective as initial prompt or via `send-keys` after launch
 - transcript capture via `tmux pipe-pane`
-- normalize end-of-run output into a stable `JobResult`
+- normalize end-of-run output into a stable `TaskResult`
 
 ### 10.3 OpenCodeAdapter
-Goal: wrap OpenCode async/session primitives into cuekit jobs.
+Goal: wrap OpenCode async/session primitives into cuekit tasks.
 
 Needs:
 
@@ -262,7 +262,7 @@ Normalization should be validated with Zod at the adapter boundary so malformed 
   "artifacts": [
     {
       "kind": "transcript",
-      "ref": ".cuekit/jobs/job-123/transcript.md"
+      "ref": ".cuekit/tasks/task-123/transcript.md"
     }
   ]
 }
@@ -340,7 +340,7 @@ The orchestrator skill is therefore an optional reference layer that explains ho
 ## 16. Recommended Implementation Order
 
 1. Write protocol and schema documents.
-2. Implement local job store and state model.
+2. Implement local task store and state model.
 3. Build one adapter end to end.
 4. Add remaining MVP adapters.
 5. Expose the primary `incur`-based command surface and publish it as MCP.
