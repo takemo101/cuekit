@@ -35,3 +35,4 @@ cuekit の最小 state model を永続化する。
 - state index は global に置く
 - 大きい payload は DB に入れず ref を持つ
 - row を素通しせず core schema で decode する
+- row mapping 後の public shape は Zod parse 済みの値だけを返す

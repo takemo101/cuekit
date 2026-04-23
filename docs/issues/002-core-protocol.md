@@ -28,6 +28,7 @@ cuekit v0 の pure protocol 層を実装する。
 - `ensureCollectable()` のような helper がある
 - invalid state は throw ではなく explicit error/result を返す
 - Zod schema が public protocol shape をカバーしている
+- TypeScript 型は可能な限り Zod schema から inference される
 - `packages/core/__tests__/` に最小テストがある
 
 ## 依存
@@ -36,4 +37,5 @@ cuekit v0 の pure protocol 層を実装する。
 ## 実装メモ
 - `core` は pure に保つ
 - Bun/SQLite/MCP SDK への依存は禁止
+- `incur` への依存も禁止
 - snake_case を protocol 境界で優先する

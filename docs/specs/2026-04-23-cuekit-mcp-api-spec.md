@@ -8,7 +8,7 @@
 
 This document specifies the Model Context Protocol (MCP) tool surface for cuekit.
 
-cuekit is control-surface agnostic at the core, but MCP-first at the v0 reference control surface. This means orchestrator agents, interactive sessions, and other tool-using clients should primarily interact with cuekit through MCP tools rather than through runtime-specific APIs.
+cuekit is control-surface agnostic at the core, but MCP-first at the v0 reference control surface. In implementation terms, the v0 control surface should be authored as an `incur` command tree with Zod schemas, then exposed to agents through MCP tools. This means orchestrator agents, interactive sessions, and other tool-using clients should primarily interact with cuekit through MCP tools rather than through runtime-specific APIs.
 
 The MCP surface should:
 
@@ -16,6 +16,7 @@ The MCP surface should:
 - hide adapter-specific runtime complexity
 - preserve protocol semantics faithfully
 - remain small and predictable
+- share its command definitions with the cuekit CLI surface instead of maintaining separate MCP-only handlers
 
 ---
 
@@ -28,6 +29,20 @@ The cuekit MCP API is designed to be:
 3. **portable** — orchestrators can use the same tools regardless of child runtime
 4. **truthful** — capability differences are surfaced explicitly, not hidden
 5. **agent-friendly** — request/response shapes are easy for coding agents to use reliably
+6. **schema-driven** — command input/output schemas are defined once in Zod and reused for CLI, MCP, store decoding, and adapter normalization
+
+---
+
+## 2.1 Implementation Strategy
+
+The v0 MCP implementation should use `incur` as the control-surface framework.
+
+Implications:
+
+- each cuekit operation is defined as an `incur` command
+- command args/options/output are described with Zod schemas
+- the same command definition is used for both CLI execution and MCP tool exposure
+- MCP should remain a thin projection of cuekit protocol operations, not a separate orchestration layer
 
 ---
 
@@ -567,6 +582,7 @@ Recommended cuekit error codes:
 ### 13.1 Stability Rules
 
 - tool names should be stable once published
+- command names should remain aligned with tool names where practical
 - optional fields may be added over time
 - required field changes should be versioned explicitly
 
@@ -587,6 +603,14 @@ If a target runtime cannot:
 - provide live progress updates
 
 then cuekit should say so explicitly instead of pretending uniform support.
+
+### 13.4 Command/Tool Parity Rule
+
+The CLI and MCP surfaces should not drift semantically.
+
+- if a cuekit operation exists as an MCP tool, it should come from the same `incur` command definition used by the CLI
+- Zod schemas attached to command definitions are the canonical source for command/tool input and output validation
+- MCP-specific glue should stay thin and should not redefine business semantics already captured in core schemas
 
 ---
 

@@ -5,6 +5,7 @@ cuekit v0 の最小フローが end-to-end で成立することを確認し、R
 
 ## スコープ
 - submit -> status -> result の smoke validation
+- 同じ flow の CLI / MCP parity 確認
 - cancel path の確認（可能なら）
 - root README 更新
 - docs index の整合確認
@@ -20,6 +21,7 @@ cuekit v0 の最小フローが end-to-end で成立することを確認し、R
 - v0 の scope と non-goals が README に反映されている
 - docs/specs と docs/architecture のリンクが壊れていない
 - 実装済みの adapter capability が docs と矛盾していない
+- CLI と MCP の payload semantics に不整合がない
 
 ## 依存
 - Issue 001
