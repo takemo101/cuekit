@@ -1,5 +1,10 @@
 import type { Database } from "bun:sqlite";
-import { isTerminalTaskStatus, type TaskListFilter, type TaskStatus } from "@cuekit/core";
+import {
+	decodeTaskListCursor,
+	isTerminalTaskStatus,
+	type TaskListFilter,
+	type TaskStatus,
+} from "@cuekit/core";
 import { type Task, TaskSchema } from "./task.ts";
 
 export interface CreateTaskInput {
@@ -66,49 +71,61 @@ export function listTasksBySession(db: Database, session_id: string): Task[] {
 export const DEFAULT_LIST_TASKS_LIMIT = 100;
 
 // Cross-session listing with protocol-level TaskListFilter. `cwd` filters by
-// `sessions.worktree_path` via a JOIN; all other filters are direct. Newest
-// first (updated_at desc). Results are paginated via filter.limit / offset —
-// see `DEFAULT_LIST_TASKS_LIMIT` for the default cap.
+// `sessions.worktree_path` via a JOIN; all other filters are direct.
+//
+// Pagination is keyset-based on `(updated_at desc, id asc)` — stable under
+// concurrent inserts (new rows can't shift an open cursor) and O(log N)
+// with idx_tasks_updated_at_id. The opaque `filter.cursor` encodes the
+// last row of the previous page.
+//
+// Named parameters (:status, :cursor_u, …) are used throughout so
+// reordering WHERE fragments can't silently shift positional bindings —
+// the "live mine" pattern flagged by Oracle P2-3.
 export function listTasks(db: Database, filter: TaskListFilter = {}): Task[] {
 	const conditions: string[] = [];
-	const params: (string | number)[] = [];
+	const bindings: Record<string, string | number> = {};
+
 	if (filter.status) {
-		conditions.push("t.status = ?");
-		params.push(filter.status);
+		conditions.push("t.status = :status");
+		bindings[":status"] = filter.status;
 	}
 	if (filter.agent_kind) {
-		conditions.push("t.target_agent_kind = ?");
-		params.push(filter.agent_kind);
+		conditions.push("t.target_agent_kind = :agent_kind");
+		bindings[":agent_kind"] = filter.agent_kind;
 	}
 	if (filter.session_id) {
-		conditions.push("t.session_id = ?");
-		params.push(filter.session_id);
+		conditions.push("t.session_id = :session_id");
+		bindings[":session_id"] = filter.session_id;
 	}
 	const joinCwd = filter.cwd !== undefined;
 	if (joinCwd && filter.cwd !== undefined) {
-		conditions.push("s.worktree_path = ?");
-		params.push(filter.cwd);
+		conditions.push("s.worktree_path = :cwd");
+		bindings[":cwd"] = filter.cwd;
 	}
+
+	// Keyset predicate: rows that come after the cursor in the
+	// (updated_at desc, id asc) ordering. A new row whose updated_at falls
+	// between the cursor row and the current page simply shows up on a
+	// future fetch — it cannot shift the walk.
+	if (filter.cursor !== undefined) {
+		const { updated_at, id } = decodeTaskListCursor(filter.cursor);
+		conditions.push(
+			"(t.updated_at < :cursor_u or (t.updated_at = :cursor_u and t.id > :cursor_i))",
+		);
+		bindings[":cursor_u"] = updated_at;
+		bindings[":cursor_i"] = id;
+	}
+
 	const where = conditions.length > 0 ? `where ${conditions.join(" and ")}` : "";
 	const join = joinCwd ? "join sessions s on s.id = t.session_id" : "";
 
-	// Pagination. No unbounded sentinel: omitting `limit` applies the
-	// default; the MCP-boundary schema caps explicit limits at 1000.
-	const limit = filter.limit ?? DEFAULT_LIST_TASKS_LIMIT;
-	const offset = filter.offset ?? 0;
+	bindings[":limit"] = filter.limit ?? DEFAULT_LIST_TASKS_LIMIT;
 
-	params.push(limit);
-	params.push(offset);
-
-	// Secondary sort by id keeps pagination stable when two rows share the
-	// same updated_at (ms-precision ISO strings collide under rapid inserts).
-	// Without it, LIMIT/OFFSET could silently drop or duplicate rows across
-	// pages — the exact bug pagination is meant to prevent.
 	const rows = db
 		.prepare(
-			`select t.* from tasks t ${join} ${where} order by t.updated_at desc, t.id asc limit ? offset ?`,
+			`select t.* from tasks t ${join} ${where} order by t.updated_at desc, t.id asc limit :limit`,
 		)
-		.all(...params);
+		.all(bindings);
 	return rows.map((r) => TaskSchema.parse(r));
 }
 

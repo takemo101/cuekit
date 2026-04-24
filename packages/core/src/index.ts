@@ -10,6 +10,7 @@ export * from "./steering-message.ts";
 export * from "./task-artifacts.ts";
 export * from "./task-handle.ts";
 export * from "./task-lifecycle.ts";
+export * from "./task-list-cursor.ts";
 export * from "./task-list-filter.ts";
 export * from "./task-refs.ts";
 export * from "./task-result.ts";

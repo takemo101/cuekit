@@ -263,7 +263,7 @@ describe("list-tasks", () => {
 		expect(result.tasks).toHaveLength(1);
 	});
 
-	it("signals has_more=false and omits next_offset when the whole set fits in one page", async () => {
+	it("signals has_more=false and omits next_cursor when the whole set fits in one page", async () => {
 		await runSubmitTask(ctx, {
 			objective: "a",
 			agent_kind: "claude-code",
@@ -271,10 +271,10 @@ describe("list-tasks", () => {
 		});
 		const result = await runListTasks(ctx, { limit: 10 });
 		expect(result.has_more).toBe(false);
-		expect(result.next_offset).toBeUndefined();
+		expect(result.next_cursor).toBeUndefined();
 	});
 
-	it("signals has_more=true and returns next_offset when more rows exist beyond the page", async () => {
+	it("signals has_more=true and returns next_cursor when more rows exist beyond the page", async () => {
 		for (let i = 0; i < 3; i++) {
 			await runSubmitTask(ctx, {
 				objective: `obj ${i}`,
@@ -282,17 +282,20 @@ describe("list-tasks", () => {
 				cwd: "/tmp/one",
 			});
 		}
-		const first = await runListTasks(ctx, { limit: 2, offset: 0 });
+		const first = await runListTasks(ctx, { limit: 2 });
 		expect(first.tasks).toHaveLength(2);
 		expect(first.has_more).toBe(true);
-		expect(first.next_offset).toBe(2);
+		expect(first.next_cursor).toBeDefined();
 
-		// Walk the rest using next_offset — the final page must flip
-		// has_more back to false so the caller knows to stop.
-		const second = await runListTasks(ctx, { limit: 2, offset: first.next_offset ?? 0 });
+		// Walk the rest using next_cursor — the final page must flip
+		// has_more back to false so the caller knows to stop. No overlap
+		// with the first page.
+		const second = await runListTasks(ctx, { limit: 2, cursor: first.next_cursor });
 		expect(second.tasks).toHaveLength(1);
 		expect(second.has_more).toBe(false);
-		expect(second.next_offset).toBeUndefined();
+		expect(second.next_cursor).toBeUndefined();
+		const firstIds = new Set(first.tasks.map((t) => t.task_id));
+		for (const t of second.tasks) expect(firstIds.has(t.task_id)).toBe(false);
 	});
 });
 
