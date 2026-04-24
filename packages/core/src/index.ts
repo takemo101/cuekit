@@ -6,6 +6,7 @@ export * from "./input-ref.ts";
 export * from "./job-error.ts";
 export * from "./session-status.ts";
 export * from "./steering-message.ts";
+export * from "./task-artifacts.ts";
 export * from "./task-handle.ts";
 export * from "./task-lifecycle.ts";
 export * from "./task-list-filter.ts";
