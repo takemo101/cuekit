@@ -35,42 +35,49 @@ cd cuekit
 bun install
 ```
 
-`cuekit` is exposed as the binary of `@cuekit/mcp`. For local use:
+`cuekit` is exposed as the binary of `@cuekit/mcp`. For local use, register the binary globally:
 
 ```sh
-bun link
-bun link @cuekit/mcp     # or: add packages/mcp/src/bin.ts to your PATH
+cd packages/mcp && bun link    # adds `cuekit` to ~/.bun/bin/
+```
+
+Or run it directly without linking:
+
+```sh
+bun packages/mcp/src/bin.ts <command> ...
 ```
 
 ## CLI
+
+Command names are kebab-case; option names follow the Zod schema (snake_case).
 
 ```sh
 cuekit list-adapters
 # → { adapters: [ { agent_kind: "claude-code", supports_attach: true, ... } ] }
 
 cuekit submit-task --objective "add retry logic to src/api/client.ts" \
-                   --agent-kind claude-code \
+                   --agent_kind claude-code \
                    --model sonnet \
                    --cwd /path/to/repo
 # → { accepted: true, task_id: "t_abc...", agent_kind: "claude-code", session_id: "s_..." }
 
-cuekit get-task-status --task-id t_abc...
+cuekit get-task-status --task_id t_abc...
 # → { task_id, status: "running", attach_hint: "tmux attach-session -t cuekit-task-t_abc...", ... }
 
 # The attach_hint is a real command you can run in another terminal:
 tmux attach-session -t cuekit-task-t_abc...
 
-cuekit steer-task --task-id t_abc... --message "also cover exponential backoff"
+cuekit steer-task --task_id t_abc... --message "also cover exponential backoff"
 
-cuekit cancel-task --task-id t_abc...
+cuekit cancel-task --task_id t_abc...
 
-cuekit get-task-result --task-id t_abc...
+cuekit get-task-result --task_id t_abc...
 # → { ok: true, value: { status: "cancelled", summary: "...", artifacts: [...] } }
 
 cuekit list-tasks --status running
 ```
 
-Every command accepts `--help` (via incur) and `--llms` (machine-readable manifest for LLM-friendly CLIs).
+Every command accepts `--help`, `--llms` / `--llms-full` (machine-readable manifest for LLM-friendly CLIs), `--schema` (JSON Schema for the command input), and `--format` (toon / json / yaml / md / jsonl) via incur.
 
 ## MCP
 

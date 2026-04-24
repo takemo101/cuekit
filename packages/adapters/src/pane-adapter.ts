@@ -139,8 +139,14 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 			try {
 				mkdirSync(dirname(desiredTranscriptPath), { recursive: true });
 				transcriptPath = desiredTranscriptPath;
-			} catch {
-				// best-effort — proceed without transcript capture
+			} catch (err) {
+				// Best-effort: unwritable cwd shouldn't block submit. Emit a
+				// visible warning to stderr so the operator can see why the
+				// transcript is missing, rather than silently returning empty
+				// artifacts on collect.
+				process.stderr.write(
+					`cuekit: transcript capture disabled for task ${task_id} (${config.kind}): ${errorMessage(err)}\n`,
+				);
 			}
 
 			try {

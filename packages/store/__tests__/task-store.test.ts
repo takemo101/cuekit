@@ -8,6 +8,7 @@ import {
 	getTaskById,
 	listTasksBySession,
 	updateTaskNativeRef,
+	updateTaskRefs,
 	updateTaskStatus,
 	updateTaskSummary,
 } from "../src/task-store.ts";
@@ -196,6 +197,60 @@ describe("updateTaskSummary", () => {
 	});
 });
 
+describe("updateTaskRefs", () => {
+	beforeEach(() => {
+		createTask(db, { id: "t1", session_id: "s1", target_agent_kind: "pi", objective: "x" });
+	});
+
+	it("sets transcript_ref alone", () => {
+		const t = updateTaskRefs(db, "t1", {
+			transcript_ref: ".cuekit/tasks/t1/transcript.txt",
+		});
+		expect(t?.transcript_ref).toBe(".cuekit/tasks/t1/transcript.txt");
+		expect(t?.result_ref).toBeNull();
+	});
+
+	it("sets result_ref alone", () => {
+		const t = updateTaskRefs(db, "t1", { result_ref: ".cuekit/tasks/t1/result.json" });
+		expect(t?.result_ref).toBe(".cuekit/tasks/t1/result.json");
+		expect(t?.transcript_ref).toBeNull();
+	});
+
+	it("sets both refs in one call", () => {
+		const t = updateTaskRefs(db, "t1", {
+			transcript_ref: "/trans",
+			result_ref: "/res",
+		});
+		expect(t?.transcript_ref).toBe("/trans");
+		expect(t?.result_ref).toBe("/res");
+	});
+
+	it("clears a ref when null is passed explicitly", () => {
+		updateTaskRefs(db, "t1", { transcript_ref: "/trans" });
+		const cleared = updateTaskRefs(db, "t1", { transcript_ref: null });
+		expect(cleared?.transcript_ref).toBeNull();
+	});
+
+	it("leaves omitted fields untouched (partial update)", () => {
+		updateTaskRefs(db, "t1", { transcript_ref: "/keep", result_ref: "/also-keep" });
+		const patched = updateTaskRefs(db, "t1", { result_ref: "/new" });
+		expect(patched?.transcript_ref).toBe("/keep");
+		expect(patched?.result_ref).toBe("/new");
+	});
+
+	it("is a no-op when the patch is empty", () => {
+		updateTaskRefs(db, "t1", { transcript_ref: "/keep" });
+		const beforeUpdatedAt = getTaskById(db, "t1")?.updated_at;
+		const t = updateTaskRefs(db, "t1", {});
+		expect(t?.transcript_ref).toBe("/keep");
+		expect(t?.updated_at).toBe(beforeUpdatedAt ?? "");
+	});
+
+	it("returns null for unknown id", () => {
+		expect(updateTaskRefs(db, "nope", { transcript_ref: "x" })).toBeNull();
+	});
+});
+
 describe("completeTask", () => {
 	beforeEach(() => {
 		createTask(db, { id: "t1", session_id: "s1", target_agent_kind: "pi", objective: "x" });
@@ -227,5 +282,47 @@ describe("completeTask", () => {
 
 	it("throws on non-terminal status (caller defect)", () => {
 		expect(() => completeTask(db, { id: "t1", status: "running" })).toThrow(/defect/);
+	});
+
+	// Regression: earlier impl blindly set summary/result_ref/transcript_ref
+	// to null when not supplied, erasing values written by updateTaskRefs at
+	// submit time. A cancel with only { status } was wiping transcript_ref.
+	it("preserves existing transcript_ref when completeTask omits it", () => {
+		updateTaskRefs(db, "t1", { transcript_ref: "/set/at/submit.txt" });
+		const done = completeTask(db, { id: "t1", status: "cancelled" });
+		expect(done?.transcript_ref).toBe("/set/at/submit.txt");
+	});
+
+	it("preserves existing result_ref when completeTask omits it", () => {
+		updateTaskRefs(db, "t1", { result_ref: "/emitted/by/runtime.json" });
+		const done = completeTask(db, { id: "t1", status: "completed" });
+		expect(done?.result_ref).toBe("/emitted/by/runtime.json");
+	});
+
+	it("preserves existing summary when completeTask omits it", () => {
+		updateTaskSummary(db, "t1", "progress so far");
+		const done = completeTask(db, { id: "t1", status: "completed" });
+		expect(done?.summary).toBe("progress so far");
+	});
+
+	it("overwrites fields that are explicitly passed", () => {
+		updateTaskRefs(db, "t1", { transcript_ref: "/old" });
+		const done = completeTask(db, {
+			id: "t1",
+			status: "completed",
+			transcript_ref: "/new",
+		});
+		expect(done?.transcript_ref).toBe("/new");
+	});
+
+	it("can still null a field via explicit null (opt-in clearing)", () => {
+		updateTaskRefs(db, "t1", { transcript_ref: "/old" });
+		const done = completeTask(db, {
+			id: "t1",
+			status: "completed",
+			transcript_ref: undefined,
+		});
+		// `undefined` means "don't touch" so /old survives
+		expect(done?.transcript_ref).toBe("/old");
 	});
 });

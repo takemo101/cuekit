@@ -6,6 +6,7 @@ import { join } from "node:path";
 import {
 	AdapterRegistry,
 	createClaudeCodeAdapter,
+	createOpenCodeAdapter,
 	createPiAdapter,
 	FakeTmuxRunner,
 	PaneBackend,
@@ -40,6 +41,7 @@ beforeEach(() => {
 		createClaudeCodeAdapter(db, panes, { launchCommandOverride: () => "sleep 60" }),
 	);
 	registry.register(createPiAdapter(db, panes, { launchCommandOverride: () => "sleep 60" }));
+	registry.register(createOpenCodeAdapter(db, panes, { launchCommandOverride: () => "sleep 60" }));
 	ctx = { db, registry };
 });
 
@@ -152,8 +154,14 @@ describe("e2e: submit → status → cancel → result", () => {
 			};
 		};
 		const map = new Map(body.data.adapters.map((a) => [a.agent_kind, a]));
+		expect(map.size).toBe(3);
+		// claude-code: model selection with a published list
 		expect(map.get("claude-code")?.supports_model_selection).toBe(true);
 		expect(map.get("claude-code")?.available_models).toContain("sonnet");
+		// pi: no model selection
 		expect(map.get("pi")?.supports_model_selection).toBe(false);
+		// opencode: model selection but runtime-configurable catalog (no list)
+		expect(map.get("opencode")?.supports_model_selection).toBe(true);
+		expect(map.get("opencode")?.available_models).toBeUndefined();
 	});
 });
