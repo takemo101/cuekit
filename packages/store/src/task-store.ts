@@ -130,6 +130,34 @@ export function updateTaskSummary(db: Database, id: string, summary: string | nu
 	return getTaskById(db, id);
 }
 
+export interface TaskRefsUpdate {
+	transcript_ref?: string | null;
+	result_ref?: string | null;
+}
+
+// Patches transcript_ref and/or result_ref. Omitted fields are left untouched;
+// null clears. Used by adapters at submit-time (to record the transcript
+// path) and at completion (to record a runtime-emitted result file).
+export function updateTaskRefs(db: Database, id: string, patch: TaskRefsUpdate): Task | null {
+	const setClauses: string[] = [];
+	const params: (string | null)[] = [];
+	if (patch.transcript_ref !== undefined) {
+		setClauses.push("transcript_ref = ?");
+		params.push(patch.transcript_ref);
+	}
+	if (patch.result_ref !== undefined) {
+		setClauses.push("result_ref = ?");
+		params.push(patch.result_ref);
+	}
+	if (setClauses.length === 0) return getTaskById(db, id);
+	const now = new Date().toISOString();
+	setClauses.push("updated_at = ?");
+	params.push(now);
+	params.push(id);
+	db.prepare(`update tasks set ${setClauses.join(", ")} where id = ?`).run(...params);
+	return getTaskById(db, id);
+}
+
 export interface CompleteTaskInput {
 	id: string;
 	status: TaskStatus;
@@ -145,19 +173,29 @@ export function completeTask(db: Database, input: CompleteTaskInput): Task | nul
 		throw new Error(`defect: completeTask requires a terminal status, got '${input.status}'`);
 	}
 	const now = new Date().toISOString();
-	db.prepare(
-		`update tasks
-		set status = ?, summary = ?, result_ref = ?, transcript_ref = ?,
-			updated_at = ?, completed_at = coalesce(completed_at, ?)
-		where id = ?`,
-	).run(
-		input.status,
-		input.summary ?? null,
-		input.result_ref ?? null,
-		input.transcript_ref ?? null,
-		now,
-		now,
-		input.id,
-	);
+	// Only overwrite the optional fields the caller actually provided. Earlier
+	// implementations blindly set summary/result_ref/transcript_ref to null
+	// when they were omitted, which erased values set by updateTaskRefs /
+	// updateTaskSummary earlier in the lifecycle.
+	const setClauses: string[] = [
+		"status = ?",
+		"updated_at = ?",
+		"completed_at = coalesce(completed_at, ?)",
+	];
+	const params: (string | null)[] = [input.status, now, now];
+	if (input.summary !== undefined) {
+		setClauses.push("summary = ?");
+		params.push(input.summary);
+	}
+	if (input.result_ref !== undefined) {
+		setClauses.push("result_ref = ?");
+		params.push(input.result_ref);
+	}
+	if (input.transcript_ref !== undefined) {
+		setClauses.push("transcript_ref = ?");
+		params.push(input.transcript_ref);
+	}
+	params.push(input.id);
+	db.prepare(`update tasks set ${setClauses.join(", ")} where id = ?`).run(...params);
 	return getTaskById(db, input.id);
 }
