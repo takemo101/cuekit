@@ -105,7 +105,7 @@ describe("e2e: submit → status → cancel → result", () => {
 		const cli = createCli(ctx);
 
 		const submitRes = await cli.fetch(
-			new Request("http://localhost/submit-task", {
+			new Request("http://localhost/submit_task", {
 				method: "POST",
 				headers: { "content-type": "application/json" },
 				body: JSON.stringify({
@@ -126,7 +126,7 @@ describe("e2e: submit → status → cancel → result", () => {
 		if (!task_id) throw new Error("no task_id");
 
 		const statusRes = await cli.fetch(
-			new Request(`http://localhost/get-task-status?task_id=${task_id}`),
+			new Request(`http://localhost/get_task_status?task_id=${task_id}`),
 		);
 		const statusBody = (await statusRes.json()) as {
 			data: { status: string; attach_hint?: string };
@@ -134,16 +134,16 @@ describe("e2e: submit → status → cancel → result", () => {
 		expect(statusBody.data.status).toBe("running");
 		expect(statusBody.data.attach_hint).toContain(task_id);
 
-		const listRes = await cli.fetch(new Request("http://localhost/list-tasks"));
+		const listRes = await cli.fetch(new Request("http://localhost/list_tasks"));
 		const listBody = (await listRes.json()) as {
 			data: { tasks: Array<{ task_id: string }> };
 		};
 		expect(listBody.data.tasks.some((t) => t.task_id === task_id)).toBe(true);
 	});
 
-	it("list-adapters surfaces all three MVP adapters with correct model capabilities", async () => {
+	it("list_adapters surfaces all three MVP adapters with correct model capabilities", async () => {
 		const cli = createCli(ctx);
-		const res = await cli.fetch(new Request("http://localhost/list-adapters"));
+		const res = await cli.fetch(new Request("http://localhost/list_adapters"));
 		const body = (await res.json()) as {
 			data: {
 				adapters: Array<{

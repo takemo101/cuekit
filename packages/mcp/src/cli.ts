@@ -38,58 +38,63 @@ import {
 } from "./commands/submit-task.ts";
 
 // Builds the cuekit control surface. The same command tree backs both the
-// CLI (`cuekit submit-task ...`) and the MCP stdio server (`cuekit --mcp`)
+// CLI (`cuekit submit_task ...`) and the MCP stdio server (`cuekit --mcp`)
 // via incur. Callers inject runtime dependencies (db, registry) through
 // ctx so the surface stays pure of environment assumptions.
+//
+// Command names are snake_case (not kebab) because incur uses the command
+// name verbatim as the MCP tool name, and the cuekit spec mandates
+// snake_case MCP tool names (`submit_task`, `get_task_status`, etc.).
+// CLI invocation follows the same convention: `cuekit submit_task ...`.
 export function createCli(ctx: CommandContext) {
 	const cli = Cli.create("cuekit", {
 		version: pkg.version,
 		description: "cuekit — delegation substrate for coding agents.",
 	});
 
-	cli.command("submit-task", {
+	cli.command("submit_task", {
 		description: "Submit a task to a target adapter.",
 		options: SubmitTaskInputSchema,
 		output: SubmitTaskOutputSchema,
 		run: ({ options }) => runSubmitTask(ctx, options),
 	});
 
-	cli.command("get-task-status", {
+	cli.command("get_task_status", {
 		description: "Fetch the current status of a task.",
 		options: GetTaskStatusInputSchema,
 		output: GetTaskStatusOutputSchema,
 		run: ({ options }) => runGetTaskStatus(ctx, options),
 	});
 
-	cli.command("get-task-result", {
+	cli.command("get_task_result", {
 		description: "Collect the normalized result of a terminal task.",
 		options: GetTaskResultInputSchema,
 		output: GetTaskResultOutputSchema,
 		run: ({ options }) => runGetTaskResult(ctx, options),
 	});
 
-	cli.command("cancel-task", {
+	cli.command("cancel_task", {
 		description: "Cancel an active task.",
 		options: CancelTaskInputSchema,
 		output: CancelTaskOutputSchema,
 		run: ({ options }) => runCancelTask(ctx, options),
 	});
 
-	cli.command("list-tasks", {
+	cli.command("list_tasks", {
 		description: "List tasks, optionally filtered by status / adapter / session / cwd.",
 		options: ListTasksInputSchema,
 		output: ListTasksOutputSchema,
 		run: ({ options }) => runListTasks(ctx, options),
 	});
 
-	cli.command("list-adapters", {
+	cli.command("list_adapters", {
 		description: "List registered adapters and their capabilities.",
 		options: ListAdaptersInputSchema,
 		output: ListAdaptersOutputSchema,
 		run: ({ options }) => runListAdapters(ctx, options),
 	});
 
-	cli.command("steer-task", {
+	cli.command("steer_task", {
 		description: "Send a steering message to a running task (best-effort).",
 		options: SteerTaskInputSchema,
 		output: SteerTaskOutputSchema,

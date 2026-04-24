@@ -35,7 +35,13 @@ function installSignalHandlers(db: Database): void {
 async function main(): Promise<void> {
 	let db: Database | undefined;
 	try {
-		db = openDatabase();
+		// Allow integration tests and operators to point at an alternate DB
+		// path via CUEKIT_DB_PATH. Unset or empty string → `~/.cuekit/state.db`
+		// (production default). Accepts `:memory:` too if someone really
+		// wants an ephemeral server.
+		const dbPath = process.env.CUEKIT_DB_PATH;
+		const useCustomPath = dbPath !== undefined && dbPath.length > 0;
+		db = openDatabase(useCustomPath ? { path: dbPath } : {});
 		runMigrations(db);
 		installSignalHandlers(db);
 
@@ -46,8 +52,13 @@ async function main(): Promise<void> {
 		registry.register(createOpenCodeAdapter(db, panes));
 
 		const cli = createCli({ db, registry });
+		// Note: `cli.serve()` may return before the process should exit —
+		// in `--mcp` mode incur resolves this promise as soon as the stdio
+		// transport is wired, and the server keeps handling requests in
+		// the background. Closing the DB here would break subsequent tool
+		// calls with 'Cannot use a closed database'. Defer cleanup to the
+		// signal handlers instead; the OS reclaims everything on exit.
 		await cli.serve();
-		closeQuietly(db);
 	} catch (err) {
 		if (db) closeQuietly(db);
 		const message = err instanceof Error ? err.message : String(err);

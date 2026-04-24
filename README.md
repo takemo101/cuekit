@@ -49,32 +49,32 @@ bun packages/mcp/src/bin.ts <command> ...
 
 ## CLI
 
-Command names are kebab-case; option names follow the Zod schema (snake_case).
+Command and option names are both snake_case. This is the same identifier the MCP tool surface exposes, so the two surfaces share one vocabulary.
 
 ```sh
-cuekit list-adapters
+cuekit list_adapters
 # → { adapters: [ { agent_kind: "claude-code", supports_attach: true, ... } ] }
 
-cuekit submit-task --objective "add retry logic to src/api/client.ts" \
+cuekit submit_task --objective "add retry logic to src/api/client.ts" \
                    --agent_kind claude-code \
                    --model sonnet \
                    --cwd /path/to/repo
 # → { accepted: true, task_id: "t_abc...", agent_kind: "claude-code", session_id: "s_..." }
 
-cuekit get-task-status --task_id t_abc...
+cuekit get_task_status --task_id t_abc...
 # → { task_id, status: "running", attach_hint: "tmux attach-session -t cuekit-task-t_abc...", ... }
 
 # The attach_hint is a real command you can run in another terminal:
 tmux attach-session -t cuekit-task-t_abc...
 
-cuekit steer-task --task_id t_abc... --message "also cover exponential backoff"
+cuekit steer_task --task_id t_abc... --message "also cover exponential backoff"
 
-cuekit cancel-task --task_id t_abc...
+cuekit cancel_task --task_id t_abc...
 
-cuekit get-task-result --task_id t_abc...
+cuekit get_task_result --task_id t_abc...
 # → { ok: true, value: { status: "cancelled", summary: "...", artifacts: [...] } }
 
-cuekit list-tasks --status running
+cuekit list_tasks --status running
 ```
 
 Every command accepts `--help`, `--llms` / `--llms-full` (machine-readable manifest for LLM-friendly CLIs), `--schema` (JSON Schema for the command input), and `--format` (toon / json / yaml / md / jsonl) via incur.
@@ -131,7 +131,7 @@ The automated suite stubs the child runtime with `sleep` so it never calls Anthr
 cd packages/mcp && bun link      # registers `cuekit` globally
 
 # In a real repo where you want the child to work:
-cuekit submit-task --objective "explain this repo in one paragraph" \
+cuekit submit_task --objective "explain this repo in one paragraph" \
                    --agent_kind claude-code \
                    --model sonnet
 
@@ -139,8 +139,8 @@ cuekit submit-task --objective "explain this repo in one paragraph" \
 tmux attach-session -t cuekit-task-<task_id>
 # Ctrl-b d detaches; the task keeps running.
 
-cuekit get-task-status --task_id <task_id>
-cuekit cancel-task     --task_id <task_id>
+cuekit get_task_status --task_id <task_id>
+cuekit cancel_task     --task_id <task_id>
 ```
 
 The transcript is piped to `<cwd>/.cuekit/tasks/<task_id>/transcript.txt` and stays after the session is killed.
