@@ -67,6 +67,18 @@ export function deleteTask(db: Database, id: string): boolean {
 	return result.changes > 0;
 }
 
+// Per-session history in creation order (oldest first). This is
+// intentionally asymmetric with `listTasks`, which pages newest-first
+// by `updated_at`:
+//   • The set here is bounded by session lifetime, so pagination
+//     isn't load-bearing — sessions don't accumulate unbounded tasks
+//     the way a cross-session DB does.
+//   • Per-session views are commonly read as a chronological
+//     transcript of what the session did; `created_at asc` matches
+//     that reading. Cross-session views are read as "what's active
+//     right now"; `updated_at desc` matches that.
+// If the two eventually need to share a contract, harmonize here
+// rather than at `listTasks` — that one carries the pagination tax.
 export function listTasksBySession(db: Database, session_id: string): Task[] {
 	const rows = db
 		.prepare("select * from tasks where session_id = ? order by created_at asc")
@@ -74,10 +86,10 @@ export function listTasksBySession(db: Database, session_id: string): Task[] {
 	return rows.map((r) => TaskSchema.parse(r));
 }
 
-// Default page size when a caller doesn't specify one. 100 is "roughly a
-// screenful of summaries" — enough that small deployments never hit the
-// cap, small enough that a forgotten-filter call over a year-old DB
-// doesn't pull tens of thousands of rows across the MCP boundary.
+// Default page size when a caller doesn't specify one. 100 is
+// "roughly a screenful of summaries" — enough that small deployments
+// never hit the cap, small enough that a forgotten-filter call over
+// a year-old DB doesn't pull tens of thousands of rows.
 export const DEFAULT_LIST_TASKS_LIMIT = 100;
 
 // Cross-session listing with protocol-level TaskListFilter. `cwd` filters by
