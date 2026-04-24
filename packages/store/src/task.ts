@@ -17,6 +17,7 @@ export const TaskSchema = z.object({
 	transcript_ref: z.string().min(1).nullable(),
 	created_at: z.string().datetime({ offset: true }),
 	updated_at: z.string().datetime({ offset: true }),
+	started_at: z.string().datetime({ offset: true }).nullable(),
 	completed_at: z.string().datetime({ offset: true }).nullable(),
 });
 

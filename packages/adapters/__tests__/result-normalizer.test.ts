@@ -18,6 +18,7 @@ function makeTask(overrides: Partial<Task> = {}): Task {
 		transcript_ref: null,
 		created_at: now,
 		updated_at: now,
+		started_at: now,
 		completed_at: now,
 		...overrides,
 	};

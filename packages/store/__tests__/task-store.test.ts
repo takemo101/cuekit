@@ -129,6 +129,8 @@ describe("updateTaskStatus", () => {
 	});
 
 	it("sets completed_at on terminal transitions", () => {
+		// queued → running → completed (spec §13.1 — completed is not reachable from queued)
+		updateTaskStatus(db, "t1", "running");
 		const t = updateTaskStatus(db, "t1", "completed");
 		expect(t?.status).toBe("completed");
 		expect(t?.completed_at).not.toBeNull();
@@ -139,11 +141,42 @@ describe("updateTaskStatus", () => {
 		expect(t?.completed_at).toBeNull();
 	});
 
+	it("stamps started_at on the first queued→running transition", () => {
+		const running = updateTaskStatus(db, "t1", "running");
+		expect(running?.started_at).not.toBeNull();
+	});
+
+	it("preserves started_at across subsequent transitions", () => {
+		const running = updateTaskStatus(db, "t1", "running");
+		const first = running?.started_at;
+		// A later state change should leave started_at unchanged.
+		updateTaskStatus(db, "t1", "blocked");
+		const later = updateTaskStatus(db, "t1", "running");
+		expect(later?.started_at).toBe(first ?? "");
+	});
+
+	it("rejects a forbidden transition as a defect (e.g. queued → completed)", () => {
+		// Spec §13.1: completed is reachable only from running. A caller that
+		// skips running is a defect, not a user error — throws loud.
+		expect(() => updateTaskStatus(db, "t1", "completed")).toThrow(/defect/);
+	});
+
 	it("preserves completed_at across repeated terminal updates", () => {
+		// running → completed → failed is allowed per ALLOWED_TRANSITIONS.
+		// Wait — completed is terminal, so completed → failed is actually
+		// forbidden. Use the legitimate path: running → completed → (defect
+		// throw). Instead test preservation via running → failed → (defect
+		// throw on re-completion). The underlying invariant (once set,
+		// completed_at is sticky) is still meaningful when a future caller
+		// adds a new terminal transition the spec might allow.
+		updateTaskStatus(db, "t1", "running");
 		const first = updateTaskStatus(db, "t1", "completed");
 		const firstEnd = first?.completed_at;
-		const second = updateTaskStatus(db, "t1", "failed");
-		expect(second?.completed_at).toBe(firstEnd ?? "");
+		// Second terminal transition should be a defect, but if it ever
+		// is allowed in the future, completed_at must be sticky.
+		expect(() => updateTaskStatus(db, "t1", "failed")).toThrow(/defect/);
+		const after = getTaskById(db, "t1");
+		expect(after?.completed_at).toBe(firstEnd ?? "");
 	});
 
 	it("returns null for unknown id", () => {
@@ -257,8 +290,13 @@ describe("updateTaskRefs", () => {
 });
 
 describe("completeTask", () => {
+	// Move the task out of `queued` so completed becomes a legal target
+	// per spec §13.1 (queued → running → completed). Tests that drive to
+	// `cancelled` / `failed` don't need this since both are reachable
+	// from queued, but running through it keeps fixtures uniform.
 	beforeEach(() => {
 		createTask(db, { id: "t1", session_id: "s1", target_agent_kind: "pi", objective: "x" });
+		updateTaskStatus(db, "t1", "running");
 	});
 
 	it("sets status, summary, result_ref, transcript_ref", () => {
@@ -287,6 +325,14 @@ describe("completeTask", () => {
 
 	it("throws on non-terminal status (caller defect)", () => {
 		expect(() => completeTask(db, { id: "t1", status: "running" })).toThrow(/defect/);
+	});
+
+	it("throws on a forbidden terminal transition (defect)", () => {
+		// running → completed first; then a second completeTask attempt
+		// targets a different terminal state (completed → failed is
+		// forbidden by ALLOWED_TRANSITIONS).
+		completeTask(db, { id: "t1", status: "completed" });
+		expect(() => completeTask(db, { id: "t1", status: "failed" })).toThrow(/defect/);
 	});
 
 	// Regression: earlier impl blindly set summary/result_ref/transcript_ref
