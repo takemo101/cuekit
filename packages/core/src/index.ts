@@ -4,6 +4,7 @@ export * from "./artifact-ref.ts";
 export * from "./expected-output.ts";
 export * from "./input-ref.ts";
 export * from "./job-error.ts";
+export * from "./logger.ts";
 export * from "./session-status.ts";
 export * from "./steering-message.ts";
 export * from "./task-artifacts.ts";

@@ -1,5 +1,5 @@
 import type { Database } from "bun:sqlite";
-import type { TaskSpec } from "@cuekit/core";
+import type { Logger, TaskSpec } from "@cuekit/core";
 import type { AgentAdapter } from "./agent-adapter.ts";
 import { createPaneAdapter } from "./pane-adapter.ts";
 import type { PaneBackend } from "./pane-backend.ts";
@@ -12,6 +12,7 @@ import { shellQuote } from "./shell-quote.ts";
 export interface PiAdapterOptions {
 	launchCommandOverride?: (spec: TaskSpec) => string;
 	piBin?: string;
+	logger?: Logger;
 }
 
 export function createPiAdapter(
@@ -38,6 +39,6 @@ export function createPiAdapter(
 			},
 			buildLaunchCommand: options.launchCommandOverride ?? buildLaunchCommand,
 		},
-		{ db, panes },
+		{ db, panes, logger: options.logger },
 	);
 }

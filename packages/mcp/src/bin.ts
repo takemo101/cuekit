@@ -7,6 +7,7 @@ import {
 	createPiAdapter,
 	PaneBackend,
 } from "@cuekit/adapters";
+import { createStderrLogger, parseLogLevel } from "@cuekit/core";
 import { openDatabase, runMigrations } from "@cuekit/store";
 import { createCli } from "./cli.ts";
 
@@ -33,6 +34,13 @@ function installSignalHandlers(db: Database): void {
 }
 
 async function main(): Promise<void> {
+	// Construct the logger before any fallible startup work so the catch
+	// block can use it uniformly. parseLogLevel guards against typos in
+	// CUEKIT_LOG_LEVEL (unknown values fall back to "warn" instead of
+	// silently enabling every level).
+	const logLevel = parseLogLevel(process.env.CUEKIT_LOG_LEVEL);
+	const logger = createStderrLogger({ minLevel: logLevel });
+
 	let db: Database | undefined;
 	try {
 		// Allow integration tests and operators to point at an alternate DB
@@ -47,9 +55,9 @@ async function main(): Promise<void> {
 
 		const panes = new PaneBackend();
 		const registry = new AdapterRegistry();
-		registry.register(createClaudeCodeAdapter(db, panes));
-		registry.register(createPiAdapter(db, panes));
-		registry.register(createOpenCodeAdapter(db, panes));
+		registry.register(createClaudeCodeAdapter(db, panes, { logger }));
+		registry.register(createPiAdapter(db, panes, { logger }));
+		registry.register(createOpenCodeAdapter(db, panes, { logger }));
 
 		const cli = createCli({ db, registry });
 		// Note: `cli.serve()` may return before the process should exit —
@@ -61,8 +69,9 @@ async function main(): Promise<void> {
 		await cli.serve();
 	} catch (err) {
 		if (db) closeQuietly(db);
-		const message = err instanceof Error ? err.message : String(err);
-		process.stderr.write(`cuekit: ${message}\n`);
+		logger.error("startup failed", {
+			reason: err instanceof Error ? err.message : String(err),
+		});
 		process.exit(1);
 	}
 }
