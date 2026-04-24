@@ -1,11 +1,7 @@
 import { Database } from "bun:sqlite";
 import { describe, expect, it } from "bun:test";
-import {
-	AdapterRegistry,
-	createClaudeCodeAdapter,
-	FakeTmuxRunner,
-	PaneBackend,
-} from "@cuekit/adapters";
+import { AdapterRegistry, createClaudeCodeAdapter, PaneBackend } from "@cuekit/adapters";
+import { FakeTmuxRunner } from "@cuekit/adapters/testing";
 import { runMigrations } from "@cuekit/store";
 import { createCli } from "../src/cli.ts";
 
