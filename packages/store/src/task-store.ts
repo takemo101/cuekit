@@ -59,12 +59,18 @@ export function listTasksBySession(db: Database, session_id: string): Task[] {
 	return rows.map((r) => TaskSchema.parse(r));
 }
 
+// Default page size when a caller doesn't specify one. Keeps unbounded
+// reads from leaking across the MCP boundary while still returning a
+// useful amount. Pass `limit: 0` to opt into unbounded reads.
+export const DEFAULT_LIST_TASKS_LIMIT = 100;
+
 // Cross-session listing with protocol-level TaskListFilter. `cwd` filters by
 // `sessions.worktree_path` via a JOIN; all other filters are direct. Newest
-// first (updated_at desc).
+// first (updated_at desc). Results are paginated via filter.limit / offset —
+// see `DEFAULT_LIST_TASKS_LIMIT` for the default cap.
 export function listTasks(db: Database, filter: TaskListFilter = {}): Task[] {
 	const conditions: string[] = [];
-	const params: string[] = [];
+	const params: (string | number)[] = [];
 	if (filter.status) {
 		conditions.push("t.status = ?");
 		params.push(filter.status);
@@ -84,8 +90,18 @@ export function listTasks(db: Database, filter: TaskListFilter = {}): Task[] {
 	}
 	const where = conditions.length > 0 ? `where ${conditions.join(" and ")}` : "";
 	const join = joinCwd ? "join sessions s on s.id = t.session_id" : "";
+
+	// Pagination. `limit: 0` means "no limit" (explicit opt-in); undefined
+	// means "default". SQLite's `LIMIT -1` returns all rows.
+	const limit = filter.limit ?? DEFAULT_LIST_TASKS_LIMIT;
+	const effectiveLimit = limit === 0 ? -1 : limit;
+	const offset = filter.offset ?? 0;
+
+	params.push(effectiveLimit);
+	params.push(offset);
+
 	const rows = db
-		.prepare(`select t.* from tasks t ${join} ${where} order by t.updated_at desc`)
+		.prepare(`select t.* from tasks t ${join} ${where} order by t.updated_at desc limit ? offset ?`)
 		.all(...params);
 	return rows.map((r) => TaskSchema.parse(r));
 }
