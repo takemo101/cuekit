@@ -377,6 +377,7 @@ interface JobError {
     | "steering_unsupported"
     | "collect_unavailable"
     | "task_not_found"
+    | "session_not_found"
     | "invalid_state"
     | "invalid_input"
     | "runtime_crash"
@@ -639,7 +640,21 @@ interface TaskSummary {
 interface TaskListFilter {
   status?: TaskStatus;
   agent_kind?: string;
+  session_id?: string;
   cwd?: string;
+  // Pagination. Implementations page newest-`updated_at` first with a
+  // keyset cursor so a new task inserted between page fetches cannot
+  // shift the walk. `limit` caps the page; `cursor` is an opaque
+  // string echoed from the previous response's `next_cursor` — never
+  // hand-craft.
+  limit?: number;  // 1..1000, default 100
+  cursor?: string; // opaque keyset cursor
+}
+
+interface ListTasksResponse {
+  tasks: TaskSummary[];
+  has_more: boolean;          // always present
+  next_cursor?: string;       // present only when `has_more` is true
 }
 ```
 
