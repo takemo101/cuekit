@@ -15,26 +15,45 @@ export interface ClaudeCodeAdapterOptions {
 	availableModels?: string[];
 }
 
+export interface BuildClaudeCodeLaunchCommandOptions {
+	claudeBin?: string;
+}
+
+// Pure builder for the tmux-pane launch command. Exported so tests can pin
+// the exact argv shape that will hit the `claude` CLI without having to spawn
+// tmux or claude itself. The output is a single shell-command string (tmux
+// new-session receives it as its final positional argument).
+//
+// Shape:    <claudeBin> [--model <model>] '<shell-quoted objective>'
+// Example:  claude --model sonnet 'Implement retry logic'
+//
+// Interactive mode (no -p / --print) — the pane stays attached to a TTY so
+// `tmux attach-session` can foreground the live child.
+export function buildClaudeCodeLaunchCommand(
+	spec: TaskSpec,
+	options: BuildClaudeCodeLaunchCommandOptions = {},
+): string {
+	const bin = options.claudeBin ?? "claude";
+	const parts: string[] = [bin];
+	if (spec.model) {
+		parts.push("--model", spec.model);
+	}
+	parts.push(shellQuote(spec.objective));
+	return parts.join(" ");
+}
+
 export function createClaudeCodeAdapter(
 	db: Database,
 	panes: PaneBackend,
 	options: ClaudeCodeAdapterOptions = {},
 ): AgentAdapter {
-	const claudeBin = options.claudeBin ?? "claude";
 	const availableModels = options.availableModels ?? ["haiku", "sonnet", "opus"];
-
-	function buildLaunchCommand(spec: TaskSpec): string {
-		const parts: string[] = [claudeBin];
-		if (spec.model) {
-			parts.push("--model", spec.model);
-		}
-		// Claude Code accepts an initial prompt as a positional argument.
-		// Interactive mode stays attached to the TTY so `tmux attach-session`
-		// can foreground the live child. No `-p`/`--print` (that would be
-		// headless).
-		parts.push(shellQuote(spec.objective));
-		return parts.join(" ");
-	}
+	// Pass `options.claudeBin` through untouched; the single default
+	// lives inside `buildClaudeCodeLaunchCommand` so there's one source
+	// of truth.
+	const builder =
+		options.launchCommandOverride ??
+		((spec: TaskSpec) => buildClaudeCodeLaunchCommand(spec, { claudeBin: options.claudeBin }));
 
 	return createPaneAdapter(
 		{
@@ -48,7 +67,7 @@ export function createClaudeCodeAdapter(
 				supports_artifacts: true,
 				supports_live_progress: false,
 			},
-			buildLaunchCommand: options.launchCommandOverride ?? buildLaunchCommand,
+			buildLaunchCommand: builder,
 		},
 		{ db, panes },
 	);
