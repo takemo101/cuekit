@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 
 // Full stack test: spawn `bun packages/mcp/src/bin.ts --mcp` as a real child
 // process and speak the MCP JSON-RPC protocol to it over stdin/stdout. This
@@ -11,18 +11,28 @@ import { join } from "node:path";
 // Uses an isolated tmpdir DB via CUEKIT_DB_PATH so test runs don't pollute
 // ~/.cuekit/state.db and can be torn down cleanly.
 
+// Resolve the workspace root from this test file's location so the test
+// works regardless of where `bun test` is invoked from (local dev, CI,
+// other contributors' machines).
+//   packages/mcp/__tests__/mcp-stdio-integ.test.ts → up 3 levels
+const WORKSPACE_ROOT = resolve(import.meta.dir, "..", "..", "..");
+
+const READ_TIMEOUT_MS = 10_000;
+const SIGKILL_GRACE_MS = 500;
+
 type JsonRpcMessage = Record<string, unknown>;
 
 interface SpawnedServer {
 	proc: ReturnType<typeof Bun.spawn>;
 	send(msg: JsonRpcMessage): Promise<void>;
-	readNext(): Promise<JsonRpcMessage>;
+	readNext(context?: string): Promise<JsonRpcMessage>;
+	getStderr(): string;
 	shutdown(): Promise<void>;
 }
 
 async function spawnServer(dbPath: string): Promise<SpawnedServer> {
 	const proc = Bun.spawn(["bun", "packages/mcp/src/bin.ts", "--mcp"], {
-		cwd: "/Users/kawasakiisao/Desktop/ai/cuekit",
+		cwd: WORKSPACE_ROOT,
 		env: { ...process.env, CUEKIT_DB_PATH: dbPath },
 		stdin: "pipe",
 		stdout: "pipe",
@@ -34,7 +44,27 @@ async function spawnServer(dbPath: string): Promise<SpawnedServer> {
 	const reader = proc.stdout.getReader();
 	let buffer = "";
 
-	async function readNext(): Promise<JsonRpcMessage> {
+	// Collect stderr in the background so it's available for diagnostics
+	// when a test times out or fails unexpectedly.
+	const stderrChunks: string[] = [];
+	const stderrReader = proc.stderr.getReader();
+	const stderrPump = (async () => {
+		try {
+			while (true) {
+				const { done, value } = await stderrReader.read();
+				if (done) return;
+				stderrChunks.push(decoder.decode(value));
+			}
+		} catch {
+			// stream closed during shutdown — ignore
+		}
+	})();
+
+	function getStderr(): string {
+		return stderrChunks.join("");
+	}
+
+	async function readLoop(): Promise<JsonRpcMessage> {
 		// MCP stdio transport is newline-delimited JSON — one message per line.
 		while (true) {
 			const nl = buffer.indexOf("\n");
@@ -52,6 +82,29 @@ async function spawnServer(dbPath: string): Promise<SpawnedServer> {
 		}
 	}
 
+	async function readNext(context?: string): Promise<JsonRpcMessage> {
+		// Guard against hung subprocesses: if the server never replies within
+		// READ_TIMEOUT_MS, fail with a clear message + last-500-chars of
+		// stderr so the test author knows what the child logged.
+		let timer: ReturnType<typeof setTimeout> | undefined;
+		const timeoutPromise = new Promise<never>((_, reject) => {
+			timer = setTimeout(() => {
+				const ctx = context ? ` (awaiting ${context})` : "";
+				const stderrTail = getStderr().slice(-500);
+				reject(
+					new Error(
+						`readNext timed out after ${READ_TIMEOUT_MS}ms${ctx}. Last stderr:\n${stderrTail}`,
+					),
+				);
+			}, READ_TIMEOUT_MS);
+		});
+		try {
+			return await Promise.race([readLoop(), timeoutPromise]);
+		} finally {
+			if (timer !== undefined) clearTimeout(timer);
+		}
+	}
+
 	async function send(msg: JsonRpcMessage): Promise<void> {
 		// Bun.spawn's stdin is a FileSink, not a WritableStream.
 		proc.stdin.write(encoder.encode(`${JSON.stringify(msg)}\n`));
@@ -65,10 +118,24 @@ async function spawnServer(dbPath: string): Promise<SpawnedServer> {
 			// reader may already be done
 		}
 		proc.kill();
-		await proc.exited;
+		// If SIGTERM doesn't unblock the child, escalate to SIGKILL so the
+		// test suite doesn't hang.
+		const hardKill = setTimeout(() => {
+			try {
+				proc.kill("SIGKILL");
+			} catch {
+				// already dead
+			}
+		}, SIGKILL_GRACE_MS);
+		try {
+			await proc.exited;
+		} finally {
+			clearTimeout(hardKill);
+			await stderrPump;
+		}
 	}
 
-	return { proc, send, readNext, shutdown };
+	return { proc, send, readNext, getStderr, shutdown };
 }
 
 async function initialize(server: SpawnedServer): Promise<JsonRpcMessage> {
@@ -82,10 +149,24 @@ async function initialize(server: SpawnedServer): Promise<JsonRpcMessage> {
 			clientInfo: { name: "cuekit-integ-test", version: "0.0.0" },
 		},
 	});
-	const reply = await server.readNext();
+	const reply = await server.readNext("initialize reply");
 	// Initialized notification (no reply expected)
 	await server.send({ jsonrpc: "2.0", method: "notifications/initialized" });
 	return reply;
+}
+
+interface ToolCallResult {
+	content?: Array<{ type: string; text?: string }>;
+	structuredContent?: Record<string, unknown>;
+	isError?: boolean;
+}
+
+// Extract the tool-call's data payload — incur emits `structuredContent`
+// for schema-typed reads and also inlines the JSON text in `content[0]`.
+function toolCallData(result: ToolCallResult): Record<string, unknown> {
+	if (result.structuredContent) return result.structuredContent;
+	const text = result.content?.[0]?.text ?? "{}";
+	return JSON.parse(text) as Record<string, unknown>;
 }
 
 let tmpRoot: string;
@@ -116,10 +197,9 @@ describe("cuekit --mcp (stdio integration)", () => {
 	it("tools/list returns the 7 cuekit commands as MCP tools", async () => {
 		await initialize(server);
 		await server.send({ jsonrpc: "2.0", id: 2, method: "tools/list" });
-		const reply = await server.readNext();
+		const reply = await server.readNext("tools/list reply");
 		const result = reply.result as { tools: Array<{ name: string }> };
 		const names = result.tools.map((t) => t.name).sort();
-		// incur flattens kebab command names to snake_case for MCP tools.
 		expect(names).toContain("submit_task");
 		expect(names).toContain("get_task_status");
 		expect(names).toContain("get_task_result");
@@ -137,23 +217,60 @@ describe("cuekit --mcp (stdio integration)", () => {
 			method: "tools/call",
 			params: { name: "list_adapters", arguments: {} },
 		});
-		const reply = await server.readNext();
-		const result = reply.result as {
-			content?: Array<{ type: string; text?: string }>;
-			structuredContent?: { adapters: Array<{ agent_kind: string }> };
-		};
-		// MCP tool results come back as content blocks; incur also emits
-		// `structuredContent` alongside for schema-typed reads.
-		expect(result).toBeDefined();
-		const adapters =
-			result.structuredContent?.adapters ??
-			(
-				JSON.parse(result.content?.[0]?.text ?? "{}") as {
-					adapters?: Array<{ agent_kind: string }>;
-				}
-			).adapters ??
-			[];
+		const reply = await server.readNext("list_adapters reply");
+		const data = toolCallData(reply.result as ToolCallResult);
+		const adapters = data.adapters as Array<{ agent_kind: string }>;
 		const kinds = adapters.map((a) => a.agent_kind).sort();
 		expect(kinds).toEqual(["claude-code", "opencode", "pi"]);
+	});
+
+	it("tools/call submit_task returns a structured response (happy OR submit_failed)", async () => {
+		// End-to-end wire test: the MCP envelope + tool input/output shape is
+		// what we care about here. On machines without tmux or `claude`, the
+		// adapter returns `accepted: false` with a structured error, which is
+		// itself a valid shape we must handle. Either way `accepted` exists.
+		await initialize(server);
+		await server.send({
+			jsonrpc: "2.0",
+			id: 4,
+			method: "tools/call",
+			params: {
+				name: "submit_task",
+				arguments: {
+					objective: "stdio integ test",
+					agent_kind: "claude-code",
+					cwd: tmpRoot,
+				},
+			},
+		});
+		const reply = await server.readNext("submit_task reply");
+		const data = toolCallData(reply.result as ToolCallResult) as {
+			accepted?: boolean;
+			task_id?: string;
+			error?: { code: string };
+		};
+		expect(data).toHaveProperty("accepted");
+		expect(typeof data.accepted).toBe("boolean");
+		if (data.accepted === false) {
+			expect(data.error?.code).toBeDefined();
+		} else {
+			expect(data.task_id).toMatch(/^t_/);
+		}
+	});
+
+	it("tools/call with an unknown tool name surfaces an error", async () => {
+		await initialize(server);
+		await server.send({
+			jsonrpc: "2.0",
+			id: 5,
+			method: "tools/call",
+			params: { name: "no_such_tool", arguments: {} },
+		});
+		const reply = await server.readNext("unknown-tool reply");
+		// Either a JSON-RPC error object OR an MCP tool-result with isError.
+		const hasJsonRpcError = reply.error !== undefined;
+		const result = reply.result as ToolCallResult | undefined;
+		const hasToolError = result?.isError === true;
+		expect(hasJsonRpcError || hasToolError).toBe(true);
 	});
 });
