@@ -1,4 +1,6 @@
 import type { Database } from "bun:sqlite";
+import { mkdirSync } from "node:fs";
+import { dirname, join } from "node:path";
 import {
 	type AdapterCapabilities,
 	ensureCollectable,
@@ -18,6 +20,7 @@ import {
 	listTasks,
 	type Task,
 	updateTaskNativeRef,
+	updateTaskRefs,
 	updateTaskStatus,
 } from "@cuekit/store";
 import { type AdapterSubmitInput, type AgentAdapter, generateTaskId } from "./agent-adapter.ts";
@@ -126,10 +129,37 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 
 			const launchCommand = config.buildLaunchCommand(input.spec);
 			const cwd = input.spec.cwd ?? session.worktree_path;
+			// Deterministic per-task output layout: <cwd>/.cuekit/tasks/<id>/
+			// containing transcript.txt plus any runtime-emitted artifacts.
+			// Dir creation is best-effort: read-only / missing cwd shouldn't
+			// fail submit, it should just skip transcript capture. The runtime
+			// still runs and the task can complete without a transcript.
+			const desiredTranscriptPath = join(cwd, ".cuekit", "tasks", task_id, "transcript.txt");
+			let transcriptPath: string | undefined;
+			try {
+				mkdirSync(dirname(desiredTranscriptPath), { recursive: true });
+				transcriptPath = desiredTranscriptPath;
+			} catch (err) {
+				// Best-effort: unwritable cwd shouldn't block submit. Emit a
+				// visible warning to stderr so the operator can see why the
+				// transcript is missing, rather than silently returning empty
+				// artifacts on collect.
+				process.stderr.write(
+					`cuekit: transcript capture disabled for task ${task_id} (${config.kind}): ${errorMessage(err)}\n`,
+				);
+			}
 
 			try {
-				const handle = await panes.spawnTask({ task_id, launchCommand, cwd });
+				const handle = await panes.spawnTask({
+					task_id,
+					launchCommand,
+					cwd,
+					transcriptPath,
+				});
 				updateTaskNativeRef(db, task_id, handle.pane_id);
+				if (transcriptPath) {
+					updateTaskRefs(db, task_id, { transcript_ref: transcriptPath });
+				}
 				updateTaskStatus(db, task_id, "running");
 				return { ok: true as const, value: { task_id } };
 			} catch (err) {

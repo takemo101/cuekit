@@ -112,6 +112,28 @@ describe("submit", () => {
 		expect(newSession?.[cwdIdx + 1]).toBe("/w");
 	});
 
+	it("soft-falls-back to no transcript capture when cwd is not writable", async () => {
+		// /dev/null is a character device; attempting to mkdir under it
+		// fails with ENOTDIR. Submit must still succeed (runtime still runs)
+		// and transcript_ref must stay null. A warning also goes to stderr —
+		// intercepting it reliably in bun:test is fiddly so we verify the
+		// behavioral outcome; the warning message is covered by a manual
+		// stderr inspection in dev.
+		const result = await adapter.submit({
+			spec: {
+				agent_kind: "claude-code",
+				objective: "x",
+				cwd: "/dev/null/cuekit-test",
+			},
+			session_id: "s1",
+		});
+		expect(result.ok).toBe(true);
+		if (!result.ok) return;
+		const task = getTaskById(db, result.value.task_id);
+		expect(task?.transcript_ref).toBeNull();
+		expect(task?.status).toBe("running");
+	});
+
 	it("marks the task failed and returns submit_failed when tmux spawn fails", async () => {
 		runner.queueResponse({ stdout: "", stderr: "tmux: boom", exitCode: 1 });
 		const result = await adapter.submit({
