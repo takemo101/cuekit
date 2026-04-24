@@ -121,3 +121,26 @@ bun run fix           # Biome auto-fix
 ```
 
 Tests use `FakeTmuxRunner` (exported from `@cuekit/adapters`) so the default run does not require `tmux`. A small integration suite in `@cuekit/adapters` exercises real tmux when available and skips otherwise.
+
+### Manual smoke test with real `claude`
+
+The automated suite stubs the child runtime with `sleep` so it never calls Anthropic. To verify the adapter end-to-end against the real `claude` CLI:
+
+```sh
+# One-time setup
+cd packages/mcp && bun link      # registers `cuekit` globally
+
+# In a real repo where you want the child to work:
+cuekit submit-task --objective "explain this repo in one paragraph" \
+                   --agent_kind claude-code \
+                   --model sonnet
+
+# Returns a task_id. Attach to the live child:
+tmux attach-session -t cuekit-task-<task_id>
+# Ctrl-b d detaches; the task keeps running.
+
+cuekit get-task-status --task_id <task_id>
+cuekit cancel-task     --task_id <task_id>
+```
+
+The transcript is piped to `<cwd>/.cuekit/tasks/<task_id>/transcript.txt` and stays after the session is killed.
