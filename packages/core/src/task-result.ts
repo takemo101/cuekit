@@ -25,7 +25,7 @@ export const TaskResultSchema = z.object({
 	files_changed: z.array(z.string()),
 	artifacts: z.array(ArtifactRefSchema),
 	error: JobErrorSchema.optional(),
-	metadata: z.record(z.unknown()).optional(),
+	metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
 export type TaskResult = z.infer<typeof TaskResultSchema>;

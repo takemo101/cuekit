@@ -5,6 +5,7 @@ import {
 	isTerminalTaskStatus,
 	type JobError,
 	type SteeringMessage,
+	type TaskListFilter,
 	type TaskSpec,
 	type TaskSummary,
 	validateSpecAgainstCapabilities,
@@ -14,6 +15,7 @@ import {
 	createTask,
 	getSessionById,
 	getTaskById,
+	listTasks,
 	type Task,
 	updateTaskNativeRef,
 	updateTaskStatus,
@@ -283,10 +285,22 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 			return { ok: true, message: "cancellation requested" };
 		},
 
-		async list(): Promise<TaskSummary[]> {
-			// List support needs a cross-session filter API in the store, deferred
-			// to Issue #5 when the MCP list_tasks tool wires up. For v0 return [].
-			return [];
+		async list(filter?: TaskListFilter): Promise<TaskSummary[]> {
+			// Adapters only return their own tasks, regardless of what kind the
+			// caller asked for. Cross-adapter listing is the control surface's
+			// job (list_tasks MCP tool queries the store directly).
+			const effectiveFilter: TaskListFilter = {
+				...filter,
+				agent_kind: config.kind,
+			};
+			const tasks = listTasks(db, effectiveFilter);
+			return tasks.map((t) => ({
+				task_id: t.id,
+				agent_kind: t.target_agent_kind,
+				status: t.status,
+				summary: t.summary ?? undefined,
+				updated_at: t.updated_at,
+			}));
 		},
 	};
 }

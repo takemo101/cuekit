@@ -20,7 +20,7 @@ export const TaskStatusViewSchema = z.object({
 	attach_hint: z.string().optional(),
 	error: JobErrorSchema.optional(),
 	artifacts: z.array(ArtifactRefSchema).optional(),
-	metadata: z.record(z.unknown()).optional(),
+	metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
 export type TaskStatusView = z.infer<typeof TaskStatusViewSchema>;

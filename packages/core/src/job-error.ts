@@ -23,7 +23,7 @@ export const JobErrorSchema = z.object({
 	code: JobErrorCodeSchema,
 	message: z.string(),
 	retryable: z.boolean().optional(),
-	details: z.record(z.unknown()).optional(),
+	details: z.record(z.string(), z.unknown()).optional(),
 });
 
 export type JobError = z.infer<typeof JobErrorSchema>;

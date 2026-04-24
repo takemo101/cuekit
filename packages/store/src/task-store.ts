@@ -1,5 +1,5 @@
 import type { Database } from "bun:sqlite";
-import { isTerminalTaskStatus, type TaskStatus } from "@cuekit/core";
+import { isTerminalTaskStatus, type TaskListFilter, type TaskStatus } from "@cuekit/core";
 import { type Task, TaskSchema } from "./task.ts";
 
 export interface CreateTaskInput {
@@ -56,6 +56,37 @@ export function listTasksBySession(db: Database, session_id: string): Task[] {
 	const rows = db
 		.prepare("select * from tasks where session_id = ? order by created_at asc")
 		.all(session_id);
+	return rows.map((r) => TaskSchema.parse(r));
+}
+
+// Cross-session listing with protocol-level TaskListFilter. `cwd` filters by
+// `sessions.worktree_path` via a JOIN; all other filters are direct. Newest
+// first (updated_at desc).
+export function listTasks(db: Database, filter: TaskListFilter = {}): Task[] {
+	const conditions: string[] = [];
+	const params: string[] = [];
+	if (filter.status) {
+		conditions.push("t.status = ?");
+		params.push(filter.status);
+	}
+	if (filter.agent_kind) {
+		conditions.push("t.target_agent_kind = ?");
+		params.push(filter.agent_kind);
+	}
+	if (filter.session_id) {
+		conditions.push("t.session_id = ?");
+		params.push(filter.session_id);
+	}
+	const joinCwd = filter.cwd !== undefined;
+	if (joinCwd && filter.cwd !== undefined) {
+		conditions.push("s.worktree_path = ?");
+		params.push(filter.cwd);
+	}
+	const where = conditions.length > 0 ? `where ${conditions.join(" and ")}` : "";
+	const join = joinCwd ? "join sessions s on s.id = t.session_id" : "";
+	const rows = db
+		.prepare(`select t.* from tasks t ${join} ${where} order by t.updated_at desc`)
+		.all(...params);
 	return rows.map((r) => TaskSchema.parse(r));
 }
 
