@@ -26,9 +26,9 @@ describe("createCli", () => {
 		expect(makeCli()).toBeDefined();
 	});
 
-	it("serves list-adapters through cli.fetch", async () => {
+	it("serves list_adapters through cli.fetch", async () => {
 		const cli = makeCli();
-		const res = await cli.fetch(new Request("http://localhost/list-adapters"));
+		const res = await cli.fetch(new Request("http://localhost/list_adapters"));
 		expect(res.ok).toBe(true);
 		const body = (await res.json()) as {
 			ok: boolean;

@@ -35,7 +35,12 @@ function installSignalHandlers(db: Database): void {
 async function main(): Promise<void> {
 	let db: Database | undefined;
 	try {
-		db = openDatabase();
+		// Allow integration tests and operators to point at an alternate DB
+		// path via CUEKIT_DB_PATH. Unset → `~/.cuekit/state.db` (production
+		// default). Accepts `:memory:` too if someone really wants an
+		// ephemeral server.
+		const dbPath = process.env.CUEKIT_DB_PATH;
+		db = openDatabase(dbPath !== undefined ? { path: dbPath } : {});
 		runMigrations(db);
 		installSignalHandlers(db);
 
