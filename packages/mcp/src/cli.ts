@@ -27,6 +27,11 @@ import {
 	runListTasks,
 } from "./commands/list-tasks.ts";
 import {
+	runShowMcpConfig,
+	ShowMcpConfigInputSchema,
+	ShowMcpConfigOutputSchema,
+} from "./commands/show-mcp-config.ts";
+import {
 	runSteerTask,
 	SteerTaskInputSchema,
 	SteerTaskOutputSchema,
@@ -99,6 +104,13 @@ export function createCli(ctx: CommandContext) {
 		options: SteerTaskInputSchema,
 		output: SteerTaskOutputSchema,
 		run: ({ options }) => runSteerTask(ctx, options),
+	});
+
+	cli.command("show_mcp_config", {
+		description: "Print the MCP-server stanza to paste into a client config.",
+		options: ShowMcpConfigInputSchema,
+		output: ShowMcpConfigOutputSchema,
+		run: ({ options }) => runShowMcpConfig(ctx, options),
 	});
 
 	return cli;
