@@ -7,7 +7,7 @@ import {
 	createPiAdapter,
 	PaneBackend,
 } from "@cuekit/adapters";
-import { createStderrLogger, type LogLevel } from "@cuekit/core";
+import { createStderrLogger, parseLogLevel } from "@cuekit/core";
 import { openDatabase, runMigrations } from "@cuekit/store";
 import { createCli } from "./cli.ts";
 
@@ -34,6 +34,13 @@ function installSignalHandlers(db: Database): void {
 }
 
 async function main(): Promise<void> {
+	// Construct the logger before any fallible startup work so the catch
+	// block can use it uniformly. parseLogLevel guards against typos in
+	// CUEKIT_LOG_LEVEL (unknown values fall back to "warn" instead of
+	// silently enabling every level).
+	const logLevel = parseLogLevel(process.env.CUEKIT_LOG_LEVEL);
+	const logger = createStderrLogger({ minLevel: logLevel });
+
 	let db: Database | undefined;
 	try {
 		// Allow integration tests and operators to point at an alternate DB
@@ -45,13 +52,6 @@ async function main(): Promise<void> {
 		db = openDatabase(useCustomPath ? { path: dbPath } : {});
 		runMigrations(db);
 		installSignalHandlers(db);
-
-		// Structured stderr logger for warnings/errors. Level controllable via
-		// CUEKIT_LOG_LEVEL (default "warn"). Adapters inherit it so operator-
-		// visible warnings (e.g. 'transcript capture disabled') don't depend
-		// on each adapter writing to stderr directly.
-		const logLevel = (process.env.CUEKIT_LOG_LEVEL as LogLevel) ?? "warn";
-		const logger = createStderrLogger({ minLevel: logLevel });
 
 		const panes = new PaneBackend();
 		const registry = new AdapterRegistry();
@@ -69,8 +69,9 @@ async function main(): Promise<void> {
 		await cli.serve();
 	} catch (err) {
 		if (db) closeQuietly(db);
-		const message = err instanceof Error ? err.message : String(err);
-		process.stderr.write(`cuekit: ${message}\n`);
+		logger.error("startup failed", {
+			reason: err instanceof Error ? err.message : String(err),
+		});
 		process.exit(1);
 	}
 }
