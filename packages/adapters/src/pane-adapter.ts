@@ -1,6 +1,5 @@
 import type { Database } from "bun:sqlite";
 import { mkdirSync } from "node:fs";
-import { dirname, join } from "node:path";
 import {
 	type AdapterCapabilities,
 	ensureCollectable,
@@ -10,6 +9,7 @@ import {
 	type TaskListFilter,
 	type TaskSpec,
 	type TaskSummary,
+	taskArtifactPaths,
 	validateSpecAgainstCapabilities,
 } from "@cuekit/core";
 import {
@@ -129,21 +129,16 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 
 			const launchCommand = config.buildLaunchCommand(input.spec);
 			const cwd = input.spec.cwd ?? session.worktree_path;
-			// Deterministic per-task output layout: <cwd>/.cuekit/tasks/<id>/
-			// containing transcript.txt plus any runtime-emitted artifacts.
-			// Dir creation is best-effort: read-only / missing cwd shouldn't
-			// fail submit, it should just skip transcript capture. The runtime
-			// still runs and the task can complete without a transcript.
-			const desiredTranscriptPath = join(cwd, ".cuekit", "tasks", task_id, "transcript.txt");
+			// Path layout for per-task artifacts is owned by core
+			// (taskArtifactPaths) so every adapter + any future tool reads
+			// the same convention from one place. Dir creation stays
+			// best-effort: an unwritable cwd shouldn't block submit.
+			const paths = taskArtifactPaths(cwd, task_id);
 			let transcriptPath: string | undefined;
 			try {
-				mkdirSync(dirname(desiredTranscriptPath), { recursive: true });
-				transcriptPath = desiredTranscriptPath;
+				mkdirSync(paths.dir, { recursive: true });
+				transcriptPath = paths.transcriptPath;
 			} catch (err) {
-				// Best-effort: unwritable cwd shouldn't block submit. Emit a
-				// visible warning to stderr so the operator can see why the
-				// transcript is missing, rather than silently returning empty
-				// artifacts on collect.
 				process.stderr.write(
 					`cuekit: transcript capture disabled for task ${task_id} (${config.kind}): ${errorMessage(err)}\n`,
 				);
