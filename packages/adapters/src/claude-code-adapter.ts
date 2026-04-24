@@ -47,12 +47,13 @@ export function createClaudeCodeAdapter(
 	panes: PaneBackend,
 	options: ClaudeCodeAdapterOptions = {},
 ): AgentAdapter {
-	const claudeBin = options.claudeBin ?? "claude";
 	const availableModels = options.availableModels ?? ["haiku", "sonnet", "opus"];
-
+	// Pass `options.claudeBin` through untouched; the single default
+	// lives inside `buildClaudeCodeLaunchCommand` so there's one source
+	// of truth.
 	const builder =
 		options.launchCommandOverride ??
-		((spec: TaskSpec) => buildClaudeCodeLaunchCommand(spec, { claudeBin }));
+		((spec: TaskSpec) => buildClaudeCodeLaunchCommand(spec, { claudeBin: options.claudeBin }));
 
 	return createPaneAdapter(
 		{

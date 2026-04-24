@@ -36,6 +36,15 @@ describe("capabilities()", () => {
 		expect(caps.supports_model_selection).toBe(true);
 		expect(caps.available_models).toContain("sonnet");
 	});
+
+	it("respects a custom availableModels option (round-trip)", () => {
+		const customPanes = new PaneBackend({ runner, sendKeysDelayMs: 0 });
+		const custom = createClaudeCodeAdapter(db, customPanes, {
+			availableModels: ["haiku"],
+			launchCommandOverride: () => "sleep 60",
+		});
+		expect(custom.capabilities().available_models).toEqual(["haiku"]);
+	});
 });
 
 describe("submit", () => {

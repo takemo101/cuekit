@@ -32,9 +32,11 @@ describe("buildClaudeCodeLaunchCommand", () => {
 	});
 
 	it("does NOT pass --print / -p (interactive mode preserves attach)", () => {
-		const out = buildClaudeCodeLaunchCommand(spec({ model: "opus" }));
-		expect(out).not.toContain("--print");
-		expect(out).not.toContain("-p ");
+		// Token-level check instead of substring — a trailing '-p' (no space)
+		// or a '-p' at end of line would slip past a naive toContain.
+		const tokens = buildClaudeCodeLaunchCommand(spec({ model: "opus" })).split(/\s+/);
+		expect(tokens).not.toContain("--print");
+		expect(tokens).not.toContain("-p");
 	});
 
 	it("shell-quotes objectives with single quotes via POSIX '\\'' escape", () => {

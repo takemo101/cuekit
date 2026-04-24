@@ -61,3 +61,16 @@ function findFlagValue(args: string[], flag: string): string | undefined {
 	if (idx < 0 || idx + 1 >= args.length) return undefined;
 	return args[idx + 1];
 }
+
+// Integration-test helpers: detect whether `tmux` is installed on PATH so
+// test suites can opt into real-tmux coverage without hard-failing on
+// machines without tmux. Exported so multiple integ suites can share the
+// same probe without re-implementing it.
+export function hasTmux(): boolean {
+	try {
+		const proc = Bun.spawnSync(["tmux", "-V"], { stdout: "pipe", stderr: "pipe" });
+		return proc.exitCode === 0;
+	} catch {
+		return false;
+	}
+}

@@ -1,17 +1,10 @@
 import { describe, expect, it } from "bun:test";
 import { PaneBackend } from "../src/pane-backend.ts";
+import { hasTmux } from "../src/testing.ts";
 
 // Skipped automatically when `tmux` is not on PATH, so unit-test runs on
 // minimal dev containers stay green. Exercises the real tmux binary for the
 // spawn → has-session → kill-session round-trip.
-function hasTmux(): boolean {
-	try {
-		const proc = Bun.spawnSync(["tmux", "-V"], { stdout: "pipe", stderr: "pipe" });
-		return proc.exitCode === 0;
-	} catch {
-		return false;
-	}
-}
 
 const suite = hasTmux() ? describe : describe.skip;
 
