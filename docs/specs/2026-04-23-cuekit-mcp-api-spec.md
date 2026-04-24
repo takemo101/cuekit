@@ -591,6 +591,7 @@ Recommended cuekit error codes:
 - `collect_unavailable`
 - `task_not_found`
 - `invalid_state`
+- `invalid_input`
 - `runtime_crash`
 - `timeout`
 - `malformed_result`

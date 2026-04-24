@@ -1,0 +1,23 @@
+{
+	"name": "cuekit-workspace",
+	"private": true,
+	"type": "module",
+	"workspaces": [
+		"packages/*"
+	],
+	"scripts": {
+		"build": "bun run --filter '*' build",
+		"typecheck": "bun run --filter '*' typecheck",
+		"test": "bun test",
+		"check": "biome check .",
+		"fix": "biome check --write ."
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^2.0.0",
+		"@types/bun": "latest",
+		"typescript": "^5.8.0"
+	},
+	"engines": {
+		"bun": ">=1.2.0"
+	}
+}
