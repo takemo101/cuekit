@@ -5,7 +5,7 @@ export const ExpectedOutputSpecSchema = z.object({
 	require_files_changed: z.boolean().optional(),
 	require_artifacts: z.boolean().optional(),
 	require_tests: z.boolean().optional(),
-	schema_hint: z.record(z.unknown()).optional(),
+	schema_hint: z.record(z.string(), z.unknown()).optional(),
 });
 
 export type ExpectedOutputSpec = z.infer<typeof ExpectedOutputSpecSchema>;

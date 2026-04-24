@@ -7,7 +7,7 @@
 		".": "./src/index.ts"
 	},
 	"bin": {
-		"cuekit": "./src/cli.ts"
+		"cuekit": "./src/bin.ts"
 	},
 	"scripts": {
 		"typecheck": "tsc --noEmit",
@@ -16,6 +16,7 @@
 	"dependencies": {
 		"@cuekit/adapters": "workspace:*",
 		"@cuekit/core": "workspace:*",
-		"@cuekit/store": "workspace:*"
+		"@cuekit/store": "workspace:*",
+		"incur": "0.4.3"
 	}
 }

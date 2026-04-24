@@ -5,7 +5,7 @@ export const InputRefSchema = z.object({
 	ref: z.string().min(1),
 	title: z.string().optional(),
 	description: z.string().optional(),
-	metadata: z.record(z.unknown()).optional(),
+	metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
 export type InputRef = z.infer<typeof InputRefSchema>;

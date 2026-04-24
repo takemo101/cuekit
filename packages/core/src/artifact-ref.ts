@@ -6,7 +6,7 @@ export const ArtifactRefSchema = z.object({
 	title: z.string().optional(),
 	description: z.string().optional(),
 	media_type: z.string().optional(),
-	metadata: z.record(z.unknown()).optional(),
+	metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
 export type ArtifactRef = z.infer<typeof ArtifactRefSchema>;
