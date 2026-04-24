@@ -1,15 +1,11 @@
-import { TaskStatusSchema, TaskSummarySchema } from "@cuekit/core";
+import { TaskListFilterSchema, TaskSummarySchema } from "@cuekit/core";
 import { listTasks } from "@cuekit/store";
 import { z } from "incur";
 import type { CommandContext } from "../command-context.ts";
 
-export const ListTasksInputSchema = z.object({
-	status: TaskStatusSchema.optional().describe("Filter by task status."),
-	agent_kind: z.string().min(1).optional().describe("Filter by adapter kind."),
-	session_id: z.string().min(1).optional().describe("Filter by cuekit session id."),
-	cwd: z.string().min(1).optional().describe("Filter by the session's worktree_path."),
-});
-
+// Reuse core's canonical TaskListFilterSchema as the command input so the
+// control surface and the persistence layer share one shape definition.
+export const ListTasksInputSchema = TaskListFilterSchema;
 export type ListTasksInput = z.infer<typeof ListTasksInputSchema>;
 
 export const ListTasksOutputSchema = z.object({

@@ -7,4 +7,5 @@ export * from "./pane-backend.ts";
 export * from "./pi-adapter.ts";
 export * from "./result-normalizer.ts";
 export * from "./shell-quote.ts";
+export * from "./testing.ts";
 export * from "./tmux-runner.ts";

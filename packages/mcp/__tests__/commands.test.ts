@@ -4,9 +4,8 @@ import {
 	AdapterRegistry,
 	createClaudeCodeAdapter,
 	createPiAdapter,
+	FakeTmuxRunner,
 	PaneBackend,
-	type TmuxRunner,
-	type TmuxRunResult,
 } from "@cuekit/adapters";
 import { createSession, getTaskById, listSessionsByWorktree, runMigrations } from "@cuekit/store";
 import type { CommandContext } from "../src/command-context.ts";
@@ -17,43 +16,6 @@ import { runListAdapters } from "../src/commands/list-adapters.ts";
 import { runListTasks } from "../src/commands/list-tasks.ts";
 import { runSteerTask } from "../src/commands/steer-task.ts";
 import { runSubmitTask } from "../src/commands/submit-task.ts";
-
-// Minimal FakeTmuxRunner (mirrors the one in @cuekit/adapters/__tests__).
-// The adapters package does not currently export its FakeTmuxRunner, so
-// re-declare a lightweight local copy.
-class FakeTmuxRunner implements TmuxRunner {
-	readonly calls: string[][] = [];
-	private readonly sessions = new Set<string>();
-	private paneCounter = 0;
-
-	async run(args: string[]): Promise<TmuxRunResult> {
-		this.calls.push([...args]);
-		const cmd = args[0];
-		switch (cmd) {
-			case "new-session": {
-				const name = args[args.indexOf("-s") + 1];
-				if (name) this.sessions.add(name);
-				this.paneCounter += 1;
-				return { stdout: `%${this.paneCounter}\n`, stderr: "", exitCode: 0 };
-			}
-			case "has-session": {
-				const name = args[args.indexOf("-t") + 1];
-				return {
-					stdout: "",
-					stderr: "",
-					exitCode: name && this.sessions.has(name) ? 0 : 1,
-				};
-			}
-			case "kill-session": {
-				const name = args[args.indexOf("-t") + 1];
-				if (name) this.sessions.delete(name);
-				return { stdout: "", stderr: "", exitCode: 0 };
-			}
-			default:
-				return { stdout: "", stderr: "", exitCode: 0 };
-		}
-	}
-}
 
 let db: Database;
 let runner: FakeTmuxRunner;
@@ -76,7 +38,7 @@ beforeEach(() => {
 			launchCommandOverride: () => "sleep 60",
 		}),
 	);
-	ctx = { db, panes, registry };
+	ctx = { db, registry };
 });
 
 describe("submit-task", () => {
@@ -93,7 +55,9 @@ describe("submit-task", () => {
 		expect(result.session_id).toMatch(/^s_/);
 		const sessions = listSessionsByWorktree(db, "/my/project");
 		expect(sessions).toHaveLength(1);
-		expect(sessions[0]?.parent_agent_kind).toBe("claude-code");
+		// parent_agent_kind is the orchestrator (the control surface itself),
+		// NOT the child adapter being targeted.
+		expect(sessions[0]?.parent_agent_kind).toBe("cuekit-cli");
 	});
 
 	it("reuses an existing active session for the same cwd", async () => {

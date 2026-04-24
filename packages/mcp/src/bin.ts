@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import type { Database } from "bun:sqlite";
 import {
 	AdapterRegistry,
 	createClaudeCodeAdapter,
@@ -13,13 +14,46 @@ import { createCli } from "./cli.ts";
 // tmux pane backend + all three adapters, and hands argv to incur.
 // `cuekit --mcp` flips incur into stdio MCP server mode; `cuekit <command>`
 // runs the command once from the CLI.
-const db = openDatabase();
-runMigrations(db);
-const panes = new PaneBackend();
-const registry = new AdapterRegistry();
-registry.register(createClaudeCodeAdapter(db, panes));
-registry.register(createPiAdapter(db, panes));
-registry.register(createOpenCodeAdapter(db, panes));
 
-const cli = createCli({ db, panes, registry });
-await cli.serve();
+function closeQuietly(db: Database): void {
+	try {
+		db.close();
+	} catch {
+		// ignore close errors on shutdown
+	}
+}
+
+function installSignalHandlers(db: Database): void {
+	const shutdown = (code: number) => {
+		closeQuietly(db);
+		process.exit(code);
+	};
+	process.on("SIGINT", () => shutdown(130));
+	process.on("SIGTERM", () => shutdown(143));
+}
+
+async function main(): Promise<void> {
+	let db: Database | undefined;
+	try {
+		db = openDatabase();
+		runMigrations(db);
+		installSignalHandlers(db);
+
+		const panes = new PaneBackend();
+		const registry = new AdapterRegistry();
+		registry.register(createClaudeCodeAdapter(db, panes));
+		registry.register(createPiAdapter(db, panes));
+		registry.register(createOpenCodeAdapter(db, panes));
+
+		const cli = createCli({ db, registry });
+		await cli.serve();
+		closeQuietly(db);
+	} catch (err) {
+		if (db) closeQuietly(db);
+		const message = err instanceof Error ? err.message : String(err);
+		process.stderr.write(`cuekit: ${message}\n`);
+		process.exit(1);
+	}
+}
+
+await main();

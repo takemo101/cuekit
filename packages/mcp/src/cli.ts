@@ -1,4 +1,5 @@
 import { Cli } from "incur";
+import pkg from "../package.json" with { type: "json" };
 import type { CommandContext } from "./command-context.ts";
 import {
 	CancelTaskInputSchema,
@@ -38,11 +39,11 @@ import {
 
 // Builds the cuekit control surface. The same command tree backs both the
 // CLI (`cuekit submit-task ...`) and the MCP stdio server (`cuekit --mcp`)
-// via incur. Callers inject runtime dependencies (db, panes, registry)
-// through ctx so the surface stays pure of environment assumptions.
+// via incur. Callers inject runtime dependencies (db, registry) through
+// ctx so the surface stays pure of environment assumptions.
 export function createCli(ctx: CommandContext) {
 	const cli = Cli.create("cuekit", {
-		version: "0.0.0",
+		version: pkg.version,
 		description: "cuekit — delegation substrate for coding agents.",
 	});
 

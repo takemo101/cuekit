@@ -53,7 +53,6 @@ export async function runSubmitTask(
 	const session_id = resolveSessionId(ctx.db, {
 		session_id: input.session_id,
 		cwd: input.cwd,
-		parent_agent_kind: input.agent_kind,
 	});
 	const spec: TaskSpec = {
 		agent_kind: input.agent_kind,
