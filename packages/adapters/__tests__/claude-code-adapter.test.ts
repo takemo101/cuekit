@@ -354,3 +354,40 @@ describe("collect", () => {
 		}
 	});
 });
+
+describe("list (agent_kind safety)", () => {
+	it("returns only this adapter's tasks when agent_kind is omitted", async () => {
+		await adapter.submit({
+			session_id: "s1",
+			spec: { agent_kind: "claude-code", cwd: "/w", objective: "a" },
+		});
+		// Insert a task from a different adapter directly, so we can
+		// verify `list()` does not leak it.
+		const pi = createPiAdapter(db, new PaneBackend({ runner, sendKeysDelayMs: 0 }), {
+			launchCommandOverride: () => "sleep 60",
+		});
+		await pi.submit({
+			session_id: "s1",
+			spec: { agent_kind: "pi", cwd: "/w", objective: "b" },
+		});
+
+		const rows = await adapter.list();
+		expect(rows.every((t) => t.agent_kind === "claude-code")).toBe(true);
+		expect(rows).toHaveLength(1);
+	});
+
+	it("rejects a caller-supplied agent_kind that conflicts with the adapter", () => {
+		expect(adapter.list({ agent_kind: "pi" })).rejects.toThrow(
+			/cannot list tasks for agent_kind 'pi'/,
+		);
+	});
+
+	it("allows a caller-supplied agent_kind that matches the adapter (no-op)", async () => {
+		await adapter.submit({
+			session_id: "s1",
+			spec: { agent_kind: "claude-code", cwd: "/w", objective: "a" },
+		});
+		const rows = await adapter.list({ agent_kind: "claude-code" });
+		expect(rows).toHaveLength(1);
+	});
+});

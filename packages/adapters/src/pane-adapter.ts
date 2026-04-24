@@ -321,9 +321,18 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 		},
 
 		async list(filter?: TaskListFilter): Promise<TaskSummary[]> {
-			// Adapters only return their own tasks, regardless of what kind the
-			// caller asked for. Cross-adapter listing is the control surface's
-			// job (list_tasks MCP tool queries the store directly).
+			// Adapters only return their own tasks. If the caller passed a
+			// conflicting `agent_kind` explicitly, fail loud rather than
+			// silently rewriting it — the silent-override variant was
+			// caught by Oracle review (PR #19) returning wrong-looking
+			// results from correct-looking inputs. Cross-adapter listing
+			// belongs to the control surface's `list_tasks` MCP tool,
+			// which queries the store directly.
+			if (filter?.agent_kind !== undefined && filter.agent_kind !== config.kind) {
+				throw new Error(
+					`adapter '${config.kind}' cannot list tasks for agent_kind '${filter.agent_kind}'; use the control-surface list_tasks tool for cross-adapter queries`,
+				);
+			}
 			const effectiveFilter: TaskListFilter = {
 				...filter,
 				agent_kind: config.kind,
