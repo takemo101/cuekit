@@ -7,7 +7,9 @@ import {
 	createTask,
 	getTaskById,
 	listTasksBySession,
+	updateTaskNativeRef,
 	updateTaskStatus,
+	updateTaskSummary,
 } from "../src/task-store.ts";
 
 let db: Database;
@@ -37,6 +39,17 @@ describe("createTask", () => {
 		expect(t.summary).toBeNull();
 	});
 
+	it("returns the row as it lives in the DB (re-read after insert)", () => {
+		const inserted = createTask(db, {
+			id: "t1",
+			session_id: "s1",
+			target_agent_kind: "pi",
+			objective: "x",
+		});
+		const fetched = getTaskById(db, "t1");
+		expect(fetched).toEqual(inserted);
+	});
+
 	it("persists model when provided", () => {
 		const t = createTask(db, {
 			id: "t1",
@@ -49,12 +62,7 @@ describe("createTask", () => {
 	});
 
 	it("persists parent_task_id for lineage", () => {
-		createTask(db, {
-			id: "t1",
-			session_id: "s1",
-			target_agent_kind: "pi",
-			objective: "a",
-		});
+		createTask(db, { id: "t1", session_id: "s1", target_agent_kind: "pi", objective: "a" });
 		const t2 = createTask(db, {
 			id: "t2",
 			session_id: "s1",
@@ -83,12 +91,7 @@ describe("getTaskById", () => {
 	});
 
 	it("returns the stored task", () => {
-		createTask(db, {
-			id: "t1",
-			session_id: "s1",
-			target_agent_kind: "pi",
-			objective: "x",
-		});
+		createTask(db, { id: "t1", session_id: "s1", target_agent_kind: "pi", objective: "x" });
 		const t = getTaskById(db, "t1");
 		expect(t?.id).toBe("t1");
 	});
@@ -102,18 +105,8 @@ describe("listTasksBySession", () => {
 			worktree_path: "/w",
 			parent_agent_kind: "pi",
 		});
-		createTask(db, {
-			id: "t1",
-			session_id: "s1",
-			target_agent_kind: "pi",
-			objective: "a",
-		});
-		createTask(db, {
-			id: "t2",
-			session_id: "s2",
-			target_agent_kind: "pi",
-			objective: "b",
-		});
+		createTask(db, { id: "t1", session_id: "s1", target_agent_kind: "pi", objective: "a" });
+		createTask(db, { id: "t2", session_id: "s2", target_agent_kind: "pi", objective: "b" });
 		const list = listTasksBySession(db, "s1");
 		expect(list).toHaveLength(1);
 		expect(list[0]?.id).toBe("t1");
@@ -126,12 +119,7 @@ describe("listTasksBySession", () => {
 
 describe("updateTaskStatus", () => {
 	beforeEach(() => {
-		createTask(db, {
-			id: "t1",
-			session_id: "s1",
-			target_agent_kind: "pi",
-			objective: "x",
-		});
+		createTask(db, { id: "t1", session_id: "s1", target_agent_kind: "pi", objective: "x" });
 	});
 
 	it("sets completed_at on terminal transitions", () => {
@@ -157,14 +145,60 @@ describe("updateTaskStatus", () => {
 	});
 });
 
+describe("updateTaskNativeRef", () => {
+	beforeEach(() => {
+		createTask(db, { id: "t1", session_id: "s1", target_agent_kind: "pi", objective: "x" });
+	});
+
+	it("sets the native_task_ref (e.g. tmux pane_id after adapter spawn)", () => {
+		const t = updateTaskNativeRef(db, "t1", "%17");
+		expect(t?.native_task_ref).toBe("%17");
+	});
+
+	it("bumps updated_at", async () => {
+		const before = getTaskById(db, "t1");
+		await Bun.sleep(5);
+		const after = updateTaskNativeRef(db, "t1", "%17");
+		expect(after?.updated_at).not.toBe(before?.updated_at);
+	});
+
+	it("can clear the ref by passing null", () => {
+		updateTaskNativeRef(db, "t1", "%17");
+		const t = updateTaskNativeRef(db, "t1", null);
+		expect(t?.native_task_ref).toBeNull();
+	});
+
+	it("returns null for unknown id", () => {
+		expect(updateTaskNativeRef(db, "nope", "x")).toBeNull();
+	});
+});
+
+describe("updateTaskSummary", () => {
+	beforeEach(() => {
+		createTask(db, { id: "t1", session_id: "s1", target_agent_kind: "pi", objective: "x" });
+	});
+
+	it("sets the summary for progress reporting", () => {
+		const t = updateTaskSummary(db, "t1", "Editing src/api/client.ts");
+		expect(t?.summary).toBe("Editing src/api/client.ts");
+	});
+
+	it("does not touch status, result_ref, transcript_ref, or completed_at", () => {
+		const t = updateTaskSummary(db, "t1", "wip");
+		expect(t?.status).toBe("queued");
+		expect(t?.result_ref).toBeNull();
+		expect(t?.transcript_ref).toBeNull();
+		expect(t?.completed_at).toBeNull();
+	});
+
+	it("returns null for unknown id", () => {
+		expect(updateTaskSummary(db, "nope", "wip")).toBeNull();
+	});
+});
+
 describe("completeTask", () => {
 	beforeEach(() => {
-		createTask(db, {
-			id: "t1",
-			session_id: "s1",
-			target_agent_kind: "pi",
-			objective: "x",
-		});
+		createTask(db, { id: "t1", session_id: "s1", target_agent_kind: "pi", objective: "x" });
 	});
 
 	it("sets status, summary, result_ref, transcript_ref", () => {

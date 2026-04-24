@@ -15,22 +15,6 @@ export interface CreateTaskInput {
 
 export function createTask(db: Database, input: CreateTaskInput): Task {
 	const now = new Date().toISOString();
-	const row = {
-		id: input.id,
-		session_id: input.session_id,
-		parent_task_id: input.parent_task_id ?? null,
-		target_agent_kind: input.target_agent_kind,
-		model: input.model ?? null,
-		objective: input.objective,
-		status: input.status ?? ("queued" as TaskStatus),
-		native_task_ref: input.native_task_ref ?? null,
-		summary: null,
-		result_ref: null,
-		transcript_ref: null,
-		created_at: now,
-		updated_at: now,
-		completed_at: null,
-	};
 	db.prepare(
 		`insert into tasks (
 			id, session_id, parent_task_id, target_agent_kind, model, objective, status,
@@ -38,22 +22,28 @@ export function createTask(db: Database, input: CreateTaskInput): Task {
 			created_at, updated_at, completed_at
 		) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 	).run(
-		row.id,
-		row.session_id,
-		row.parent_task_id,
-		row.target_agent_kind,
-		row.model,
-		row.objective,
-		row.status,
-		row.native_task_ref,
-		row.summary,
-		row.result_ref,
-		row.transcript_ref,
-		row.created_at,
-		row.updated_at,
-		row.completed_at,
+		input.id,
+		input.session_id,
+		input.parent_task_id ?? null,
+		input.target_agent_kind,
+		input.model ?? null,
+		input.objective,
+		input.status ?? "queued",
+		input.native_task_ref ?? null,
+		null,
+		null,
+		null,
+		now,
+		now,
+		null,
 	);
-	return TaskSchema.parse(row);
+	// Read the row back through the schema so the returned value reflects the
+	// DB's actual state, not whatever we just constructed.
+	const row = getTaskById(db, input.id);
+	if (!row) {
+		throw new Error(`defect: inserted task '${input.id}' but row could not be read back`);
+	}
+	return row;
 }
 
 export function getTaskById(db: Database, id: string): Task | null {
@@ -86,6 +76,29 @@ export function updateTaskStatus(db: Database, id: string, status: TaskStatus): 
 	return getTaskById(db, id);
 }
 
+// Sets `native_task_ref` (typically the tmux pane_id captured after adapter
+// spawn). Pass null to clear.
+export function updateTaskNativeRef(
+	db: Database,
+	id: string,
+	native_task_ref: string | null,
+): Task | null {
+	const now = new Date().toISOString();
+	db.prepare("update tasks set native_task_ref = ?, updated_at = ? where id = ?").run(
+		native_task_ref,
+		now,
+		id,
+	);
+	return getTaskById(db, id);
+}
+
+// Sets `summary` for progress reporting during execution. Pass null to clear.
+export function updateTaskSummary(db: Database, id: string, summary: string | null): Task | null {
+	const now = new Date().toISOString();
+	db.prepare("update tasks set summary = ?, updated_at = ? where id = ?").run(summary, now, id);
+	return getTaskById(db, id);
+}
+
 export interface CompleteTaskInput {
 	id: string;
 	status: TaskStatus;
@@ -96,7 +109,7 @@ export interface CompleteTaskInput {
 
 export function completeTask(db: Database, input: CompleteTaskInput): Task | null {
 	if (!isTerminalTaskStatus(input.status)) {
-		// This is a defect: `completeTask` is only meaningful for terminal states.
+		// Defect: `completeTask` is only meaningful for terminal states.
 		// Non-terminal status transitions should use `updateTaskStatus` instead.
 		throw new Error(`defect: completeTask requires a terminal status, got '${input.status}'`);
 	}

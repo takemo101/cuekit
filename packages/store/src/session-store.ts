@@ -12,34 +12,29 @@ export interface CreateSessionInput {
 
 export function createSession(db: Database, input: CreateSessionInput): Session {
 	const now = new Date().toISOString();
-	const row = {
-		id: input.id,
-		project_root: input.project_root,
-		worktree_path: input.worktree_path,
-		parent_agent_kind: input.parent_agent_kind,
-		parent_session_ref: input.parent_session_ref ?? null,
-		status: "active" as const,
-		created_at: now,
-		updated_at: now,
-		ended_at: null,
-	};
 	db.prepare(
 		`insert into sessions (
 			id, project_root, worktree_path, parent_agent_kind, parent_session_ref,
 			status, created_at, updated_at, ended_at
 		) values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 	).run(
-		row.id,
-		row.project_root,
-		row.worktree_path,
-		row.parent_agent_kind,
-		row.parent_session_ref,
-		row.status,
-		row.created_at,
-		row.updated_at,
-		row.ended_at,
+		input.id,
+		input.project_root,
+		input.worktree_path,
+		input.parent_agent_kind,
+		input.parent_session_ref ?? null,
+		"active",
+		now,
+		now,
+		null,
 	);
-	return SessionSchema.parse(row);
+	// Read the row back through the schema so the returned value reflects the
+	// DB's actual state, not whatever we just constructed.
+	const row = getSessionById(db, input.id);
+	if (!row) {
+		throw new Error(`defect: inserted session '${input.id}' but row could not be read back`);
+	}
+	return row;
 }
 
 export function getSessionById(db: Database, id: string): Session | null {
