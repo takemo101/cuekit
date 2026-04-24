@@ -100,8 +100,14 @@ export function listTasks(db: Database, filter: TaskListFilter = {}): Task[] {
 	params.push(effectiveLimit);
 	params.push(offset);
 
+	// Secondary sort by id keeps pagination stable when two rows share the
+	// same updated_at (ms-precision ISO strings collide under rapid inserts).
+	// Without it, LIMIT/OFFSET could silently drop or duplicate rows across
+	// pages — the exact bug pagination is meant to prevent.
 	const rows = db
-		.prepare(`select t.* from tasks t ${join} ${where} order by t.updated_at desc limit ? offset ?`)
+		.prepare(
+			`select t.* from tasks t ${join} ${where} order by t.updated_at desc, t.id asc limit ? offset ?`,
+		)
 		.all(...params);
 	return rows.map((r) => TaskSchema.parse(r));
 }

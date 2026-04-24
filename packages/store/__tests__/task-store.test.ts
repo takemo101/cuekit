@@ -449,4 +449,30 @@ describe("listTasks (cross-session filter + pagination)", () => {
 		await seed(2);
 		expect(listTasks(db, { offset: 10 })).toEqual([]);
 	});
+
+	it("stays stable across pages when rows share updated_at (id tiebreaker)", () => {
+		// ISO-8601 strings collide at ms granularity, so rapid inserts can
+		// produce rows with identical `updated_at`. Force that collision by
+		// writing the same timestamp to every row, then verify pagination
+		// still covers the set with no gaps or duplicates.
+		for (let i = 0; i < 6; i++) {
+			createTask(db, {
+				id: `fixed-${i}`,
+				session_id: "s1",
+				target_agent_kind: "pi",
+				objective: `x${i}`,
+			});
+		}
+		db.prepare("update tasks set updated_at = '2026-04-24T00:00:00.000Z'").run();
+
+		const pageSize = 2;
+		const seen: string[] = [];
+		for (let offset = 0; offset < 10; offset += pageSize) {
+			const page = listTasks(db, { limit: pageSize, offset });
+			if (page.length === 0) break;
+			for (const t of page) seen.push(t.id);
+		}
+		expect(seen).toHaveLength(6);
+		expect(new Set(seen).size).toBe(6);
+	});
 });
