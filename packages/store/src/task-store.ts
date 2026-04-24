@@ -4,6 +4,7 @@ import {
 	isTerminalTaskStatus,
 	type TaskListFilter,
 	type TaskStatus,
+	validateTaskTransition,
 } from "@cuekit/core";
 import { type Task, TaskSchema } from "./task.ts";
 
@@ -151,19 +152,54 @@ export function listTasks(db: Database, filter: TaskListFilter = {}): Task[] {
 	return rows.map((r) => TaskSchema.parse(r));
 }
 
-// Updates only the status. Caller is responsible for validating transitions
-// via `validateTaskTransition` from @cuekit/core before calling. When moving to
-// a terminal status, `completed_at` is set (preserving any prior value).
+// Updates only the status. Enforces the state machine via
+// `validateTaskTransition` and throws on violation — a forbidden
+// transition is a defect, not a user error, so it propagates loud
+// rather than returning a silent `null`. Unknown id still returns
+// `null` (no state to transition from).
+//
+// Side-effects keyed off the transition:
+//   • queued → running: stamps `started_at = now` the first time
+//     (preserved across later transitions, same pattern as
+//     `completed_at`).
+//   • any → terminal: stamps `completed_at = now`, preserving any
+//     prior value via COALESCE.
 export function updateTaskStatus(db: Database, id: string, status: TaskStatus): Task | null {
+	const current = getTaskById(db, id);
+	if (!current) return null;
+	const check = validateTaskTransition(current.status, status);
+	if (!check.ok) {
+		throw new Error(`defect: ${check.error.message}`);
+	}
 	const now = new Date().toISOString();
+	const startedNow = current.status === "queued" && status === "running";
 	if (isTerminalTaskStatus(status)) {
 		db.prepare(
 			`update tasks
-			set status = ?, updated_at = ?, completed_at = coalesce(completed_at, ?)
-			where id = ?`,
-		).run(status, now, now, id);
+			set status = :status,
+				updated_at = :now,
+				started_at = coalesce(started_at, :started_at),
+				completed_at = coalesce(completed_at, :now)
+			where id = :id`,
+		).run({
+			":status": status,
+			":now": now,
+			":started_at": startedNow ? now : null,
+			":id": id,
+		});
 	} else {
-		db.prepare("update tasks set status = ? , updated_at = ? where id = ?").run(status, now, id);
+		db.prepare(
+			`update tasks
+			set status = :status,
+				updated_at = :now,
+				started_at = coalesce(started_at, :started_at)
+			where id = :id`,
+		).run({
+			":status": status,
+			":now": now,
+			":started_at": startedNow ? now : null,
+			":id": id,
+		});
 	}
 	return getTaskById(db, id);
 }
@@ -232,6 +268,16 @@ export function completeTask(db: Database, input: CompleteTaskInput): Task | nul
 		// Defect: `completeTask` is only meaningful for terminal states.
 		// Non-terminal status transitions should use `updateTaskStatus` instead.
 		throw new Error(`defect: completeTask requires a terminal status, got '${input.status}'`);
+	}
+	const current = getTaskById(db, input.id);
+	if (!current) return null;
+	// Enforce the same state-machine contract as `updateTaskStatus`: a
+	// terminal→terminal flip (e.g. completed→failed) is a defect, not a
+	// caller error. Skipping this was how an already-completed task could
+	// be silently rewritten to failed.
+	const check = validateTaskTransition(current.status, input.status);
+	if (!check.ok) {
+		throw new Error(`defect: ${check.error.message}`);
 	}
 	const now = new Date().toISOString();
 	// Only overwrite the optional fields the caller actually provided. Earlier

@@ -4,7 +4,11 @@ import { join } from "node:path";
 
 const MIGRATIONS_DIR = join(import.meta.dir, "sql");
 
-const MIGRATIONS = ["001-init.sql", "002-tasks-updated-at-index.sql"] as const;
+const MIGRATIONS = [
+	"001-init.sql",
+	"002-tasks-updated-at-index.sql",
+	"003-tasks-started-at.sql",
+] as const;
 
 // Bootstrap table created outside the migration files so it can be relied on
 // by the tracking logic itself. Idempotent via `if not exists`.

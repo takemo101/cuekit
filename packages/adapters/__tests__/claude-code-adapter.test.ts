@@ -1,5 +1,9 @@
 import { Database } from "bun:sqlite";
-import { beforeEach, describe, expect, it } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { taskArtifactPaths } from "@cuekit/core";
 import { createSession, getTaskById, runMigrations } from "@cuekit/store";
 import { createClaudeCodeAdapter } from "../src/claude-code-adapter.ts";
 import { PaneBackend } from "../src/pane-backend.ts";
@@ -389,5 +393,100 @@ describe("list (agent_kind safety)", () => {
 		});
 		const rows = await adapter.list({ agent_kind: "claude-code" });
 		expect(rows).toHaveLength(1);
+	});
+});
+
+describe("status — pane-death terminal inference (the completed path)", () => {
+	// These tests use a real temp dir so the sentinel file round-trips
+	// through the same filesystem machinery production uses. The default
+	// /w worktree in the outer beforeEach isn't writable, which is why
+	// the bulk of the suite never exercised the sentinel path before.
+	let tmpCwd: string;
+	let paneDeathAdapter: ReturnType<typeof createClaudeCodeAdapter>;
+	let paneDeathDb: Database;
+	let paneDeathRunner: FakeTmuxRunner;
+
+	beforeEach(() => {
+		tmpCwd = mkdtempSync(join(tmpdir(), "cuekit-pane-death-"));
+		paneDeathDb = new Database(":memory:");
+		paneDeathDb.exec("pragma foreign_keys = ON;");
+		runMigrations(paneDeathDb);
+		createSession(paneDeathDb, {
+			id: "s1",
+			project_root: tmpCwd,
+			worktree_path: tmpCwd,
+			parent_agent_kind: "claude-code",
+		});
+		paneDeathRunner = new FakeTmuxRunner();
+		paneDeathAdapter = createClaudeCodeAdapter(
+			paneDeathDb,
+			new PaneBackend({ runner: paneDeathRunner, sendKeysDelayMs: 0 }),
+			{ launchCommandOverride: () => "sleep 60" },
+		);
+	});
+
+	afterEach(() => {
+		rmSync(tmpCwd, { recursive: true, force: true });
+		paneDeathDb.close();
+	});
+
+	// Simulates the pane having written its exit-code sentinel and then
+	// dying. The wrapped launch command would do this in production; the
+	// fake runner doesn't execute shell, so the test writes the sentinel
+	// directly.
+	async function submitAndSimulateExit(exitCode: number | null): Promise<string> {
+		const result = await paneDeathAdapter.submit({
+			session_id: "s1",
+			spec: { agent_kind: "claude-code", cwd: tmpCwd, objective: "x" },
+		});
+		if (!result.ok) throw new Error("submit failed in setup");
+		const task_id = result.value.task_id;
+		const paths = taskArtifactPaths(tmpCwd, task_id);
+		// Submit created .cuekit/tasks/<id>/ for the transcript; write the
+		// sentinel into it (or leave it missing if the test wants to
+		// simulate SIGKILL).
+		mkdirSync(paths.dir, { recursive: true });
+		if (exitCode !== null) {
+			writeFileSync(paths.exitCodePath, `cuekit_exit=${exitCode}\n`);
+		}
+		// Drop the tmux session so isAlive returns false on the next
+		// status() call.
+		await paneDeathRunner.run(["kill-session", "-t", `cuekit-task-${task_id}`]);
+		return task_id;
+	}
+
+	it("transitions to `completed` when the sentinel says exit 0", async () => {
+		const task_id = await submitAndSimulateExit(0);
+		const view = await paneDeathAdapter.status(task_id);
+		expect(view.status).toBe("completed");
+		expect(view.completed_at).toBeDefined();
+		// The row should also be written — status() drives completeTask.
+		expect(getTaskById(paneDeathDb, task_id)?.status).toBe("completed");
+	});
+
+	it("transitions to `failed` when the sentinel says a non-zero exit", async () => {
+		const task_id = await submitAndSimulateExit(137);
+		const view = await paneDeathAdapter.status(task_id);
+		expect(view.status).toBe("failed");
+		expect(view.summary).toMatch(/exited with code 137/);
+	});
+
+	it("transitions to `failed` when the sentinel is missing (SIGKILL / host shell crash)", async () => {
+		const task_id = await submitAndSimulateExit(null);
+		const view = await paneDeathAdapter.status(task_id);
+		expect(view.status).toBe("failed");
+		expect(view.summary).toMatch(/without writing exit code/);
+	});
+
+	it("populates `started_at` (first queued→running) and `metadata.tmux_pane_id`", async () => {
+		const result = await paneDeathAdapter.submit({
+			session_id: "s1",
+			spec: { agent_kind: "claude-code", cwd: tmpCwd, objective: "x" },
+		});
+		if (!result.ok) throw new Error("submit failed");
+		const view = await paneDeathAdapter.status(result.value.task_id);
+		expect(view.started_at).toBeDefined();
+		expect(view.metadata?.tmux_session_name).toBe(`cuekit-task-${result.value.task_id}`);
+		expect(view.metadata?.tmux_pane_id).toBeDefined();
 	});
 });

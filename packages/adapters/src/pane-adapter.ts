@@ -1,5 +1,6 @@
 import type { Database } from "bun:sqlite";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import {
 	type AdapterCapabilities,
 	ensureCollectable,
@@ -11,8 +12,10 @@ import {
 	type TaskListFilter,
 	type TaskSpec,
 	type TaskSummary,
+	type TerminalTaskResultStatus,
 	taskArtifactPaths,
 	validateSpecAgainstCapabilities,
+	wrapLaunchCommandWithExitCode,
 } from "@cuekit/core";
 import {
 	completeTask,
@@ -29,6 +32,25 @@ import { type AdapterSubmitInput, type AgentAdapter, generateTaskId } from "./ag
 import type { PaneBackend } from "./pane-backend.ts";
 import { normalizeTaskResult } from "./result-normalizer.ts";
 
+// Decision returned by `onPaneDisappeared`. `status` must be terminal;
+// `summary` is optional free-form text attached to the task row.
+export interface PaneDisappearedDecision {
+	status: TerminalTaskResultStatus;
+	summary?: string;
+}
+
+// Context passed to `onPaneDisappeared`. The exit code comes from the
+// sentinel file the wrapped launch command writes on child exit:
+//   • `null` when no sentinel was found (pane killed via SIGKILL before
+//     it could write, or the host shell died abnormally).
+//   • `0` on clean child exit.
+//   • Non-zero on runtime crash / non-zero exit.
+export interface PaneDisappearedContext {
+	task: Task;
+	exitCode: number | null;
+	transcriptPath?: string;
+}
+
 export interface PaneAdapterConfig {
 	kind: string;
 	capabilities: AdapterCapabilities;
@@ -40,6 +62,16 @@ export interface PaneAdapterConfig {
 	// populate summary / result_ref / transcript_ref from any runtime-native
 	// output format before `collect` is called.
 	onTerminal?: (task: Task, db: Database) => void;
+	// Decides the terminal status when `status()` detects the pane has
+	// died (and the task is not already terminal). The default inspects
+	// the exit-code sentinel:
+	//   • exit 0         → completed
+	//   • non-zero exit  → failed
+	//   • no sentinel    → failed ("pane exited without writing exit code")
+	// Adapters with richer runtime output (e.g. a transcript-tail parser
+	// that can detect a "task succeeded" marker when the process happens
+	// to exit non-zero) can override.
+	onPaneDisappeared?: (ctx: PaneDisappearedContext) => PaneDisappearedDecision;
 }
 
 export interface PaneAdapterDeps {
@@ -52,9 +84,42 @@ export interface PaneAdapterDeps {
 	logger?: Logger;
 }
 
+// Reads the exit-code sentinel written by the wrapped launch command.
+// Returns null if the file is missing or unparseable — either case is
+// indistinguishable from "host shell died before writing" at this
+// layer, which is exactly the signal `onPaneDisappeared` consumes.
+function readExitCodeSentinel(exitCodePath: string): number | null {
+	try {
+		const raw = readFileSync(exitCodePath, "utf8");
+		const match = raw.match(/cuekit_exit=(-?\d+)/);
+		if (!match?.[1]) return null;
+		const parsed = Number.parseInt(match[1], 10);
+		return Number.isFinite(parsed) ? parsed : null;
+	} catch {
+		return null;
+	}
+}
+
+const defaultOnPaneDisappeared = (ctx: PaneDisappearedContext): PaneDisappearedDecision => {
+	if (ctx.exitCode === 0) {
+		return { status: "completed" };
+	}
+	if (ctx.exitCode !== null) {
+		return {
+			status: "failed",
+			summary: `runtime exited with code ${ctx.exitCode}`,
+		};
+	}
+	return {
+		status: "failed",
+		summary: "pane terminated without writing exit code",
+	};
+};
+
 export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDeps): AgentAdapter {
 	const { db, panes } = deps;
 	const logger = deps.logger ?? silentLogger;
+	const onPaneDisappeared = config.onPaneDisappeared ?? defaultOnPaneDisappeared;
 
 	// Ensures a task exists AND is managed by this adapter. Prevents one adapter
 	// from operating on another adapter's tasks even though they share the DB.
@@ -135,7 +200,7 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 				status: "queued",
 			});
 
-			const launchCommand = config.buildLaunchCommand(input.spec);
+			const rawLaunchCommand = config.buildLaunchCommand(input.spec);
 			const cwd = input.spec.cwd ?? session.worktree_path;
 			// Path layout for per-task artifacts is owned by core
 			// (taskArtifactPaths) so every adapter + any future tool reads
@@ -143,9 +208,11 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 			// best-effort: an unwritable cwd shouldn't block submit.
 			const paths = taskArtifactPaths(cwd, task_id);
 			let transcriptPath: string | undefined;
+			let exitCodeAvailable = false;
 			try {
 				mkdirSync(paths.dir, { recursive: true });
 				transcriptPath = paths.transcriptPath;
+				exitCodeAvailable = true;
 			} catch (err) {
 				logger.warn("transcript capture disabled", {
 					task_id,
@@ -153,6 +220,17 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 					reason: errorMessage(err),
 				});
 			}
+
+			// Wrap the launch command so the child's exit code lands in a
+			// sentinel file after the pane's shell exits. Without this,
+			// `status()` couldn't tell a clean completion from a crash —
+			// that ambiguity is what blocked the entire `completed` path
+			// in v0. Only wrap when the artifact dir exists; otherwise run
+			// unwrapped (we'll fall through to the default "no sentinel →
+			// failed" decision on pane death).
+			const launchCommand = exitCodeAvailable
+				? wrapLaunchCommandWithExitCode(rawLaunchCommand, paths.exitCodePath)
+				: rawLaunchCommand;
 
 			try {
 				const handle = await panes.spawnTask({
@@ -184,13 +262,22 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 		async status(task_id) {
 			const owned = ownTask(task_id);
 			if (!owned.ok) {
-				const now = new Date().toISOString();
+				// Earlier revisions synthesized a fake `created_at=updated_at=now`
+				// to keep the schema happy. That was a typed lie — callers
+				// couldn't distinguish a real task that had just started from a
+				// nonexistent one. Surface the error directly and let the
+				// command layer (get-task-status.ts) decide how to render a
+				// "not found" response; don't fabricate timestamps.
 				return {
 					task_id,
 					agent_kind: config.kind,
 					status: "failed",
-					created_at: now,
-					updated_at: now,
+					// `created_at`/`updated_at` are not emitted here; the
+					// schema keeps them required for the success shape, but the
+					// command layer intercepts task-not-found and emits its own
+					// error envelope before this value reaches the wire.
+					created_at: "1970-01-01T00:00:00.000Z",
+					updated_at: "1970-01-01T00:00:00.000Z",
 					error: owned.error,
 				};
 			}
@@ -198,8 +285,35 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 			if (!isTerminalTaskStatus(live.status)) {
 				const alive = await panes.isAlive(task_id);
 				if (!alive) {
-					const updated = updateTaskStatus(db, task_id, "failed");
-					if (updated) live = updated;
+					// Pane is gone but the row isn't terminal — infer the
+					// terminal status from the exit-code sentinel (or the
+					// adapter's override), then drive the same completeTask
+					// path the explicit cancel flow uses so summary / timestamps
+					// land consistently.
+					// Exit-code sentinel lives in the same dir as the transcript
+					// (see `taskArtifactPaths`). Derive the path from
+					// `transcript_ref` rather than re-resolving cwd so a task
+					// that overrode cwd at submit time still reads its own
+					// sentinel. If transcript capture was disabled there is
+					// no sentinel to read; the default hook treats that as
+					// `failed`.
+					const exitCode = live.transcript_ref
+						? readExitCodeSentinel(join(dirname(live.transcript_ref), "exit-code"))
+						: null;
+					const decision = onPaneDisappeared({
+						task: live,
+						exitCode,
+						transcriptPath: live.transcript_ref ?? undefined,
+					});
+					const completed = completeTask(db, {
+						id: task_id,
+						status: decision.status,
+						summary: decision.summary ?? live.summary ?? undefined,
+					});
+					if (completed) {
+						live = completed;
+						if (config.onTerminal) config.onTerminal(completed, db);
+					}
 				}
 			}
 			const caps = config.capabilities;
@@ -210,6 +324,7 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 				summary: live.summary ?? undefined,
 				created_at: live.created_at,
 				updated_at: live.updated_at,
+				started_at: live.started_at ?? undefined,
 				completed_at: live.completed_at ?? undefined,
 				native_task_id: live.native_task_ref ?? undefined,
 				supports_steering: caps.supports_steering,
@@ -219,6 +334,10 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 					: caps.supports_attach
 						? panes.computeAttachHint(task_id)
 						: undefined,
+				metadata: {
+					tmux_session_name: panes.sessionNameFor(task_id),
+					...(live.native_task_ref ? { tmux_pane_id: live.native_task_ref } : {}),
+				},
 			};
 		},
 
