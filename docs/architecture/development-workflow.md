@@ -83,9 +83,12 @@ Core は外部依存なしで終わらせる。
 最初は 1 本だけ spike する。
 
 推奨:
-1. 一番 controllable な adapter
-2. submit/status/collect/cancel が通る最小 path
-3. steering は optional
+1. 共有 **pane backend** (tmux) を先に固める — spawn/pane lifecycle/attach_hint/transcript pipe はすべてここに集約する
+2. 一番 controllable な adapter を選び、launch command と result extractor だけ書く
+3. submit/status/collect/cancel が通る最小 path
+4. steering は optional (`tmux send-keys`)
+
+v0 は headless one-shot ではなく pane backend 前提 (詳細は `../specs/2026-04-23-cuekit-adapter-spec.md` Section 3.7)。`tmux` が無い環境では `submit_failed` を返す。
 
 ### ルール
 - adapter は runtime-native state を cuekit state に翻訳する

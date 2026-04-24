@@ -13,7 +13,7 @@ If you want the shortest path to understanding the project, read in this order:
 
 2. [`2026-04-23-cuekit-protocol-spec.md`](2026-04-23-cuekit-protocol-spec.md)
    - Core delegation protocol
-   - Task/job model
+   - Task/session model
    - Status, result, error, capability concepts
 
 3. [`2026-04-23-cuekit-state-model.md`](2026-04-23-cuekit-state-model.md)

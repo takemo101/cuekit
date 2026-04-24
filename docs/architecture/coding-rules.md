@@ -46,7 +46,7 @@
 - `task-spec.ts`
 - `task-status.ts`
 - `task-result.ts`
-- `job-error.ts`
+- `task-error.ts`
 
 ## Pure core を守る
 
@@ -119,7 +119,7 @@ Type だけ定義して parse しないのは避ける。
 cuekit は protocol / MCP / persistence が中心なので、外部境界では snake_case を優先する。
 
 例:
-- `job_id`
+- `task_id`
 - `task_id`
 - `parent_session_ref`
 - `result_ref`

@@ -129,9 +129,10 @@ Represents a delegated child task created by an orchestration session.
 | `session_id` | text | yes | Foreign key to `sessions.id` |
 | `parent_task_id` | text | no | Optional self-reference for simple task lineage |
 | `target_agent_kind` | text | yes | Child runtime family |
+| `model` | text | no | Requested runtime model name (e.g. `sonnet`); null if not specified at submit |
 | `objective` | text | yes | Human-readable task objective |
 | `status` | text | yes | Task lifecycle status |
-| `native_task_ref` | text | no | Native runtime task/session reference |
+| `native_task_ref` | text | no | Native runtime task/session reference (v0 tmux: `pane_id`) |
 | `summary` | text | no | Current or final normalized summary |
 | `result_ref` | text | no | Path/reference to structured result file |
 | `transcript_ref` | text | no | Path/reference to transcript/log file |
@@ -167,6 +168,8 @@ type TaskStatus =
 - `summary` may be used for either the latest normalized status summary or the final result summary
 - `result_ref` and `transcript_ref` are optional because not all runtimes can guarantee both
 - `parent_task_id` is sufficient for simple lineage in v0; a dedicated lineage table is not needed yet
+- `native_task_ref` under the v0 tmux pane backend stores the tmux `pane_id` of the child (see adapter spec Section 3.7). The tmux session name (`cuekit-task-{task_id_short}`) is derivable from `id`, so it does not need its own column. v0 uses a flat 1 task = 1 tmux session layout (no window hierarchy).
+- `model` stores the requested runtime model name (e.g. `sonnet` for claude-code) if the caller asked for one. Null means the adapter launched the runtime without a model flag and the runtime used its own default. See protocol spec Section 3.4.
 
 ---
 
@@ -217,6 +220,7 @@ create table tasks (
   session_id text not null,
   parent_task_id text,
   target_agent_kind text not null,
+  model text,
   objective text not null,
   status text not null,
   native_task_ref text,

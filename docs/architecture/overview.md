@@ -95,6 +95,7 @@ MCP/CLI Surface → Adapters → Core
 - cancellation
 - optional steering
 - runtime 境界の input/output を Zod で検証し、曖昧な native data をそのまま通さない
+- v0 では **tmux pane backend** を execution substrate として共有する (詳細は `../specs/2026-04-23-cuekit-adapter-spec.md` Section 3.7)。各 adapter は launch command と result extractor のみを持つ。ヘッドレス one-shot ではなく、ユーザーが `tmux attach-session` で child に入れる形を v0 の前提にする。
 
 ### Control Surface (`@cuekit/mcp`)
 - `incur` command tree を定義する
