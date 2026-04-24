@@ -1,8 +1,9 @@
 import { Database } from "bun:sqlite";
 import { beforeEach, describe, expect, it } from "bun:test";
-import { TaskListFilterSchema } from "@cuekit/core";
+import { encodeTaskListCursor, TaskListFilterSchema } from "@cuekit/core";
 import { runMigrations } from "../src/migrate.ts";
 import { createSession } from "../src/session-store.ts";
+import type { Task } from "../src/task.ts";
 import {
 	completeTask,
 	createTask,
@@ -330,9 +331,7 @@ describe("completeTask", () => {
 	});
 });
 
-describe("listTasks (cross-session filter + pagination)", () => {
-	// Seed a second session + an assortment of tasks so filter / pagination
-	// combinations have something meaningful to slice through.
+describe("listTasks (cross-session filter + keyset pagination)", () => {
 	async function seed(count: number, opts: { session?: string; agent?: string } = {}) {
 		const session = opts.session ?? "s1";
 		const agent = opts.agent ?? "pi";
@@ -343,14 +342,20 @@ describe("listTasks (cross-session filter + pagination)", () => {
 				target_agent_kind: agent,
 				objective: `obj ${i}`,
 			});
-			// Tick so updated_at differs and the `order by updated_at desc`
-			// produces a deterministic order (newest last-inserted).
+			// Tick so `updated_at` differs and the walk is deterministic.
 			await Bun.sleep(2);
 		}
 	}
 
+	// Helper: take the last row of a page and hand back the cursor the
+	// MCP command layer would emit. Tests use this to verify the store
+	// honours the cursor predicate; the real encoding round-trip is
+	// covered end-to-end in the MCP commands test.
+	function cursorOf(row: { updated_at: string; id: string }): string {
+		return encodeTaskListCursor({ updated_at: row.updated_at, id: row.id });
+	}
+
 	it("applies DEFAULT_LIST_TASKS_LIMIT when limit is omitted", async () => {
-		// Insert one more than the default so we can tell truncation happened.
 		await seed(DEFAULT_LIST_TASKS_LIMIT + 1);
 		const rows = listTasks(db);
 		expect(rows).toHaveLength(DEFAULT_LIST_TASKS_LIMIT);
@@ -362,54 +367,46 @@ describe("listTasks (cross-session filter + pagination)", () => {
 		expect(rows).toHaveLength(3);
 	});
 
-	it("skips `offset` rows before returning", async () => {
+	it("starts the next page strictly after the cursor row", async () => {
 		await seed(5);
-		const firstPage = listTasks(db, { limit: 2 });
-		const secondPage = listTasks(db, { limit: 2, offset: 2 });
-		expect(firstPage.map((t) => t.id)).not.toEqual(secondPage.map((t) => t.id));
-		expect(secondPage).toHaveLength(2);
+		const first = listTasks(db, { limit: 2 });
+		const anchor = first[first.length - 1];
+		if (!anchor) throw new Error("setup failed — first page empty");
+		const next = listTasks(db, { limit: 2, cursor: cursorOf(anchor) });
+		expect(next).toHaveLength(2);
+		// No overlap between pages.
+		const firstIds = new Set(first.map((t) => t.id));
+		for (const t of next) expect(firstIds.has(t.id)).toBe(false);
 	});
 
-	it("caps an explicit limit at the schema max (1000) — no unbounded sentinel", () => {
-		// Regression against an earlier draft of this PR that treated
-		// `limit: 0` as "return every row." The schema now rejects both 0
-		// and values >1000; callers that need more than 1000 rows must
-		// page via offset.
+	it("validates schema boundary conditions", () => {
 		expect(TaskListFilterSchema.safeParse({ limit: 0 }).success).toBe(false);
 		expect(TaskListFilterSchema.safeParse({ limit: 1001 }).success).toBe(false);
 		expect(TaskListFilterSchema.safeParse({ limit: 1000 }).success).toBe(true);
 		expect(TaskListFilterSchema.safeParse({ limit: -1 }).success).toBe(false);
 		expect(TaskListFilterSchema.safeParse({ limit: 3.5 }).success).toBe(false);
-		expect(TaskListFilterSchema.safeParse({ offset: -1 }).success).toBe(false);
-	});
-
-	it("rejects offset without an explicit limit (Oracle P1-1)", () => {
-		// `{ offset: 50 }` alone falls back to the default page size and
-		// silently returns "skip 50, take 100" — almost never intended.
-		// The schema refinement forces callers to state the page size.
-		expect(TaskListFilterSchema.safeParse({ offset: 50 }).success).toBe(false);
-		expect(TaskListFilterSchema.safeParse({ offset: 50, limit: 10 }).success).toBe(true);
-		// offset: 0 alone is still rejected — even when the value is the
-		// default, the absence of `limit` means "skip into default window"
-		// which is the exact ambiguity the refinement exists to block.
-		expect(TaskListFilterSchema.safeParse({ offset: 0 }).success).toBe(false);
-		// limit alone is fine; offset defaults to 0 at the store.
-		expect(TaskListFilterSchema.safeParse({ limit: 10 }).success).toBe(true);
-		// Empty filter is fine — uses defaults for both.
+		// cursor is an opaque string — schema trusts any string; store
+		// validates the envelope on decode.
+		expect(TaskListFilterSchema.safeParse({ cursor: "anything" }).success).toBe(true);
 		expect(TaskListFilterSchema.safeParse({}).success).toBe(true);
 	});
 
-	it("pages cleanly: limit+offset walk covers the full set with no gaps or dupes", async () => {
+	it("pages cleanly: cursor walk covers the full set with no gaps or dupes", async () => {
 		await seed(7);
 		const pageSize = 3;
 		const seen: string[] = [];
-		for (let offset = 0; offset < 10; offset += pageSize) {
-			const page = listTasks(db, { limit: pageSize, offset });
+		let cursor: string | undefined;
+		for (let i = 0; i < 10; i++) {
+			const page: Task[] = listTasks(db, { limit: pageSize, cursor });
 			if (page.length === 0) break;
 			for (const t of page) seen.push(t.id);
+			if (page.length < pageSize) break;
+			const last = page[page.length - 1];
+			if (!last) break;
+			cursor = cursorOf(last);
 		}
 		expect(seen).toHaveLength(7);
-		expect(new Set(seen).size).toBe(7); // no duplicates
+		expect(new Set(seen).size).toBe(7);
 	});
 
 	it("orders by updated_at desc (newest first)", async () => {
@@ -423,7 +420,6 @@ describe("listTasks (cross-session filter + pagination)", () => {
 	it("filters by status and still paginates", async () => {
 		await seed(4);
 		const ids = listTasks(db).map((t) => t.id);
-		// Mark the first two running, leave the rest queued.
 		if (ids[0]) updateTaskStatus(db, ids[0], "running");
 		if (ids[1]) updateTaskStatus(db, ids[1], "running");
 		const running = listTasks(db, { status: "running", limit: 10 });
@@ -435,10 +431,8 @@ describe("listTasks (cross-session filter + pagination)", () => {
 	it("filters by agent_kind", async () => {
 		await seed(2, { agent: "pi" });
 		await seed(3, { agent: "claude-code" });
-		const pi = listTasks(db, { agent_kind: "pi", limit: 1000 });
-		const cc = listTasks(db, { agent_kind: "claude-code", limit: 1000 });
-		expect(pi).toHaveLength(2);
-		expect(cc).toHaveLength(3);
+		expect(listTasks(db, { agent_kind: "pi", limit: 1000 })).toHaveLength(2);
+		expect(listTasks(db, { agent_kind: "claude-code", limit: 1000 })).toHaveLength(3);
 	});
 
 	it("filters by session_id", async () => {
@@ -461,24 +455,28 @@ describe("listTasks (cross-session filter + pagination)", () => {
 			worktree_path: "/other",
 			parent_agent_kind: "pi",
 		});
-		await seed(2, { session: "s1" }); // sessions.s1.worktree_path = "/w"
-		await seed(1, { session: "s2" }); // sessions.s2.worktree_path = "/other"
-		const here = listTasks(db, { cwd: "/w", limit: 1000 });
-		const there = listTasks(db, { cwd: "/other", limit: 1000 });
-		expect(here).toHaveLength(2);
-		expect(there).toHaveLength(1);
+		await seed(2, { session: "s1" });
+		await seed(1, { session: "s2" });
+		expect(listTasks(db, { cwd: "/w", limit: 1000 })).toHaveLength(2);
+		expect(listTasks(db, { cwd: "/other", limit: 1000 })).toHaveLength(1);
 	});
 
-	it("returns [] when offset exceeds total rows", async () => {
+	it("returns [] when the cursor is past the end of the set", async () => {
 		await seed(2);
-		expect(listTasks(db, { offset: 10 })).toEqual([]);
+		const all = listTasks(db);
+		const last = all[all.length - 1];
+		if (!last) throw new Error("setup failed");
+		expect(listTasks(db, { limit: 10, cursor: cursorOf(last) })).toEqual([]);
+	});
+
+	it("rejects a malformed cursor with an Error (defect, not silent empty page)", () => {
+		expect(() => listTasks(db, { limit: 10, cursor: "not-base64-json" })).toThrow(/cursor/);
 	});
 
 	it("stays stable across pages when rows share updated_at (id tiebreaker)", () => {
-		// ISO-8601 strings collide at ms granularity, so rapid inserts can
-		// produce rows with identical `updated_at`. Force that collision by
-		// writing the same timestamp to every row, then verify pagination
-		// still covers the set with no gaps or duplicates.
+		// ISO-8601 strings collide at ms granularity. Force the collision
+		// across every row and verify the keyset walk still covers the
+		// set with no gaps or duplicates — concurrent-insert stability.
 		for (let i = 0; i < 6; i++) {
 			createTask(db, {
 				id: `fixed-${i}`,
@@ -491,12 +489,46 @@ describe("listTasks (cross-session filter + pagination)", () => {
 
 		const pageSize = 2;
 		const seen: string[] = [];
-		for (let offset = 0; offset < 10; offset += pageSize) {
-			const page = listTasks(db, { limit: pageSize, offset });
+		let cursor: string | undefined;
+		for (let i = 0; i < 10; i++) {
+			const page: Task[] = listTasks(db, { limit: pageSize, cursor });
 			if (page.length === 0) break;
 			for (const t of page) seen.push(t.id);
+			if (page.length < pageSize) break;
+			const last = page[page.length - 1];
+			if (!last) break;
+			cursor = cursorOf(last);
 		}
 		expect(seen).toHaveLength(6);
 		expect(new Set(seen).size).toBe(6);
+	});
+
+	it("is stable under concurrent inserts mid-walk (keyset's core promise)", async () => {
+		// The OFFSET predecessor of this function would have let a new
+		// row inserted between page fetches shift the window, causing
+		// skips or duplicates. With keyset the cursor anchors on a
+		// specific row — new rows can only appear on future fetches.
+		await seed(4);
+		const first = listTasks(db, { limit: 2 });
+		const anchor = first[first.length - 1];
+		if (!anchor) throw new Error("setup failed");
+		// Insert a task whose updated_at is NEWER than any existing row,
+		// simulating a fresh arrival between page fetches.
+		await Bun.sleep(2);
+		createTask(db, {
+			id: "mid-walk",
+			session_id: "s1",
+			target_agent_kind: "pi",
+			objective: "arrived mid-walk",
+		});
+		const next = listTasks(db, { limit: 2, cursor: cursorOf(anchor) });
+		// The new row does not shift the cursor window; we still get
+		// the original tail-of-set, in order, with no duplicates of the
+		// first page.
+		const firstIds = new Set(first.map((t) => t.id));
+		for (const t of next) {
+			expect(firstIds.has(t.id)).toBe(false);
+			expect(t.id).not.toBe("mid-walk");
+		}
 	});
 });
