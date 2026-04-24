@@ -383,6 +383,22 @@ describe("listTasks (cross-session filter + pagination)", () => {
 		expect(TaskListFilterSchema.safeParse({ offset: -1 }).success).toBe(false);
 	});
 
+	it("rejects offset without an explicit limit (Oracle P1-1)", () => {
+		// `{ offset: 50 }` alone falls back to the default page size and
+		// silently returns "skip 50, take 100" — almost never intended.
+		// The schema refinement forces callers to state the page size.
+		expect(TaskListFilterSchema.safeParse({ offset: 50 }).success).toBe(false);
+		expect(TaskListFilterSchema.safeParse({ offset: 50, limit: 10 }).success).toBe(true);
+		// offset: 0 alone is still rejected — even when the value is the
+		// default, the absence of `limit` means "skip into default window"
+		// which is the exact ambiguity the refinement exists to block.
+		expect(TaskListFilterSchema.safeParse({ offset: 0 }).success).toBe(false);
+		// limit alone is fine; offset defaults to 0 at the store.
+		expect(TaskListFilterSchema.safeParse({ limit: 10 }).success).toBe(true);
+		// Empty filter is fine — uses defaults for both.
+		expect(TaskListFilterSchema.safeParse({}).success).toBe(true);
+	});
+
 	it("pages cleanly: limit+offset walk covers the full set with no gaps or dupes", async () => {
 		await seed(7);
 		const pageSize = 3;
