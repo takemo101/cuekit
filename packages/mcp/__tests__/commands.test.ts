@@ -262,6 +262,38 @@ describe("list-tasks", () => {
 		const result = await runListTasks(ctx, { cwd: "/tmp/one" });
 		expect(result.tasks).toHaveLength(1);
 	});
+
+	it("signals has_more=false and omits next_offset when the whole set fits in one page", async () => {
+		await runSubmitTask(ctx, {
+			objective: "a",
+			agent_kind: "claude-code",
+			cwd: "/tmp/one",
+		});
+		const result = await runListTasks(ctx, { limit: 10 });
+		expect(result.has_more).toBe(false);
+		expect(result.next_offset).toBeUndefined();
+	});
+
+	it("signals has_more=true and returns next_offset when more rows exist beyond the page", async () => {
+		for (let i = 0; i < 3; i++) {
+			await runSubmitTask(ctx, {
+				objective: `obj ${i}`,
+				agent_kind: "claude-code",
+				cwd: "/tmp/one",
+			});
+		}
+		const first = await runListTasks(ctx, { limit: 2, offset: 0 });
+		expect(first.tasks).toHaveLength(2);
+		expect(first.has_more).toBe(true);
+		expect(first.next_offset).toBe(2);
+
+		// Walk the rest using next_offset — the final page must flip
+		// has_more back to false so the caller knows to stop.
+		const second = await runListTasks(ctx, { limit: 2, offset: first.next_offset ?? 0 });
+		expect(second.tasks).toHaveLength(1);
+		expect(second.has_more).toBe(false);
+		expect(second.next_offset).toBeUndefined();
+	});
 });
 
 describe("list-adapters", () => {

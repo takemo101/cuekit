@@ -1,11 +1,14 @@
 import { Database } from "bun:sqlite";
 import { beforeEach, describe, expect, it } from "bun:test";
+import { TaskListFilterSchema } from "@cuekit/core";
 import { runMigrations } from "../src/migrate.ts";
 import { createSession } from "../src/session-store.ts";
 import {
 	completeTask,
 	createTask,
+	DEFAULT_LIST_TASKS_LIMIT,
 	getTaskById,
+	listTasks,
 	listTasksBySession,
 	updateTaskNativeRef,
 	updateTaskRefs,
@@ -324,5 +327,160 @@ describe("completeTask", () => {
 		});
 		// `undefined` means "don't touch" so /old survives
 		expect(done?.transcript_ref).toBe("/old");
+	});
+});
+
+describe("listTasks (cross-session filter + pagination)", () => {
+	// Seed a second session + an assortment of tasks so filter / pagination
+	// combinations have something meaningful to slice through.
+	async function seed(count: number, opts: { session?: string; agent?: string } = {}) {
+		const session = opts.session ?? "s1";
+		const agent = opts.agent ?? "pi";
+		for (let i = 0; i < count; i++) {
+			createTask(db, {
+				id: `${session}-${agent}-${i}`,
+				session_id: session,
+				target_agent_kind: agent,
+				objective: `obj ${i}`,
+			});
+			// Tick so updated_at differs and the `order by updated_at desc`
+			// produces a deterministic order (newest last-inserted).
+			await Bun.sleep(2);
+		}
+	}
+
+	it("applies DEFAULT_LIST_TASKS_LIMIT when limit is omitted", async () => {
+		// Insert one more than the default so we can tell truncation happened.
+		await seed(DEFAULT_LIST_TASKS_LIMIT + 1);
+		const rows = listTasks(db);
+		expect(rows).toHaveLength(DEFAULT_LIST_TASKS_LIMIT);
+	});
+
+	it("caps the result set to an explicit limit", async () => {
+		await seed(5);
+		const rows = listTasks(db, { limit: 3 });
+		expect(rows).toHaveLength(3);
+	});
+
+	it("skips `offset` rows before returning", async () => {
+		await seed(5);
+		const firstPage = listTasks(db, { limit: 2 });
+		const secondPage = listTasks(db, { limit: 2, offset: 2 });
+		expect(firstPage.map((t) => t.id)).not.toEqual(secondPage.map((t) => t.id));
+		expect(secondPage).toHaveLength(2);
+	});
+
+	it("caps an explicit limit at the schema max (1000) — no unbounded sentinel", () => {
+		// Regression against an earlier draft of this PR that treated
+		// `limit: 0` as "return every row." The schema now rejects both 0
+		// and values >1000; callers that need more than 1000 rows must
+		// page via offset.
+		expect(TaskListFilterSchema.safeParse({ limit: 0 }).success).toBe(false);
+		expect(TaskListFilterSchema.safeParse({ limit: 1001 }).success).toBe(false);
+		expect(TaskListFilterSchema.safeParse({ limit: 1000 }).success).toBe(true);
+		expect(TaskListFilterSchema.safeParse({ limit: -1 }).success).toBe(false);
+		expect(TaskListFilterSchema.safeParse({ limit: 3.5 }).success).toBe(false);
+		expect(TaskListFilterSchema.safeParse({ offset: -1 }).success).toBe(false);
+	});
+
+	it("pages cleanly: limit+offset walk covers the full set with no gaps or dupes", async () => {
+		await seed(7);
+		const pageSize = 3;
+		const seen: string[] = [];
+		for (let offset = 0; offset < 10; offset += pageSize) {
+			const page = listTasks(db, { limit: pageSize, offset });
+			if (page.length === 0) break;
+			for (const t of page) seen.push(t.id);
+		}
+		expect(seen).toHaveLength(7);
+		expect(new Set(seen).size).toBe(7); // no duplicates
+	});
+
+	it("orders by updated_at desc (newest first)", async () => {
+		await seed(3);
+		const rows = listTasks(db);
+		const updatedAts = rows.map((t) => t.updated_at);
+		const sorted = [...updatedAts].sort((a, b) => b.localeCompare(a));
+		expect(updatedAts).toEqual(sorted);
+	});
+
+	it("filters by status and still paginates", async () => {
+		await seed(4);
+		const ids = listTasks(db).map((t) => t.id);
+		// Mark the first two running, leave the rest queued.
+		if (ids[0]) updateTaskStatus(db, ids[0], "running");
+		if (ids[1]) updateTaskStatus(db, ids[1], "running");
+		const running = listTasks(db, { status: "running", limit: 10 });
+		expect(running).toHaveLength(2);
+		const runningLimited = listTasks(db, { status: "running", limit: 1 });
+		expect(runningLimited).toHaveLength(1);
+	});
+
+	it("filters by agent_kind", async () => {
+		await seed(2, { agent: "pi" });
+		await seed(3, { agent: "claude-code" });
+		const pi = listTasks(db, { agent_kind: "pi", limit: 1000 });
+		const cc = listTasks(db, { agent_kind: "claude-code", limit: 1000 });
+		expect(pi).toHaveLength(2);
+		expect(cc).toHaveLength(3);
+	});
+
+	it("filters by session_id", async () => {
+		createSession(db, {
+			id: "s2",
+			project_root: "/p",
+			worktree_path: "/w2",
+			parent_agent_kind: "pi",
+		});
+		await seed(2, { session: "s1" });
+		await seed(3, { session: "s2" });
+		expect(listTasks(db, { session_id: "s1", limit: 1000 })).toHaveLength(2);
+		expect(listTasks(db, { session_id: "s2", limit: 1000 })).toHaveLength(3);
+	});
+
+	it("filters by cwd (via sessions.worktree_path join)", async () => {
+		createSession(db, {
+			id: "s2",
+			project_root: "/p",
+			worktree_path: "/other",
+			parent_agent_kind: "pi",
+		});
+		await seed(2, { session: "s1" }); // sessions.s1.worktree_path = "/w"
+		await seed(1, { session: "s2" }); // sessions.s2.worktree_path = "/other"
+		const here = listTasks(db, { cwd: "/w", limit: 1000 });
+		const there = listTasks(db, { cwd: "/other", limit: 1000 });
+		expect(here).toHaveLength(2);
+		expect(there).toHaveLength(1);
+	});
+
+	it("returns [] when offset exceeds total rows", async () => {
+		await seed(2);
+		expect(listTasks(db, { offset: 10 })).toEqual([]);
+	});
+
+	it("stays stable across pages when rows share updated_at (id tiebreaker)", () => {
+		// ISO-8601 strings collide at ms granularity, so rapid inserts can
+		// produce rows with identical `updated_at`. Force that collision by
+		// writing the same timestamp to every row, then verify pagination
+		// still covers the set with no gaps or duplicates.
+		for (let i = 0; i < 6; i++) {
+			createTask(db, {
+				id: `fixed-${i}`,
+				session_id: "s1",
+				target_agent_kind: "pi",
+				objective: `x${i}`,
+			});
+		}
+		db.prepare("update tasks set updated_at = '2026-04-24T00:00:00.000Z'").run();
+
+		const pageSize = 2;
+		const seen: string[] = [];
+		for (let offset = 0; offset < 10; offset += pageSize) {
+			const page = listTasks(db, { limit: pageSize, offset });
+			if (page.length === 0) break;
+			for (const t of page) seen.push(t.id);
+		}
+		expect(seen).toHaveLength(6);
+		expect(new Set(seen).size).toBe(6);
 	});
 });

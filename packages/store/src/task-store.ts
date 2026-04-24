@@ -59,12 +59,19 @@ export function listTasksBySession(db: Database, session_id: string): Task[] {
 	return rows.map((r) => TaskSchema.parse(r));
 }
 
+// Default page size when a caller doesn't specify one. 100 is "roughly a
+// screenful of summaries" — enough that small deployments never hit the
+// cap, small enough that a forgotten-filter call over a year-old DB
+// doesn't pull tens of thousands of rows across the MCP boundary.
+export const DEFAULT_LIST_TASKS_LIMIT = 100;
+
 // Cross-session listing with protocol-level TaskListFilter. `cwd` filters by
 // `sessions.worktree_path` via a JOIN; all other filters are direct. Newest
-// first (updated_at desc).
+// first (updated_at desc). Results are paginated via filter.limit / offset —
+// see `DEFAULT_LIST_TASKS_LIMIT` for the default cap.
 export function listTasks(db: Database, filter: TaskListFilter = {}): Task[] {
 	const conditions: string[] = [];
-	const params: string[] = [];
+	const params: (string | number)[] = [];
 	if (filter.status) {
 		conditions.push("t.status = ?");
 		params.push(filter.status);
@@ -84,8 +91,23 @@ export function listTasks(db: Database, filter: TaskListFilter = {}): Task[] {
 	}
 	const where = conditions.length > 0 ? `where ${conditions.join(" and ")}` : "";
 	const join = joinCwd ? "join sessions s on s.id = t.session_id" : "";
+
+	// Pagination. No unbounded sentinel: omitting `limit` applies the
+	// default; the MCP-boundary schema caps explicit limits at 1000.
+	const limit = filter.limit ?? DEFAULT_LIST_TASKS_LIMIT;
+	const offset = filter.offset ?? 0;
+
+	params.push(limit);
+	params.push(offset);
+
+	// Secondary sort by id keeps pagination stable when two rows share the
+	// same updated_at (ms-precision ISO strings collide under rapid inserts).
+	// Without it, LIMIT/OFFSET could silently drop or duplicate rows across
+	// pages — the exact bug pagination is meant to prevent.
 	const rows = db
-		.prepare(`select t.* from tasks t ${join} ${where} order by t.updated_at desc`)
+		.prepare(
+			`select t.* from tasks t ${join} ${where} order by t.updated_at desc, t.id asc limit ? offset ?`,
+		)
 		.all(...params);
 	return rows.map((r) => TaskSchema.parse(r));
 }
