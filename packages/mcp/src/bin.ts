@@ -7,6 +7,7 @@ import {
 	createPiAdapter,
 	PaneBackend,
 } from "@cuekit/adapters";
+import { createStderrLogger, type LogLevel } from "@cuekit/core";
 import { openDatabase, runMigrations } from "@cuekit/store";
 import { createCli } from "./cli.ts";
 
@@ -45,11 +46,18 @@ async function main(): Promise<void> {
 		runMigrations(db);
 		installSignalHandlers(db);
 
+		// Structured stderr logger for warnings/errors. Level controllable via
+		// CUEKIT_LOG_LEVEL (default "warn"). Adapters inherit it so operator-
+		// visible warnings (e.g. 'transcript capture disabled') don't depend
+		// on each adapter writing to stderr directly.
+		const logLevel = (process.env.CUEKIT_LOG_LEVEL as LogLevel) ?? "warn";
+		const logger = createStderrLogger({ minLevel: logLevel });
+
 		const panes = new PaneBackend();
 		const registry = new AdapterRegistry();
-		registry.register(createClaudeCodeAdapter(db, panes));
-		registry.register(createPiAdapter(db, panes));
-		registry.register(createOpenCodeAdapter(db, panes));
+		registry.register(createClaudeCodeAdapter(db, panes, { logger }));
+		registry.register(createPiAdapter(db, panes, { logger }));
+		registry.register(createOpenCodeAdapter(db, panes, { logger }));
 
 		const cli = createCli({ db, registry });
 		// Note: `cli.serve()` may return before the process should exit —

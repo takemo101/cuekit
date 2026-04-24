@@ -5,7 +5,9 @@ import {
 	ensureCollectable,
 	isTerminalTaskStatus,
 	type JobError,
+	type Logger,
 	type SteeringMessage,
+	silentLogger,
 	type TaskListFilter,
 	type TaskSpec,
 	type TaskSummary,
@@ -43,10 +45,16 @@ export interface PaneAdapterConfig {
 export interface PaneAdapterDeps {
 	db: Database;
 	panes: PaneBackend;
+	// Optional sink for warnings (e.g. "transcript capture disabled"). Tests
+	// default to the silent logger so submit failures on read-only cwds
+	// don't pollute test output; the `cuekit` binary injects an stderr
+	// logger so operators actually see warnings.
+	logger?: Logger;
 }
 
 export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDeps): AgentAdapter {
 	const { db, panes } = deps;
+	const logger = deps.logger ?? silentLogger;
 
 	// Ensures a task exists AND is managed by this adapter. Prevents one adapter
 	// from operating on another adapter's tasks even though they share the DB.
@@ -139,9 +147,11 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 				mkdirSync(paths.dir, { recursive: true });
 				transcriptPath = paths.transcriptPath;
 			} catch (err) {
-				process.stderr.write(
-					`cuekit: transcript capture disabled for task ${task_id} (${config.kind}): ${errorMessage(err)}\n`,
-				);
+				logger.warn("transcript capture disabled", {
+					task_id,
+					agent_kind: config.kind,
+					reason: errorMessage(err),
+				});
 			}
 
 			try {

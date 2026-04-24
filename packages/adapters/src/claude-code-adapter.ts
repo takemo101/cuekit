@@ -1,5 +1,5 @@
 import type { Database } from "bun:sqlite";
-import type { TaskSpec } from "@cuekit/core";
+import type { Logger, TaskSpec } from "@cuekit/core";
 import type { AgentAdapter } from "./agent-adapter.ts";
 import { createPaneAdapter } from "./pane-adapter.ts";
 import type { PaneBackend } from "./pane-backend.ts";
@@ -13,6 +13,8 @@ export interface ClaudeCodeAdapterOptions {
 	claudeBin?: string;
 	// Advertised models. Defaults to Anthropic's current code-targeted set.
 	availableModels?: string[];
+	// Optional logger forwarded to the shared pane adapter. Defaults silent.
+	logger?: Logger;
 }
 
 export interface BuildClaudeCodeLaunchCommandOptions {
@@ -69,6 +71,6 @@ export function createClaudeCodeAdapter(
 			},
 			buildLaunchCommand: builder,
 		},
-		{ db, panes },
+		{ db, panes, logger: options.logger },
 	);
 }
