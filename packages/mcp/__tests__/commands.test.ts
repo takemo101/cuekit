@@ -14,6 +14,7 @@ import { runGetTaskResult } from "../src/commands/get-task-result.ts";
 import { runGetTaskStatus } from "../src/commands/get-task-status.ts";
 import { runListAdapters } from "../src/commands/list-adapters.ts";
 import { runListTasks } from "../src/commands/list-tasks.ts";
+import { runShowMcpConfig } from "../src/commands/show-mcp-config.ts";
 import { runSteerTask } from "../src/commands/steer-task.ts";
 import { runSubmitTask } from "../src/commands/submit-task.ts";
 
@@ -312,5 +313,44 @@ describe("list-adapters", () => {
 		expect(claude?.available_models).toContain("sonnet");
 		const pi = result.adapters.find((a) => a.agent_kind === "pi");
 		expect(pi?.supports_model_selection).toBe(false);
+	});
+});
+
+describe("show-mcp-config", () => {
+	it("returns defaults (name='cuekit', command='cuekit', --mcp) when called with no input", async () => {
+		const result = await runShowMcpConfig(ctx, {});
+		expect(result.name).toBe("cuekit");
+		expect(result.command).toBe("cuekit");
+		expect(result.args).toEqual(["--mcp"]);
+		// Paste-ready snippet is keyed by the server name.
+		expect(result.mcpServers).toEqual({
+			cuekit: { command: "cuekit", args: ["--mcp"] },
+		});
+	});
+
+	it("honours a custom server name (for side-by-side installs)", async () => {
+		const result = await runShowMcpConfig(ctx, { name: "cuekit-prod" });
+		expect(result.name).toBe("cuekit-prod");
+		expect(result.mcpServers).toEqual({
+			"cuekit-prod": { command: "cuekit", args: ["--mcp"] },
+		});
+	});
+
+	it("honours an absolute bin path (uninstalled / workspace-linked checkouts)", async () => {
+		const result = await runShowMcpConfig(ctx, {
+			bin: "/Users/me/code/cuekit/packages/mcp/src/bin.ts",
+		});
+		expect(result.command).toBe("/Users/me/code/cuekit/packages/mcp/src/bin.ts");
+		expect(result.mcpServers.cuekit?.command).toBe("/Users/me/code/cuekit/packages/mcp/src/bin.ts");
+	});
+
+	it("round-trips both overrides in the mcpServers snippet", async () => {
+		const result = await runShowMcpConfig(ctx, {
+			name: "staging",
+			bin: "/opt/cuekit/bin/cuekit",
+		});
+		expect(result.mcpServers).toEqual({
+			staging: { command: "/opt/cuekit/bin/cuekit", args: ["--mcp"] },
+		});
 	});
 });
