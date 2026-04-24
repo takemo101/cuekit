@@ -50,6 +50,20 @@ export function listSessionsByWorktree(db: Database, worktree_path: string): Ses
 	return rows.map((r) => SessionSchema.parse(r));
 }
 
+// Deletes a session and all of its tasks in one transaction. Returns
+// true if the session row was removed. Child tasks are deleted
+// unconditionally to satisfy the FK — policy ("only if all tasks are
+// terminal") lives at the command layer, which verifies before
+// calling. Does not touch any on-disk artifact directories; operators
+// can remove those separately.
+export function deleteSession(db: Database, id: string): boolean {
+	return db.transaction(() => {
+		db.prepare("delete from tasks where session_id = ?").run(id);
+		const result = db.prepare("delete from sessions where id = ?").run(id);
+		return result.changes > 0;
+	})();
+}
+
 // Updates only the session status. The caller is responsible for validating the
 // transition is legal before calling this — the store trusts its inputs. When
 // transitioning to a terminal status, `ended_at` is set (preserving any prior

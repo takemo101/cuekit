@@ -7,9 +7,17 @@ import {
 	FakeTmuxRunner,
 	PaneBackend,
 } from "@cuekit/adapters";
-import { createSession, getTaskById, listSessionsByWorktree, runMigrations } from "@cuekit/store";
+import {
+	createSession,
+	getSessionById,
+	getTaskById,
+	listSessionsByWorktree,
+	runMigrations,
+} from "@cuekit/store";
 import type { CommandContext } from "../src/command-context.ts";
 import { runCancelTask } from "../src/commands/cancel-task.ts";
+import { runDeleteSession } from "../src/commands/delete-session.ts";
+import { runDeleteTask } from "../src/commands/delete-task.ts";
 import { runGetTaskResult } from "../src/commands/get-task-result.ts";
 import { runGetTaskStatus } from "../src/commands/get-task-status.ts";
 import { runListAdapters } from "../src/commands/list-adapters.ts";
@@ -352,5 +360,96 @@ describe("show-mcp-config", () => {
 		expect(result.mcpServers).toEqual({
 			staging: { command: "/opt/cuekit/bin/cuekit", args: ["--mcp"] },
 		});
+	});
+});
+
+describe("delete-task", () => {
+	it("deletes a terminal task and returns ok", async () => {
+		const submit = await runSubmitTask(ctx, {
+			objective: "x",
+			agent_kind: "claude-code",
+			cwd: "/tmp",
+		});
+		if (!submit.accepted) throw new Error("setup failed");
+		await runCancelTask(ctx, { task_id: submit.task_id });
+		const ack = await runDeleteTask(ctx, { task_id: submit.task_id });
+		expect(ack.ok).toBe(true);
+		expect(getTaskById(db, submit.task_id)).toBeNull();
+	});
+
+	it("refuses to delete a running task (caller must cancel first)", async () => {
+		const submit = await runSubmitTask(ctx, {
+			objective: "x",
+			agent_kind: "claude-code",
+			cwd: "/tmp",
+		});
+		if (!submit.accepted) throw new Error("setup failed");
+		const ack = await runDeleteTask(ctx, { task_id: submit.task_id });
+		expect(ack.ok).toBe(false);
+		if (!ack.ok) {
+			expect(ack.error.code).toBe("invalid_state");
+			expect(ack.error.message).toMatch(/cancel it before deleting/);
+		}
+		// Row still present — the refuse did not accidentally succeed.
+		expect(getTaskById(db, submit.task_id)).not.toBeNull();
+	});
+
+	it("returns task_not_found for unknown id", async () => {
+		const ack = await runDeleteTask(ctx, { task_id: "t_nope" });
+		expect(ack.ok).toBe(false);
+		if (!ack.ok) expect(ack.error.code).toBe("task_not_found");
+	});
+});
+
+describe("delete-session", () => {
+	it("deletes a session whose tasks are all terminal, cascading to children", async () => {
+		const submit = await runSubmitTask(ctx, {
+			objective: "x",
+			agent_kind: "claude-code",
+			cwd: "/tmp",
+		});
+		if (!submit.accepted) throw new Error("setup failed");
+		await runCancelTask(ctx, { task_id: submit.task_id });
+		const ack = await runDeleteSession(ctx, { session_id: submit.session_id });
+		expect(ack.ok).toBe(true);
+		expect(getSessionById(db, submit.session_id)).toBeNull();
+		expect(getTaskById(db, submit.task_id)).toBeNull();
+	});
+
+	it("deletes an empty session (no tasks) — valid terminal state", async () => {
+		createSession(db, {
+			id: "s_empty",
+			project_root: "/p",
+			worktree_path: "/w",
+			parent_agent_kind: "pi",
+		});
+		const ack = await runDeleteSession(ctx, { session_id: "s_empty" });
+		expect(ack.ok).toBe(true);
+		expect(getSessionById(db, "s_empty")).toBeNull();
+	});
+
+	it("refuses to delete a session with active tasks", async () => {
+		const submit = await runSubmitTask(ctx, {
+			objective: "x",
+			agent_kind: "claude-code",
+			cwd: "/tmp",
+		});
+		if (!submit.accepted) throw new Error("setup failed");
+		// Task is still running — deletion must be blocked.
+		const ack = await runDeleteSession(ctx, { session_id: submit.session_id });
+		expect(ack.ok).toBe(false);
+		if (!ack.ok) {
+			expect(ack.error.code).toBe("invalid_state");
+			expect(ack.error.message).toMatch(/active task/);
+		}
+		// Both rows still present — block is complete, not partial.
+		expect(getSessionById(db, submit.session_id)).not.toBeNull();
+		expect(getTaskById(db, submit.task_id)).not.toBeNull();
+	});
+
+	it("returns session_not_found for unknown id", async () => {
+		const ack = await runDeleteSession(ctx, { session_id: "s_nope" });
+		expect(ack.ok).toBe(false);
+		if (!ack.ok) expect(ack.error.code).toBe("session_not_found");
 	});
 });

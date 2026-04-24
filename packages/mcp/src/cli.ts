@@ -7,6 +7,16 @@ import {
 	runCancelTask,
 } from "./commands/cancel-task.ts";
 import {
+	DeleteSessionInputSchema,
+	DeleteSessionOutputSchema,
+	runDeleteSession,
+} from "./commands/delete-session.ts";
+import {
+	DeleteTaskInputSchema,
+	DeleteTaskOutputSchema,
+	runDeleteTask,
+} from "./commands/delete-task.ts";
+import {
 	GetTaskResultInputSchema,
 	GetTaskResultOutputSchema,
 	runGetTaskResult,
@@ -111,6 +121,21 @@ export function createCli(ctx: CommandContext) {
 		options: ShowMcpConfigInputSchema,
 		output: ShowMcpConfigOutputSchema,
 		run: ({ options }) => runShowMcpConfig(ctx, options),
+	});
+
+	cli.command("delete_task", {
+		description: "Delete a terminal task row. Non-terminal tasks must be cancelled first.",
+		options: DeleteTaskInputSchema,
+		output: DeleteTaskOutputSchema,
+		run: ({ options }) => runDeleteTask(ctx, options),
+	});
+
+	cli.command("delete_session", {
+		description:
+			"Delete a session and its tasks. All child tasks must be terminal before deletion.",
+		options: DeleteSessionInputSchema,
+		output: DeleteSessionOutputSchema,
+		run: ({ options }) => runDeleteSession(ctx, options),
 	});
 
 	return cli;

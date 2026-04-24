@@ -57,6 +57,16 @@ export function getTaskById(db: Database, id: string): Task | null {
 	return TaskSchema.parse(row);
 }
 
+// Low-level row delete. Returns true if a row was removed. Policy
+// (e.g. "only delete terminal tasks") lives at the command layer —
+// this function trusts the caller. Does not touch the artifact
+// directory (`.cuekit/tasks/<id>/`); operators can remove that
+// separately or keep it for audit.
+export function deleteTask(db: Database, id: string): boolean {
+	const result = db.prepare("delete from tasks where id = ?").run(id);
+	return result.changes > 0;
+}
+
 export function listTasksBySession(db: Database, session_id: string): Task[] {
 	const rows = db
 		.prepare("select * from tasks where session_id = ? order by created_at asc")

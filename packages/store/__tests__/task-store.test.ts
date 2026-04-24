@@ -8,6 +8,7 @@ import {
 	completeTask,
 	createTask,
 	DEFAULT_LIST_TASKS_LIMIT,
+	deleteTask,
 	getTaskById,
 	listTasks,
 	listTasksBySession,
@@ -530,5 +531,27 @@ describe("listTasks (cross-session filter + keyset pagination)", () => {
 			expect(firstIds.has(t.id)).toBe(false);
 			expect(t.id).not.toBe("mid-walk");
 		}
+	});
+});
+
+describe("deleteTask", () => {
+	beforeEach(() => {
+		createTask(db, { id: "t1", session_id: "s1", target_agent_kind: "pi", objective: "x" });
+	});
+
+	it("removes the row and returns true", () => {
+		expect(deleteTask(db, "t1")).toBe(true);
+		expect(getTaskById(db, "t1")).toBeNull();
+	});
+
+	it("returns false when the id is unknown (idempotent)", () => {
+		expect(deleteTask(db, "nope")).toBe(false);
+	});
+
+	it("does not enforce status — that's the command layer's job", () => {
+		// The store function trusts its input; callers that need policy
+		// must check isTerminalTaskStatus before calling.
+		updateTaskStatus(db, "t1", "running");
+		expect(deleteTask(db, "t1")).toBe(true);
 	});
 });
