@@ -4,7 +4,7 @@ import { createSession, getTaskById, runMigrations } from "@cuekit/store";
 import { createClaudeCodeAdapter } from "../src/claude-code-adapter.ts";
 import { PaneBackend } from "../src/pane-backend.ts";
 import { createPiAdapter } from "../src/pi-adapter.ts";
-import { FakeTmuxRunner } from "./fake-tmux-runner.ts";
+import { FakeTmuxRunner } from "../src/testing.ts";
 
 let db: Database;
 let runner: FakeTmuxRunner;

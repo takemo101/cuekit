@@ -7,5 +7,8 @@ export * from "./pane-backend.ts";
 export * from "./pi-adapter.ts";
 export * from "./result-normalizer.ts";
 export * from "./shell-quote.ts";
-export * from "./testing.ts";
 export * from "./tmux-runner.ts";
+// `testing.ts` is intentionally NOT re-exported here — it contains
+// test-only helpers (FakeTmuxRunner, hasTmux). Test callers import
+// them via the `@cuekit/adapters/testing` subpath so production code
+// can't accidentally wire a fake into a live runtime.

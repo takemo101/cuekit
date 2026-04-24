@@ -4,7 +4,7 @@ import { createSession, runMigrations } from "@cuekit/store";
 import { createOpenCodeAdapter } from "../src/opencode-adapter.ts";
 import { PaneBackend } from "../src/pane-backend.ts";
 import { createPiAdapter } from "../src/pi-adapter.ts";
-import { FakeTmuxRunner } from "./fake-tmux-runner.ts";
+import { FakeTmuxRunner } from "../src/testing.ts";
 
 let db: Database;
 let panes: PaneBackend;

@@ -8,9 +8,9 @@ import {
 	createClaudeCodeAdapter,
 	createOpenCodeAdapter,
 	createPiAdapter,
-	FakeTmuxRunner,
 	PaneBackend,
 } from "@cuekit/adapters";
+import { FakeTmuxRunner } from "@cuekit/adapters/testing";
 import { getTaskById, runMigrations } from "@cuekit/store";
 import { createCli } from "../src/cli.ts";
 import type { CommandContext } from "../src/command-context.ts";

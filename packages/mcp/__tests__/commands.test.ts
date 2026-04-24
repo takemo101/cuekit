@@ -4,9 +4,9 @@ import {
 	AdapterRegistry,
 	createClaudeCodeAdapter,
 	createPiAdapter,
-	FakeTmuxRunner,
 	PaneBackend,
 } from "@cuekit/adapters";
+import { FakeTmuxRunner } from "@cuekit/adapters/testing";
 import {
 	createSession,
 	getSessionById,

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "bun:test";
 import { PaneBackend } from "../src/pane-backend.ts";
-import { FakeTmuxRunner } from "./fake-tmux-runner.ts";
+import { FakeTmuxRunner } from "../src/testing.ts";
 
 let runner: FakeTmuxRunner;
 let panes: PaneBackend;
