@@ -1,5 +1,6 @@
 import { Database } from "bun:sqlite";
 import { beforeEach, describe, expect, it } from "bun:test";
+import { TaskListFilterSchema } from "@cuekit/core";
 import { runMigrations } from "../src/migrate.ts";
 import { createSession } from "../src/session-store.ts";
 import {
@@ -369,10 +370,17 @@ describe("listTasks (cross-session filter + pagination)", () => {
 		expect(secondPage).toHaveLength(2);
 	});
 
-	it("treats `limit: 0` as opt-in unbounded (returns all rows)", async () => {
-		await seed(DEFAULT_LIST_TASKS_LIMIT + 5);
-		const rows = listTasks(db, { limit: 0 });
-		expect(rows).toHaveLength(DEFAULT_LIST_TASKS_LIMIT + 5);
+	it("caps an explicit limit at the schema max (1000) — no unbounded sentinel", () => {
+		// Regression against an earlier draft of this PR that treated
+		// `limit: 0` as "return every row." The schema now rejects both 0
+		// and values >1000; callers that need more than 1000 rows must
+		// page via offset.
+		expect(TaskListFilterSchema.safeParse({ limit: 0 }).success).toBe(false);
+		expect(TaskListFilterSchema.safeParse({ limit: 1001 }).success).toBe(false);
+		expect(TaskListFilterSchema.safeParse({ limit: 1000 }).success).toBe(true);
+		expect(TaskListFilterSchema.safeParse({ limit: -1 }).success).toBe(false);
+		expect(TaskListFilterSchema.safeParse({ limit: 3.5 }).success).toBe(false);
+		expect(TaskListFilterSchema.safeParse({ offset: -1 }).success).toBe(false);
 	});
 
 	it("pages cleanly: limit+offset walk covers the full set with no gaps or dupes", async () => {
@@ -411,8 +419,8 @@ describe("listTasks (cross-session filter + pagination)", () => {
 	it("filters by agent_kind", async () => {
 		await seed(2, { agent: "pi" });
 		await seed(3, { agent: "claude-code" });
-		const pi = listTasks(db, { agent_kind: "pi", limit: 0 });
-		const cc = listTasks(db, { agent_kind: "claude-code", limit: 0 });
+		const pi = listTasks(db, { agent_kind: "pi", limit: 1000 });
+		const cc = listTasks(db, { agent_kind: "claude-code", limit: 1000 });
 		expect(pi).toHaveLength(2);
 		expect(cc).toHaveLength(3);
 	});
@@ -426,8 +434,8 @@ describe("listTasks (cross-session filter + pagination)", () => {
 		});
 		await seed(2, { session: "s1" });
 		await seed(3, { session: "s2" });
-		expect(listTasks(db, { session_id: "s1", limit: 0 })).toHaveLength(2);
-		expect(listTasks(db, { session_id: "s2", limit: 0 })).toHaveLength(3);
+		expect(listTasks(db, { session_id: "s1", limit: 1000 })).toHaveLength(2);
+		expect(listTasks(db, { session_id: "s2", limit: 1000 })).toHaveLength(3);
 	});
 
 	it("filters by cwd (via sessions.worktree_path join)", async () => {
@@ -439,8 +447,8 @@ describe("listTasks (cross-session filter + pagination)", () => {
 		});
 		await seed(2, { session: "s1" }); // sessions.s1.worktree_path = "/w"
 		await seed(1, { session: "s2" }); // sessions.s2.worktree_path = "/other"
-		const here = listTasks(db, { cwd: "/w", limit: 0 });
-		const there = listTasks(db, { cwd: "/other", limit: 0 });
+		const here = listTasks(db, { cwd: "/w", limit: 1000 });
+		const there = listTasks(db, { cwd: "/other", limit: 1000 });
 		expect(here).toHaveLength(2);
 		expect(there).toHaveLength(1);
 	});

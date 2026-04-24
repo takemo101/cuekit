@@ -59,9 +59,10 @@ export function listTasksBySession(db: Database, session_id: string): Task[] {
 	return rows.map((r) => TaskSchema.parse(r));
 }
 
-// Default page size when a caller doesn't specify one. Keeps unbounded
-// reads from leaking across the MCP boundary while still returning a
-// useful amount. Pass `limit: 0` to opt into unbounded reads.
+// Default page size when a caller doesn't specify one. 100 is "roughly a
+// screenful of summaries" — enough that small deployments never hit the
+// cap, small enough that a forgotten-filter call over a year-old DB
+// doesn't pull tens of thousands of rows across the MCP boundary.
 export const DEFAULT_LIST_TASKS_LIMIT = 100;
 
 // Cross-session listing with protocol-level TaskListFilter. `cwd` filters by
@@ -91,13 +92,12 @@ export function listTasks(db: Database, filter: TaskListFilter = {}): Task[] {
 	const where = conditions.length > 0 ? `where ${conditions.join(" and ")}` : "";
 	const join = joinCwd ? "join sessions s on s.id = t.session_id" : "";
 
-	// Pagination. `limit: 0` means "no limit" (explicit opt-in); undefined
-	// means "default". SQLite's `LIMIT -1` returns all rows.
+	// Pagination. No unbounded sentinel: omitting `limit` applies the
+	// default; the MCP-boundary schema caps explicit limits at 1000.
 	const limit = filter.limit ?? DEFAULT_LIST_TASKS_LIMIT;
-	const effectiveLimit = limit === 0 ? -1 : limit;
 	const offset = filter.offset ?? 0;
 
-	params.push(effectiveLimit);
+	params.push(limit);
 	params.push(offset);
 
 	// Secondary sort by id keeps pagination stable when two rows share the
