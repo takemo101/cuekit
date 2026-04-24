@@ -6,7 +6,7 @@ export const TaskSummarySchema = z.object({
 	agent_kind: z.string().min(1),
 	status: TaskStatusSchema,
 	summary: z.string().optional(),
-	updated_at: z.string().min(1),
+	updated_at: z.string().datetime({ offset: true }),
 });
 
 export type TaskSummary = z.infer<typeof TaskSummarySchema>;
