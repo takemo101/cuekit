@@ -48,7 +48,14 @@ Implications:
 
 ## 3. Tool Set
 
-The v0 MCP API consists of seven tools:
+The v0 MCP API surface is organized into three groups. The **protocol
+operations** (§5–§11) are the thin projection of cuekit's protocol
+spec — adapters must support them. The **management tools** and
+**helper tools** (§11.5 / §11.6) were added post-v0 and are not part
+of the protocol itself; they exist so an operator can run cuekit
+without standing up a separate admin CLI.
+
+Protocol operations:
 
 1. `submit_task`
 2. `get_task_status`
@@ -57,6 +64,18 @@ The v0 MCP API consists of seven tools:
 5. `cancel_task`
 6. `list_tasks`
 7. `list_adapters`
+
+Management tools (§11.5):
+
+8. `delete_task`
+9. `delete_session`
+
+Helper tools (§11.6):
+
+10. `show_mcp_config`
+
+MCP callers that want to implement a pure "cuekit protocol client"
+can ignore groups 8–10.
 
 ---
 
@@ -454,7 +473,10 @@ Failure:
 
 ### 10.1 Purpose
 
-List known tasks, optionally filtered.
+List known tasks, optionally filtered. The result set is paginated
+with a **keyset cursor** so page walks remain stable under concurrent
+inserts (a new task arriving between page fetches cannot shift the
+cursor or cause a row to be seen twice).
 
 ### 10.2 Input
 
@@ -462,11 +484,23 @@ List known tasks, optionally filtered.
 {
   "status": "running",
   "agent_kind": "opencode",
-  "cwd": "/repo"
+  "cwd": "/repo",
+  "limit": 50,
+  "cursor": "eyJ1IjoiMjAyNi0wNC0yNFQx…"
 }
 ```
 
-All fields are optional.
+All fields are optional:
+
+- **`status`**, **`agent_kind`**, **`session_id`**, **`cwd`** — filter
+  predicates. `cwd` joins against the owning session's `worktree_path`.
+- **`limit`** — integer in `[1, 1000]`. Default `100`. There is no
+  "unbounded" sentinel; callers that need more than 1000 rows must
+  page.
+- **`cursor`** — opaque string returned in the previous response's
+  `next_cursor`. Never hand-craft; the encoding is a cuekit-internal
+  detail (currently base64url JSON of `{u, i}` — subject to change).
+  Omit on the first page.
 
 ### 10.3 Output
 
@@ -479,27 +513,40 @@ All fields are optional.
       "status": "running",
       "summary": "Working on layout extraction",
       "updated_at": "2026-04-23T10:04:00Z"
-    },
-    {
-      "task_id": "task_556",
-      "agent_kind": "opencode",
-      "status": "input_required",
-      "summary": "Waiting for clarification on validation target",
-      "updated_at": "2026-04-23T10:05:00Z"
     }
-  ]
+  ],
+  "has_more": true,
+  "next_cursor": "eyJ1IjoiMjAyNi0wNC0yM1Qx…"
 }
 ```
 
+- **`tasks`** — page, ordered newest-`updated_at` first.
+- **`has_more`** — `true` when another page is available, `false` on
+  the final page. Always present.
+- **`next_cursor`** — opaque cursor to pass to the next call. Present
+  only when `has_more` is `true`.
+
 ### 10.4 Summary Shape
 
-Each returned task should include:
+Each returned task includes:
 
 - `task_id`
 - `agent_kind`
 - `status`
 - `summary` (optional)
 - `updated_at`
+
+### 10.5 Pagination Semantics
+
+Rows are walked in `(updated_at DESC, id ASC)` order. The keyset
+predicate `(updated_at, id) < (cursor_u, cursor_i)` gives these
+guarantees:
+
+- A **new row inserted between page fetches** cannot shift the
+  current walk — it can only appear on a fresh page-1 request, and
+  existing page anchors remain valid.
+- The `id` tiebreaker handles ms-precision timestamp collisions on
+  rapid inserts without skipping or duplicating rows.
 
 ---
 
@@ -563,6 +610,104 @@ This tool is intended for:
 
 ---
 
+## 11.5 Management Tools
+
+These tools mutate cuekit's own persistence rather than the protocol
+state of a task. They exist so operators can keep the DB tidy without
+standing up a separate admin CLI; conformance implementations that
+project only cuekit's protocol may omit them.
+
+### 11.5.1 delete_task
+
+Remove a terminal task row. Tasks in non-terminal states
+(`queued`, `running`, `input_required`, `blocked`) are refused with
+`invalid_state` — the caller cancels first.
+
+**Input**
+
+```json
+{ "task_id": "task_555" }
+```
+
+**Output**
+
+Ack (§4.1). On success:
+
+```json
+{ "ok": true, "message": "deleted task 'task_555'" }
+```
+
+**Side-effects**
+
+- Removes the task row.
+- Does **not** touch on-disk artifacts (`.cuekit/tasks/<id>/`).
+  Operators that want full cleanup remove the directory themselves.
+
+### 11.5.2 delete_session
+
+Remove a session and all of its tasks in one transaction. Every child
+task must already be terminal; any active task blocks the delete with
+`invalid_state` so a single call can't drop live work.
+
+**Input**
+
+```json
+{ "session_id": "session_777" }
+```
+
+**Output**
+
+Ack (§4.1). On success:
+
+```json
+{ "ok": true, "message": "deleted session 'session_777' and 4 task(s)" }
+```
+
+**Side-effects**
+
+- Cascades child-task deletion in a single SQLite transaction.
+- Does **not** touch on-disk artifacts.
+
+---
+
+## 11.6 Helper Tools
+
+### 11.6.1 show_mcp_config
+
+Emit the MCP-server stanza an operator pastes into a client config
+(Claude Code / Claude Desktop / Cursor all share the `mcpServers`
+shape). Side-effect free: never writes files, never shells out.
+Callable via MCP itself as a self-describing install helper.
+
+**Input**
+
+```json
+{ "name": "cuekit", "bin": "/usr/local/bin/cuekit" }
+```
+
+Both fields optional. Defaults: `name = "cuekit"`,
+`bin = "cuekit"` (relies on PATH).
+
+**Output**
+
+```json
+{
+  "name": "cuekit",
+  "command": "/usr/local/bin/cuekit",
+  "args": ["--mcp"],
+  "mcpServers": {
+    "cuekit": {
+      "command": "/usr/local/bin/cuekit",
+      "args": ["--mcp"]
+    }
+  }
+}
+```
+
+`mcpServers` is a paste-ready snippet.
+
+---
+
 ## 12. MCP Error Semantics
 
 ### 12.1 Tool-Level Errors vs Structured Errors
@@ -590,6 +735,7 @@ Recommended cuekit error codes:
 - `steering_unsupported`
 - `collect_unavailable`
 - `task_not_found`
+- `session_not_found`
 - `invalid_state`
 - `invalid_input`
 - `runtime_crash`
