@@ -3,6 +3,7 @@ import type { TaskSpec } from "@cuekit/core";
 import type { AgentAdapter } from "./agent-adapter.ts";
 import { createPaneAdapter } from "./pane-adapter.ts";
 import type { PaneBackend } from "./pane-backend.ts";
+import { shellQuote } from "./shell-quote.ts";
 
 // Truthful stub: placeholder OpenCode CLI invocation. Capabilities match the
 // spec's adapter matrix (state-dependent steering, model selection via
@@ -44,8 +45,4 @@ export function createOpenCodeAdapter(
 		},
 		{ db, panes },
 	);
-}
-
-function shellQuote(s: string): string {
-	return `'${s.replace(/'/g, "'\\''")}'`;
 }

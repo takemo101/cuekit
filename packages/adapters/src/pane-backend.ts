@@ -1,3 +1,4 @@
+import { shellQuote } from "./shell-quote.ts";
 import { defaultTmuxRunner, type TmuxRunner } from "./tmux-runner.ts";
 
 export interface PaneBackendOptions {
@@ -111,15 +112,14 @@ export class PaneBackend {
 	async killTask(task_id: string): Promise<void> {
 		const result = await this.runner.run(["kill-session", "-t", this.sessionNameFor(task_id)]);
 		// Missing session is idempotent success — killing an already-gone task
-		// is not an error.
-		if (result.exitCode !== 0 && !/session not found/.test(result.stderr)) {
+		// is not an error. Real tmux's wording varies: "can't find session" on
+		// macOS, "session not found" on some distros, "no such session" on
+		// others; match all three.
+		if (
+			result.exitCode !== 0 &&
+			!/can't find session|session not found|no such session|no server running/i.test(result.stderr)
+		) {
 			throw new Error(`tmux kill-session for task ${task_id} failed: ${result.stderr.trim()}`);
 		}
 	}
-}
-
-// POSIX shell single-quote escape for values embedded in a tmux pipe-pane
-// shell command string.
-function shellQuote(s: string): string {
-	return `'${s.replace(/'/g, "'\\''")}'`;
 }

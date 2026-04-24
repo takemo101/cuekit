@@ -3,13 +3,16 @@ import {
 	type AdapterCapabilities,
 	ensureCollectable,
 	isTerminalTaskStatus,
+	type JobError,
 	type SteeringMessage,
 	type TaskSpec,
 	type TaskSummary,
+	validateSpecAgainstCapabilities,
 } from "@cuekit/core";
 import {
 	completeTask,
 	createTask,
+	getSessionById,
 	getTaskById,
 	type Task,
 	updateTaskNativeRef,
@@ -40,13 +43,35 @@ export interface PaneAdapterDeps {
 export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDeps): AgentAdapter {
 	const { db, panes } = deps;
 
-	function syncLiveness(task: Task): Task {
-		// If the pane is gone but the row still says non-terminal, mark failed.
-		// The synchronous status call doesn't await, so this is best-effort for
-		// crash detection during status reads.
-		if (isTerminalTaskStatus(task.status)) return task;
-		// Liveness check is async; callers do it themselves in status().
-		return task;
+	// Ensures a task exists AND is managed by this adapter. Prevents one adapter
+	// from operating on another adapter's tasks even though they share the DB.
+	function ownTask(task_id: string): { ok: true; task: Task } | { ok: false; error: JobError } {
+		const task = getTaskById(db, task_id);
+		if (!task) {
+			return {
+				ok: false,
+				error: {
+					code: "task_not_found",
+					message: `task '${task_id}' not found`,
+					retryable: false,
+				},
+			};
+		}
+		if (task.target_agent_kind !== config.kind) {
+			return {
+				ok: false,
+				error: {
+					code: "task_not_found",
+					message: `task '${task_id}' is not managed by adapter '${config.kind}'`,
+					retryable: false,
+				},
+			};
+		}
+		return { ok: true, task };
+	}
+
+	function errorMessage(err: unknown): string {
+		return err instanceof Error ? err.message : String(err);
 	}
 
 	return {
@@ -67,6 +92,26 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 					},
 				};
 			}
+			// Hybrid model validation: if the adapter declared available_models or
+			// supports_model_selection: false, fail fast before spawning anything.
+			const specCheck = validateSpecAgainstCapabilities(input.spec, config.capabilities);
+			if (!specCheck.ok) {
+				return { ok: false, error: specCheck.error };
+			}
+			// Guard against bogus session_id — createTask would throw a raw FK
+			// error, which should be a structured invalid_input instead.
+			const session = getSessionById(db, input.session_id);
+			if (!session) {
+				return {
+					ok: false,
+					error: {
+						code: "invalid_input",
+						message: `session '${input.session_id}' not found`,
+						retryable: false,
+					},
+				};
+			}
+
 			const task_id = generateTaskId();
 			createTask(db, {
 				id: task_id,
@@ -78,7 +123,7 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 			});
 
 			const launchCommand = config.buildLaunchCommand(input.spec);
-			const cwd = input.spec.cwd ?? process.cwd();
+			const cwd = input.spec.cwd ?? session.worktree_path;
 
 			try {
 				const handle = await panes.spawnTask({ task_id, launchCommand, cwd });
@@ -91,7 +136,7 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 					ok: false as const,
 					error: {
 						code: "submit_failed",
-						message: `adapter '${config.kind}' failed to spawn: ${(err as Error).message}`,
+						message: `adapter '${config.kind}' failed to spawn: ${errorMessage(err)}`,
 						retryable: true,
 						details: { task_id },
 					},
@@ -100,8 +145,8 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 		},
 
 		async status(task_id) {
-			const task = getTaskById(db, task_id);
-			if (!task) {
+			const owned = ownTask(task_id);
+			if (!owned.ok) {
 				const now = new Date().toISOString();
 				return {
 					task_id,
@@ -109,15 +154,11 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 					status: "failed",
 					created_at: now,
 					updated_at: now,
-					error: {
-						code: "task_not_found",
-						message: `task '${task_id}' is not tracked by adapter '${config.kind}'`,
-						retryable: false,
-					},
+					error: owned.error,
 				};
 			}
-			let live = task;
-			if (!isTerminalTaskStatus(task.status)) {
+			let live = owned.task;
+			if (!isTerminalTaskStatus(live.status)) {
 				const alive = await panes.isAlive(task_id);
 				if (!alive) {
 					const updated = updateTaskStatus(db, task_id, "failed");
@@ -145,17 +186,9 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 		},
 
 		async steer(message: SteeringMessage) {
-			const task = getTaskById(db, message.task_id);
-			if (!task) {
-				return {
-					ok: false,
-					error: {
-						code: "task_not_found",
-						message: `task '${message.task_id}' not found`,
-						retryable: false,
-					},
-				};
-			}
+			const owned = ownTask(message.task_id);
+			if (!owned.ok) return { ok: false, error: owned.error };
+
 			if (!config.capabilities.supports_steering) {
 				return {
 					ok: false,
@@ -166,12 +199,12 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 					},
 				};
 			}
-			if (isTerminalTaskStatus(task.status)) {
+			if (isTerminalTaskStatus(owned.task.status)) {
 				return {
 					ok: false,
 					error: {
 						code: "invalid_state",
-						message: `cannot steer terminal task (status '${task.status}')`,
+						message: `cannot steer terminal task (status '${owned.task.status}')`,
 						retryable: false,
 					},
 				};
@@ -186,56 +219,62 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 					},
 				};
 			}
-			await panes.sendKeys(message.task_id, message.message);
-			return { ok: true, message: "steering message delivered" };
+			try {
+				await panes.sendKeys(message.task_id, message.message);
+				return { ok: true, message: "steering message delivered" };
+			} catch (err) {
+				return {
+					ok: false,
+					error: {
+						code: "transport_error",
+						message: `tmux send-keys failed: ${errorMessage(err)}`,
+						retryable: true,
+					},
+				};
+			}
 		},
 
 		async collect(task_id) {
-			const task = getTaskById(db, task_id);
-			if (!task) {
-				return {
-					ok: false,
-					error: {
-						code: "task_not_found",
-						message: `task '${task_id}' not found`,
-						retryable: false,
-					},
-				};
-			}
-			const check = ensureCollectable(task.status);
+			const owned = ownTask(task_id);
+			if (!owned.ok) return { ok: false, error: owned.error };
+
+			const check = ensureCollectable(owned.task.status);
 			if (!check.ok) {
 				return { ok: false, error: check.error };
 			}
-			return { ok: true, value: normalizeTaskResult(task) };
+			return { ok: true, value: normalizeTaskResult(owned.task) };
 		},
 
 		async cancel(task_id) {
-			const task = getTaskById(db, task_id);
-			if (!task) {
-				return {
-					ok: false,
-					error: {
-						code: "task_not_found",
-						message: `task '${task_id}' not found`,
-						retryable: false,
-					},
-				};
-			}
-			if (isTerminalTaskStatus(task.status)) {
+			const owned = ownTask(task_id);
+			if (!owned.ok) return { ok: false, error: owned.error };
+
+			if (isTerminalTaskStatus(owned.task.status)) {
 				return {
 					ok: false,
 					error: {
 						code: "invalid_state",
-						message: `task is already in terminal state '${task.status}'`,
+						message: `task is already in terminal state '${owned.task.status}'`,
 						retryable: false,
 					},
 				};
 			}
-			await panes.killTask(task_id);
+			try {
+				await panes.killTask(task_id);
+			} catch (err) {
+				return {
+					ok: false,
+					error: {
+						code: "transport_error",
+						message: `tmux kill-session failed: ${errorMessage(err)}`,
+						retryable: true,
+					},
+				};
+			}
 			completeTask(db, {
 				id: task_id,
 				status: "cancelled",
-				summary: task.summary ?? "cancelled by caller",
+				summary: owned.task.summary ?? "cancelled by caller",
 			});
 			if (config.onTerminal) {
 				const finalRow = getTaskById(db, task_id);
@@ -247,8 +286,6 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 		async list(): Promise<TaskSummary[]> {
 			// List support needs a cross-session filter API in the store, deferred
 			// to Issue #5 when the MCP list_tasks tool wires up. For v0 return [].
-			// Reference syncLiveness to avoid unused-binding lint.
-			void syncLiveness;
 			return [];
 		},
 	};

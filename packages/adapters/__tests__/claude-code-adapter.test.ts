@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from "bun:test";
 import { createSession, getTaskById, runMigrations } from "@cuekit/store";
 import { createClaudeCodeAdapter } from "../src/claude-code-adapter.ts";
 import { PaneBackend } from "../src/pane-backend.ts";
+import { createPiAdapter } from "../src/pi-adapter.ts";
 import { FakeTmuxRunner } from "./fake-tmux-runner.ts";
 
 let db: Database;
@@ -69,6 +70,48 @@ describe("submit", () => {
 		}
 	});
 
+	it("rejects model not in available_models (fast-fail pre-flight)", async () => {
+		const result = await adapter.submit({
+			spec: {
+				agent_kind: "claude-code",
+				objective: "x",
+				model: "gpt-4",
+			},
+			session_id: "s1",
+		});
+		expect(result.ok).toBe(false);
+		if (!result.ok) {
+			expect(result.error.code).toBe("invalid_input");
+		}
+		// Should not have reached tmux at all
+		expect(runner.calls).toHaveLength(0);
+	});
+
+	it("rejects unknown session_id with invalid_input (no FK error leaks)", async () => {
+		const result = await adapter.submit({
+			spec: { agent_kind: "claude-code", objective: "x" },
+			session_id: "s_missing",
+		});
+		expect(result.ok).toBe(false);
+		if (!result.ok) {
+			expect(result.error.code).toBe("invalid_input");
+			expect(result.error.message).toContain("s_missing");
+		}
+		// And nothing in tmux either
+		expect(runner.calls).toHaveLength(0);
+	});
+
+	it("defaults cwd to the session's worktree_path when spec.cwd is omitted", async () => {
+		const result = await adapter.submit({
+			spec: { agent_kind: "claude-code", objective: "x" },
+			session_id: "s1",
+		});
+		if (!result.ok) throw new Error("setup failed");
+		const newSession = runner.calls.find((c) => c[0] === "new-session");
+		const cwdIdx = newSession?.indexOf("-c") ?? -1;
+		expect(newSession?.[cwdIdx + 1]).toBe("/w");
+	});
+
 	it("marks the task failed and returns submit_failed when tmux spawn fails", async () => {
 		runner.queueResponse({ stdout: "", stderr: "tmux: boom", exitCode: 1 });
 		const result = await adapter.submit({
@@ -112,6 +155,21 @@ describe("status", () => {
 		const view = await adapter.status("t_nope");
 		expect(view.status).toBe("failed");
 		expect(view.error?.code).toBe("task_not_found");
+	});
+
+	it("returns task_not_found for a task owned by a different adapter (cross-adapter guard)", async () => {
+		const piAdapter = createPiAdapter(db, new PaneBackend({ runner, sendKeysDelayMs: 0 }), {
+			launchCommandOverride: () => "sleep 60",
+		});
+		const piResult = await piAdapter.submit({
+			spec: { agent_kind: "pi", objective: "x" },
+			session_id: "s1",
+		});
+		if (!piResult.ok) throw new Error("setup failed");
+		const view = await adapter.status(piResult.value.task_id);
+		expect(view.status).toBe("failed");
+		expect(view.error?.code).toBe("task_not_found");
+		expect(view.error?.message).toContain("claude-code");
 	});
 });
 
@@ -159,6 +217,27 @@ describe("steer", () => {
 			expect(ack.error.code).toBe("task_not_found");
 		}
 	});
+
+	it("wraps tmux send-keys failures as transport_error", async () => {
+		const result = await adapter.submit({
+			spec: { agent_kind: "claude-code", objective: "x" },
+			session_id: "s1",
+		});
+		if (!result.ok) throw new Error("setup failed");
+		// Queue a failure for the NEXT call (which will be has-session in steer)
+		// — easiest to trigger send-keys failure: succeed has-session then fail
+		// the -l send-keys.
+		runner.queueResponse({ stdout: "", stderr: "", exitCode: 0 }); // has-session ok
+		runner.queueResponse({ stdout: "", stderr: "tmux: broken pipe", exitCode: 1 }); // send-keys -l fails
+		const ack = await adapter.steer({
+			task_id: result.value.task_id,
+			message: "hi",
+		});
+		expect(ack.ok).toBe(false);
+		if (!ack.ok) {
+			expect(ack.error.code).toBe("transport_error");
+		}
+	});
 });
 
 describe("cancel", () => {
@@ -184,6 +263,25 @@ describe("cancel", () => {
 		await adapter.cancel(result.value.task_id);
 		const ack = await adapter.cancel(result.value.task_id);
 		expect(ack.ok).toBe(false);
+	});
+
+	it("returns task_not_found for cross-adapter task (guard)", async () => {
+		const piAdapter = createPiAdapter(db, new PaneBackend({ runner, sendKeysDelayMs: 0 }), {
+			launchCommandOverride: () => "sleep 60",
+		});
+		const piResult = await piAdapter.submit({
+			spec: { agent_kind: "pi", objective: "x" },
+			session_id: "s1",
+		});
+		if (!piResult.ok) throw new Error("setup failed");
+		const ack = await adapter.cancel(piResult.value.task_id);
+		expect(ack.ok).toBe(false);
+		if (!ack.ok) {
+			expect(ack.error.code).toBe("task_not_found");
+		}
+		// Pi's task should remain untouched
+		const piTask = getTaskById(db, piResult.value.task_id);
+		expect(piTask?.status).toBe("running");
 	});
 });
 
