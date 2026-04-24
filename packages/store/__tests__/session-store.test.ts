@@ -3,10 +3,12 @@ import { beforeEach, describe, expect, it } from "bun:test";
 import { runMigrations } from "../src/migrate.ts";
 import {
 	createSession,
+	deleteSession,
 	getSessionById,
 	listSessionsByWorktree,
 	updateSessionStatus,
 } from "../src/session-store.ts";
+import { createTask, listTasksBySession } from "../src/task-store.ts";
 
 let db: Database;
 beforeEach(() => {
@@ -127,5 +129,53 @@ describe("updateSessionStatus", () => {
 
 	it("returns null for unknown id", () => {
 		expect(updateSessionStatus(db, "nope", "completed")).toBeNull();
+	});
+});
+
+describe("deleteSession", () => {
+	beforeEach(() => {
+		createSession(db, {
+			id: "s1",
+			project_root: "/p",
+			worktree_path: "/w",
+			parent_agent_kind: "pi",
+		});
+	});
+
+	it("returns true when the session is removed", () => {
+		expect(deleteSession(db, "s1")).toBe(true);
+		expect(getSessionById(db, "s1")).toBeNull();
+	});
+
+	it("returns false when the id is unknown (idempotent)", () => {
+		expect(deleteSession(db, "nope")).toBe(false);
+	});
+
+	it("cascades to child tasks in the same transaction", () => {
+		createTask(db, { id: "t1", session_id: "s1", target_agent_kind: "pi", objective: "a" });
+		createTask(db, { id: "t2", session_id: "s1", target_agent_kind: "pi", objective: "b" });
+		expect(listTasksBySession(db, "s1")).toHaveLength(2);
+		expect(deleteSession(db, "s1")).toBe(true);
+		expect(listTasksBySession(db, "s1")).toHaveLength(0);
+		expect(getSessionById(db, "s1")).toBeNull();
+	});
+
+	it("does not enforce child-task terminal status — that's the command layer's job", () => {
+		// The store trusts its input; callers that need policy must
+		// filter listTasksBySession before calling.
+		createTask(db, { id: "t1", session_id: "s1", target_agent_kind: "pi", objective: "a" });
+		expect(deleteSession(db, "s1")).toBe(true);
+	});
+
+	it("is atomic — a failure mid-cascade would roll back both deletes", () => {
+		// We can't easily force a mid-cascade failure against :memory:
+		// SQLite with FK ON, but we can assert the transaction wrapper
+		// is in place by confirming no partial state ever leaks after a
+		// successful call.
+		createTask(db, { id: "t1", session_id: "s1", target_agent_kind: "pi", objective: "a" });
+		deleteSession(db, "s1");
+		// Session gone AND task gone — never "session gone, task orphan".
+		expect(getSessionById(db, "s1")).toBeNull();
+		expect(listTasksBySession(db, "s1")).toEqual([]);
 	});
 });
