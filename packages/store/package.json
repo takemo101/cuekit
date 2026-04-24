@@ -11,6 +11,7 @@
 		"test": "bun test"
 	},
 	"dependencies": {
-		"@cuekit/core": "workspace:*"
+		"@cuekit/core": "workspace:*",
+		"zod": "^3.23.0"
 	}
 }
