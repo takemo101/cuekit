@@ -20,6 +20,7 @@ function makeTask(overrides: Partial<Task> = {}): Task {
 		updated_at: now,
 		started_at: now,
 		completed_at: now,
+		spec_json: null,
 		...overrides,
 	};
 }

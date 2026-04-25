@@ -13,6 +13,7 @@ import {
 	silentLogger,
 	type TaskListFilter,
 	type TaskSpec,
+	TaskSpecSchema,
 	type TaskSummary,
 	type TerminalTaskResultStatus,
 	taskArtifactPaths,
@@ -111,6 +112,24 @@ function readExitCodeSentinel(exitCodePath: string): number | null {
 	} catch {
 		return null;
 	}
+}
+
+function timeoutMsFor(task: Task): number | null {
+	if (!task.spec_json) return null;
+	try {
+		const spec = TaskSpecSchema.parse(JSON.parse(task.spec_json));
+		return spec.timeout_ms ?? null;
+	} catch {
+		return null;
+	}
+}
+
+function hasTimedOut(task: Task, nowMs = Date.now()): boolean {
+	const timeoutMs = timeoutMsFor(task);
+	if (timeoutMs === null) return false;
+	const anchor = Date.parse(task.started_at ?? task.created_at);
+	if (!Number.isFinite(anchor)) return false;
+	return nowMs - anchor >= timeoutMs;
 }
 
 const defaultOnPaneDisappeared = (ctx: PaneDisappearedContext): PaneDisappearedDecision => {
@@ -226,6 +245,7 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 				model: input.spec.model,
 				objective: input.spec.objective,
 				status: "queued",
+				spec: input.spec,
 			});
 
 			const rawLaunchCommand = config.buildLaunchCommand(input.spec);
@@ -378,6 +398,17 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 						id: task_id,
 						status: decision.status,
 						summary: decision.summary ?? live.summary ?? undefined,
+					});
+					if (completed) {
+						live = completed;
+						if (config.onTerminal) config.onTerminal(completed, db);
+					}
+				} else if (hasTimedOut(live)) {
+					await panes.killTask(task_id);
+					const completed = completeTask(db, {
+						id: task_id,
+						status: "timed_out",
+						summary: `timed out after ${timeoutMsFor(live)}ms`,
 					});
 					if (completed) {
 						live = completed;

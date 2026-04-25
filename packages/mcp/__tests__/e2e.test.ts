@@ -78,8 +78,8 @@ describe("e2e: submit → status → cancel → result", () => {
 
 		// 5. collect attempt on running task → invalid_state
 		const early = await runGetTaskResult(ctx, { task_id });
-		expect(early.ok).toBe(false);
-		if (!early.ok) {
+		expect("task_id" in early).toBe(false);
+		if (!("task_id" in early)) {
 			expect(early.error.code).toBe("invalid_state");
 		}
 
@@ -89,13 +89,11 @@ describe("e2e: submit → status → cancel → result", () => {
 
 		// 7. collect after cancel → TaskResult with transcript artifact
 		const collected = await runGetTaskResult(ctx, { task_id });
-		expect(collected.ok).toBe(true);
-		if (collected.ok) {
-			expect(collected.value.status).toBe("cancelled");
-			expect(collected.value.artifacts.length).toBeGreaterThan(0);
-			const transcript = collected.value.artifacts.find(
-				(a: { kind: string }) => a.kind === "transcript",
-			);
+		expect("task_id" in collected).toBe(true);
+		if ("task_id" in collected) {
+			expect(collected.status).toBe("cancelled");
+			expect(collected.artifacts.length).toBeGreaterThan(0);
+			const transcript = collected.artifacts.find((a: { kind: string }) => a.kind === "transcript");
 			expect(transcript).toBeDefined();
 			expect(transcript?.ref).toContain(".cuekit/tasks/");
 		}

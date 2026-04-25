@@ -1,5 +1,6 @@
 import { Database } from "bun:sqlite";
 import { beforeEach, describe, expect, it } from "bun:test";
+import { relative, resolve } from "node:path";
 import {
 	AdapterRegistry,
 	createClaudeCodeAdapter,
@@ -127,6 +128,19 @@ describe("submit-task", () => {
 		});
 		expect(result.accepted).toBe(true);
 	});
+
+	it("normalizes cwd before passing the TaskSpec to the adapter", async () => {
+		const cwd = relative(process.cwd(), "/tmp");
+		const result = await runSubmitTask(ctx, {
+			objective: "x",
+			agent_kind: "claude-code",
+			cwd,
+		});
+		expect(result.accepted).toBe(true);
+		if (!result.accepted) return;
+		const call = runner.calls.find((c) => c[0] === "new-session") ?? [];
+		expect(call).toContain(resolve(cwd));
+	});
 });
 
 describe("get-task-status", () => {
@@ -171,9 +185,10 @@ describe("get-task-result", () => {
 		});
 		if (!submit.accepted) throw new Error("setup failed");
 		const result = await runGetTaskResult(ctx, { task_id: submit.task_id });
-		expect(result.ok).toBe(false);
-		if (!result.ok) {
+		expect("task_id" in result).toBe(false);
+		if (!("task_id" in result)) {
 			expect(result.error.code).toBe("invalid_state");
+			expect(result.error.retryable).toBe(true);
 		}
 	});
 
@@ -186,10 +201,22 @@ describe("get-task-result", () => {
 		if (!submit.accepted) throw new Error("setup failed");
 		await runCancelTask(ctx, { task_id: submit.task_id });
 		const result = await runGetTaskResult(ctx, { task_id: submit.task_id });
-		expect(result.ok).toBe(true);
-		if (result.ok) {
-			expect(result.value.status).toBe("cancelled");
-		}
+		expect("task_id" in result).toBe(true);
+		if ("task_id" in result) expect(result.status).toBe("cancelled");
+	});
+
+	it("refreshes a non-terminal task before collect so timeout_ms is enforced", async () => {
+		const submit = await runSubmitTask(ctx, {
+			objective: "x",
+			agent_kind: "claude-code",
+			cwd: "/tmp",
+			timeout_ms: 1,
+		});
+		if (!submit.accepted) throw new Error("setup failed");
+		await Bun.sleep(5);
+		const result = await runGetTaskResult(ctx, { task_id: submit.task_id });
+		expect("task_id" in result).toBe(true);
+		if ("task_id" in result) expect(result.status).toBe("timed_out");
 	});
 });
 
@@ -249,6 +276,7 @@ describe("list-tasks", () => {
 			cwd: "/tmp/two",
 		});
 		const result = await runListTasks(ctx, {});
+		if ("error" in result) throw new Error(result.error.message);
 		expect(result.tasks).toHaveLength(2);
 	});
 
@@ -264,6 +292,7 @@ describe("list-tasks", () => {
 			cwd: "/tmp/two",
 		});
 		const result = await runListTasks(ctx, { agent_kind: "pi" });
+		if ("error" in result) throw new Error(result.error.message);
 		expect(result.tasks).toHaveLength(1);
 		expect(result.tasks[0]?.agent_kind).toBe("pi");
 	});
@@ -282,8 +311,10 @@ describe("list-tasks", () => {
 		if (!a.accepted) throw new Error("setup failed");
 		await runCancelTask(ctx, { task_id: a.task_id });
 		const running = await runListTasks(ctx, { status: "running" });
+		if ("error" in running) throw new Error(running.error.message);
 		expect(running.tasks).toHaveLength(1);
 		const cancelled = await runListTasks(ctx, { status: "cancelled" });
+		if ("error" in cancelled) throw new Error(cancelled.error.message);
 		expect(cancelled.tasks).toHaveLength(1);
 	});
 
@@ -299,7 +330,89 @@ describe("list-tasks", () => {
 			cwd: "/tmp/two",
 		});
 		const result = await runListTasks(ctx, { cwd: "/tmp/one" });
+		if ("error" in result) throw new Error(result.error.message);
 		expect(result.tasks).toHaveLength(1);
+	});
+
+	it("normalizes relative cwd filters", async () => {
+		const cwd = relative(process.cwd(), "/tmp/one");
+		await runSubmitTask(ctx, {
+			objective: "a",
+			agent_kind: "claude-code",
+			cwd,
+		});
+		const result = await runListTasks(ctx, { cwd });
+		if ("error" in result) throw new Error(result.error.message);
+		expect(result.tasks).toHaveLength(1);
+	});
+
+	it("refreshes listed non-terminal tasks so expired running tasks leave running filters", async () => {
+		await runSubmitTask(ctx, {
+			objective: "a",
+			agent_kind: "claude-code",
+			cwd: "/tmp/one",
+			timeout_ms: 1,
+		});
+		await Bun.sleep(5);
+		const result = await runListTasks(ctx, { status: "running" });
+		if ("error" in result) throw new Error(result.error.message);
+		expect(result.tasks).toHaveLength(0);
+	});
+
+	it("does not return probe rows before the cursor anchor after refresh filtering", async () => {
+		const active = await runSubmitTask(ctx, {
+			objective: "still running",
+			agent_kind: "claude-code",
+			cwd: "/tmp/one",
+		});
+		if (!active.accepted) throw new Error("setup failed");
+		for (let i = 0; i < 3; i++) {
+			const expired = await runSubmitTask(ctx, {
+				objective: `expired ${i}`,
+				agent_kind: "claude-code",
+				cwd: "/tmp/one",
+				timeout_ms: 1,
+			});
+			if (!expired.accepted) throw new Error("setup failed");
+			db.prepare("update tasks set updated_at = ? where id = ?").run(
+				`2026-04-24T10:00:0${3 - i}.000Z`,
+				expired.task_id,
+			);
+		}
+		db.prepare("update tasks set updated_at = ? where id = ?").run(
+			"2026-04-24T10:00:00.000Z",
+			active.task_id,
+		);
+		await Bun.sleep(5);
+		const first = await runListTasks(ctx, { status: "running", limit: 2 });
+		if ("error" in first) throw new Error(first.error.message);
+		expect(first.tasks.map((t) => t.task_id)).not.toContain(active.task_id);
+		if (!first.next_cursor) throw new Error("expected cursor");
+		const second = await runListTasks(ctx, {
+			status: "running",
+			limit: 2,
+			cursor: first.next_cursor,
+		});
+		if ("error" in second) throw new Error(second.error.message);
+		expect(second.tasks.map((t) => t.task_id)).toContain(active.task_id);
+	});
+
+	it("finds legacy sessions stored with relative worktree_path", async () => {
+		createSession(db, {
+			id: "s_relative",
+			project_root: ".",
+			worktree_path: "legacy/relative",
+			parent_agent_kind: "cuekit-cli",
+		});
+		const task = await runSubmitTask(ctx, {
+			objective: "legacy task",
+			agent_kind: "claude-code",
+			session_id: "s_relative",
+		});
+		if (!task.accepted) throw new Error("setup failed");
+		const result = await runListTasks(ctx, { cwd: "legacy/relative" });
+		if ("error" in result) throw new Error(result.error.message);
+		expect(result.tasks.map((t) => t.task_id)).toContain(task.task_id);
 	});
 
 	it("signals has_more=false and omits next_cursor when the whole set fits in one page", async () => {
@@ -309,6 +422,7 @@ describe("list-tasks", () => {
 			cwd: "/tmp/one",
 		});
 		const result = await runListTasks(ctx, { limit: 10 });
+		if ("error" in result) throw new Error(result.error.message);
 		expect(result.has_more).toBe(false);
 		expect(result.next_cursor).toBeUndefined();
 	});
@@ -322,6 +436,7 @@ describe("list-tasks", () => {
 			});
 		}
 		const first = await runListTasks(ctx, { limit: 2 });
+		if ("error" in first) throw new Error(first.error.message);
 		expect(first.tasks).toHaveLength(2);
 		expect(first.has_more).toBe(true);
 		expect(first.next_cursor).toBeDefined();
@@ -330,11 +445,21 @@ describe("list-tasks", () => {
 		// has_more back to false so the caller knows to stop. No overlap
 		// with the first page.
 		const second = await runListTasks(ctx, { limit: 2, cursor: first.next_cursor });
+		if ("error" in second) throw new Error(second.error.message);
 		expect(second.tasks).toHaveLength(1);
 		expect(second.has_more).toBe(false);
 		expect(second.next_cursor).toBeUndefined();
 		const firstIds = new Set(first.tasks.map((t) => t.task_id));
 		for (const t of second.tasks) expect(firstIds.has(t.task_id)).toBe(false);
+	});
+
+	it("returns structured invalid_input for malformed cursors", async () => {
+		const result = await runListTasks(ctx, { cursor: "not-json" });
+		expect("error" in result).toBe(true);
+		if ("error" in result) {
+			expect(result.error.code).toBe("invalid_input");
+			expect(result.error.message).toContain("invalid cursor");
+		}
 	});
 });
 

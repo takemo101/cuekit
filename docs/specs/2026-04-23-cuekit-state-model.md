@@ -136,6 +136,7 @@ Represents a delegated child task created by an orchestration session.
 | `summary` | text | no | Current or final normalized summary |
 | `result_ref` | text | no | Path/reference to structured result file |
 | `transcript_ref` | text | no | Path/reference to transcript/log file |
+| `spec_json` | text | no | JSON-encoded original `TaskSpec` for recovery, audit, and policy enforcement |
 | `created_at` | text | yes | ISO 8601 timestamp |
 | `updated_at` | text | yes | ISO 8601 timestamp |
 | `started_at` | text | no | ISO 8601 timestamp; written on the first `queued → running` transition, preserved across later transitions |
@@ -234,6 +235,7 @@ create table tasks (
   summary text,
   result_ref text,
   transcript_ref text,
+  spec_json text,
   created_at text not null,
   updated_at text not null,
   started_at text,

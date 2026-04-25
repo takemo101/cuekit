@@ -57,6 +57,31 @@ describe("spawnTask", () => {
 		expect(pipe?.[pipe.length - 1]).toBe("cat > '/tmp/spaces in it.txt'");
 	});
 
+	it("kills the tmux session when pipe-pane fails after new-session succeeds", async () => {
+		const calls: string[][] = [];
+		const failingPipePanes = new PaneBackend({
+			runner: {
+				async run(args) {
+					calls.push([...args]);
+					if (args[0] === "new-session") return { stdout: "%9\n", stderr: "", exitCode: 0 };
+					if (args[0] === "pipe-pane") return { stdout: "", stderr: "pipe failed", exitCode: 1 };
+					return { stdout: "", stderr: "", exitCode: 0 };
+				},
+			},
+		});
+
+		await expect(
+			failingPipePanes.spawnTask({
+				task_id: "t_abc",
+				launchCommand: "sleep 60",
+				cwd: "/tmp",
+				transcriptPath: "/tmp/transcript.txt",
+			}),
+		).rejects.toThrow(/pipe-pane/);
+
+		expect(calls).toContainEqual(["kill-session", "-t", "cuekit-task-t_abc"]);
+	});
+
 	it("throws when tmux reports a non-zero exit code", async () => {
 		runner.queueResponse({ stdout: "", stderr: "tmux: boom", exitCode: 1 });
 		await expect(

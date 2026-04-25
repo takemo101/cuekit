@@ -756,11 +756,11 @@ Example response:
       "supports_attach": true,
       "supports_model_selection": false,
       "supports_artifacts": true,
-      "supports_live_progress": true
+      "supports_live_progress": false
     },
     {
       "agent_kind": "claude-code",
-      "supports_steering": false,
+      "supports_steering": true,
       "supports_attach": true,
       "supports_model_selection": true,
       "available_models": ["haiku", "sonnet", "opus"],

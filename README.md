@@ -72,7 +72,7 @@ cuekit steer_task --task_id t_abc... --message "also cover exponential backoff"
 cuekit cancel_task --task_id t_abc...
 
 cuekit get_task_result --task_id t_abc...
-# → { ok: true, value: { status: "cancelled", summary: "...", artifacts: [...] } }
+# → { task_id: "t_abc...", status: "cancelled", summary: "...", files_changed: [], artifacts: [...] }
 
 cuekit list_tasks --status running
 ```

@@ -1,4 +1,4 @@
-import { JobErrorSchema, TaskResultSchema } from "@cuekit/core";
+import { isTerminalTaskStatus, JobErrorSchema, TaskResultSchema } from "@cuekit/core";
 import { getTaskById } from "@cuekit/store";
 import { z } from "incur";
 import type { CommandContext } from "../command-context.ts";
@@ -9,9 +9,9 @@ export const GetTaskResultInputSchema = z.object({
 
 export type GetTaskResultInput = z.infer<typeof GetTaskResultInputSchema>;
 
-export const GetTaskResultOutputSchema = z.discriminatedUnion("ok", [
-	z.object({ ok: z.literal(true), value: TaskResultSchema }),
-	z.object({ ok: z.literal(false), error: JobErrorSchema }),
+export const GetTaskResultOutputSchema = z.union([
+	TaskResultSchema,
+	z.object({ error: JobErrorSchema }),
 ]);
 
 export type GetTaskResultOutput = z.infer<typeof GetTaskResultOutputSchema>;
@@ -20,10 +20,9 @@ export async function runGetTaskResult(
 	ctx: CommandContext,
 	input: GetTaskResultInput,
 ): Promise<GetTaskResultOutput> {
-	const task = getTaskById(ctx.db, input.task_id);
+	let task = getTaskById(ctx.db, input.task_id);
 	if (!task) {
 		return {
-			ok: false,
 			error: {
 				code: "task_not_found",
 				message: `task '${input.task_id}' not found`,
@@ -33,7 +32,31 @@ export async function runGetTaskResult(
 	}
 	const adapterRes = ctx.registry.require(task.agent_kind);
 	if (!adapterRes.ok) {
-		return { ok: false, error: adapterRes.error };
+		return { error: adapterRes.error };
 	}
-	return adapterRes.value.collect(input.task_id);
+	if (!isTerminalTaskStatus(task.status)) {
+		await adapterRes.value.status(input.task_id);
+		task = getTaskById(ctx.db, input.task_id);
+		if (!task) {
+			return {
+				error: {
+					code: "task_not_found",
+					message: `task '${input.task_id}' not found`,
+					retryable: false,
+				},
+			};
+		}
+		if (!isTerminalTaskStatus(task.status)) {
+			return {
+				error: {
+					code: "invalid_state",
+					message: `get_task_result requires a terminal task state, got '${task.status}'`,
+					retryable: true,
+				},
+			};
+		}
+	}
+	const result = await adapterRes.value.collect(input.task_id);
+	if (!result.ok) return { error: result.error };
+	return result.value;
 }

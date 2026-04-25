@@ -3,6 +3,7 @@ import {
 	decodeTaskListCursor,
 	isTerminalTaskStatus,
 	type TaskListFilter,
+	type TaskSpec,
 	type TaskStatus,
 	validateTaskTransition,
 } from "@cuekit/core";
@@ -17,6 +18,7 @@ export interface CreateTaskInput {
 	objective: string;
 	status?: TaskStatus;
 	native_task_ref?: string;
+	spec?: TaskSpec;
 }
 
 export function createTask(db: Database, input: CreateTaskInput): Task {
@@ -25,8 +27,8 @@ export function createTask(db: Database, input: CreateTaskInput): Task {
 		`insert into tasks (
 			id, session_id, parent_task_id, agent_kind, model, objective, status,
 			native_task_ref, summary, result_ref, transcript_ref,
-			created_at, updated_at, completed_at
-		) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			created_at, updated_at, completed_at, spec_json
+		) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 	).run(
 		input.id,
 		input.session_id,
@@ -42,6 +44,7 @@ export function createTask(db: Database, input: CreateTaskInput): Task {
 		now,
 		now,
 		null,
+		input.spec ? JSON.stringify(input.spec) : null,
 	);
 	// Read the row back through the schema so the returned value reflects the
 	// DB's actual state, not whatever we just constructed.

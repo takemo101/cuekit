@@ -4,6 +4,7 @@ import type { AgentAdapter } from "./agent-adapter.ts";
 import { createPaneAdapter } from "./pane-adapter.ts";
 import type { PaneBackend } from "./pane-backend.ts";
 import { shellQuote } from "./shell-quote.ts";
+import { renderTaskSpecPrompt } from "./task-spec-prompt.ts";
 
 // Truthful stub: wiring is in place via the shared pane backend, but the
 // concrete pi CLI invocation is a placeholder until verified against the
@@ -24,7 +25,7 @@ export function createPiAdapter(
 	const piBin = options.piBin ?? "pi";
 
 	function buildLaunchCommand(spec: TaskSpec): string {
-		return `${piBin} ${shellQuote(spec.objective)}`;
+		return `${piBin} ${shellQuote(renderTaskSpecPrompt(spec))}`;
 	}
 
 	return createPaneAdapter(
@@ -36,7 +37,7 @@ export function createPiAdapter(
 				supports_attach: true,
 				supports_model_selection: false,
 				supports_artifacts: true,
-				supports_live_progress: true,
+				supports_live_progress: false,
 			},
 			buildLaunchCommand: options.launchCommandOverride ?? buildLaunchCommand,
 		},

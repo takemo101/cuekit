@@ -67,6 +67,24 @@ describe("createTask", () => {
 		expect(t.model).toBe("sonnet");
 	});
 
+	it("persists the full TaskSpec JSON for recovery and audit", () => {
+		const t = createTask(db, {
+			id: "t1",
+			session_id: "s1",
+			agent_kind: "claude-code",
+			objective: "x",
+			spec: {
+				agent_kind: "claude-code",
+				objective: "x",
+				context: "background",
+				constraints: ["do not edit package.json"],
+				timeout_ms: 1000,
+			},
+		});
+		expect(t.spec_json).toContain("do not edit package.json");
+		expect(JSON.parse(t.spec_json ?? "{}").timeout_ms).toBe(1000);
+	});
+
 	it("persists parent_task_id for lineage", () => {
 		createTask(db, { id: "t1", session_id: "s1", agent_kind: "pi", objective: "a" });
 		const t2 = createTask(db, {
