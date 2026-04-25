@@ -266,22 +266,19 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 		async status(task_id) {
 			const owned = ownTask(task_id);
 			if (!owned.ok) {
-				// Earlier revisions synthesized a fake `created_at=updated_at=now`
-				// to keep the schema happy. That was a typed lie — callers
-				// couldn't distinguish a real task that had just started from a
-				// nonexistent one. Surface the error directly and let the
-				// command layer (get-task-status.ts) decide how to render a
-				// "not found" response; don't fabricate timestamps.
+				// Minimal error envelope per mcp-api-spec §6.5 — no fake
+				// timestamps. Earlier revisions filled `created_at` and
+				// `updated_at` with `1970-01-01` to satisfy the schema's
+				// (then-mandatory) datetime fields; the schema is now
+				// optional on those fields specifically so this path can
+				// be honest about what we don't know. This is reachable
+				// when a caller routes a task to the wrong adapter (the
+				// cross-adapter `ownTask` rejection); the command layer
+				// guards the not-found case before it ever gets here.
 				return {
 					task_id,
 					agent_kind: config.kind,
 					status: "failed",
-					// `created_at`/`updated_at` are not emitted here; the
-					// schema keeps them required for the success shape, but the
-					// command layer intercepts task-not-found and emits its own
-					// error envelope before this value reaches the wire.
-					created_at: "1970-01-01T00:00:00.000Z",
-					updated_at: "1970-01-01T00:00:00.000Z",
 					error: owned.error,
 				};
 			}

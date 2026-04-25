@@ -130,6 +130,18 @@ describe("get-task-status", () => {
 		expect(view.status).toBe("failed");
 		expect(view.error?.code).toBe("task_not_found");
 	});
+
+	it("does not fabricate timestamps or agent_kind for the not-found envelope", async () => {
+		// Regression for Oracle re-review P1-4: earlier code filled
+		// `created_at = updated_at = new Date().toISOString()` and
+		// `agent_kind: "unknown"` so the schema would accept the
+		// not-found case. Schema is now optional on those fields
+		// precisely so the envelope can be honest.
+		const view = await runGetTaskStatus(ctx, { task_id: "t_nope" });
+		expect(view.created_at).toBeUndefined();
+		expect(view.updated_at).toBeUndefined();
+		expect(view.agent_kind).toBeUndefined();
+	});
 });
 
 describe("get-task-result", () => {
