@@ -27,8 +27,13 @@ describe("buildClaudeCodeLaunchCommand", () => {
 
 	it("inserts --model before the objective when a model is requested", () => {
 		expect(buildClaudeCodeLaunchCommand(spec({ model: "sonnet" }))).toBe(
-			"claude --model sonnet 'do the thing'",
+			"claude --model 'sonnet' 'do the thing'",
 		);
+	});
+
+	it("shell-quotes model names with shell metacharacters", () => {
+		const out = buildClaudeCodeLaunchCommand(spec({ model: "sonnet; touch /tmp/pwned" }));
+		expect(out).toContain("--model 'sonnet; touch /tmp/pwned'");
 	});
 
 	it("does NOT pass --print / -p (interactive mode preserves attach)", () => {

@@ -4,6 +4,7 @@ import type { AgentAdapter } from "./agent-adapter.ts";
 import { createPaneAdapter } from "./pane-adapter.ts";
 import type { PaneBackend } from "./pane-backend.ts";
 import { shellQuote } from "./shell-quote.ts";
+import { renderTaskSpecPrompt } from "./task-spec-prompt.ts";
 
 // Truthful stub: placeholder OpenCode CLI invocation. Capabilities match the
 // spec's adapter matrix (state-dependent steering, model selection via
@@ -16,21 +17,21 @@ export interface OpenCodeAdapterOptions {
 	cuekitHomeDir?: string;
 }
 
+export function buildOpenCodeLaunchCommand(spec: TaskSpec, openCodeBin = "opencode"): string {
+	const parts: string[] = [openCodeBin, "run"];
+	if (spec.model) {
+		parts.push("--model", shellQuote(spec.model));
+	}
+	parts.push("--prompt", shellQuote(renderTaskSpecPrompt(spec)));
+	return parts.join(" ");
+}
+
 export function createOpenCodeAdapter(
 	db: Database,
 	panes: PaneBackend,
 	options: OpenCodeAdapterOptions = {},
 ): AgentAdapter {
 	const bin = options.openCodeBin ?? "opencode";
-
-	function buildLaunchCommand(spec: TaskSpec): string {
-		const parts: string[] = [bin, "run"];
-		if (spec.model) {
-			parts.push("--model", spec.model);
-		}
-		parts.push("--prompt", shellQuote(spec.objective));
-		return parts.join(" ");
-	}
 
 	return createPaneAdapter(
 		{
@@ -41,9 +42,10 @@ export function createOpenCodeAdapter(
 				supports_attach: true,
 				supports_model_selection: true,
 				supports_artifacts: true,
-				supports_live_progress: true,
+				supports_live_progress: false,
 			},
-			buildLaunchCommand: options.launchCommandOverride ?? buildLaunchCommand,
+			buildLaunchCommand:
+				options.launchCommandOverride ?? ((spec) => buildOpenCodeLaunchCommand(spec, bin)),
 		},
 		{ db, panes, logger: options.logger, cuekitHomeDir: options.cuekitHomeDir },
 	);

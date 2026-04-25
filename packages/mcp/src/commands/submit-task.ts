@@ -1,3 +1,4 @@
+import { resolve } from "node:path";
 import { JobErrorSchema, type TaskSpec, TaskSpecSchema } from "@cuekit/core";
 import { z } from "incur";
 import type { CommandContext } from "../command-context.ts";
@@ -51,8 +52,12 @@ export async function runSubmitTask(
 	// previously-dropped `context` / `constraints` / `inputs` /
 	// `expected_output`. `session_id` is the only field that's *not*
 	// part of TaskSpec, so we strip it explicitly here.
-	const { session_id: _ignored, ...spec } = input satisfies TaskSpec & {
+	const { session_id: _ignored, ...rawSpec } = input satisfies TaskSpec & {
 		session_id?: string;
+	};
+	const spec: TaskSpec = {
+		...rawSpec,
+		...(rawSpec.cwd !== undefined ? { cwd: resolve(rawSpec.cwd) } : {}),
 	};
 	const result = await adapterRes.value.submit({ spec, session_id });
 	if (!result.ok) {

@@ -2,7 +2,7 @@ import { Database } from "bun:sqlite";
 import { beforeEach, describe, expect, it } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative, resolve } from "node:path";
 import { runMigrations } from "@cuekit/store";
 import { findProjectRoot, generateSessionId, resolveSessionId } from "../src/session-helpers.ts";
 
@@ -75,6 +75,21 @@ describe("resolveSessionId", () => {
 				| undefined;
 			expect(row?.parent_agent_kind).toBe("cuekit-cli");
 			expect(row?.worktree_path).toBe(tmp);
+		} finally {
+			rmSync(tmp, { recursive: true, force: true });
+		}
+	});
+
+	it("normalizes cwd to an absolute worktree_path", () => {
+		const tmp = mkdtempSync(join(tmpdir(), "cuekit-helpers-"));
+		try {
+			const cwd = relative(process.cwd(), tmp);
+			const id = resolveSessionId(db, { cwd });
+			const row = db.prepare("select * from sessions where id = ?").get(id) as
+				| { project_root: string; worktree_path: string }
+				| undefined;
+			expect(row?.worktree_path).toBe(resolve(cwd));
+			expect(row?.project_root).toBe(resolve(cwd));
 		} finally {
 			rmSync(tmp, { recursive: true, force: true });
 		}

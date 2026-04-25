@@ -19,6 +19,7 @@ export const TaskSchema = z.object({
 	updated_at: z.string().datetime({ offset: true }),
 	started_at: z.string().datetime({ offset: true }).nullable(),
 	completed_at: z.string().datetime({ offset: true }).nullable(),
+	spec_json: z.string().nullable(),
 });
 
 export type Task = z.infer<typeof TaskSchema>;

@@ -4,6 +4,7 @@ import type { AgentAdapter } from "./agent-adapter.ts";
 import { createPaneAdapter } from "./pane-adapter.ts";
 import type { PaneBackend } from "./pane-backend.ts";
 import { shellQuote } from "./shell-quote.ts";
+import { renderTaskSpecPrompt } from "./task-spec-prompt.ts";
 
 export interface ClaudeCodeAdapterOptions {
 	// For tests / sandboxing: replace the launch command builder entirely. The
@@ -42,9 +43,9 @@ export function buildClaudeCodeLaunchCommand(
 	const bin = options.claudeBin ?? "claude";
 	const parts: string[] = [bin];
 	if (spec.model) {
-		parts.push("--model", spec.model);
+		parts.push("--model", shellQuote(spec.model));
 	}
-	parts.push(shellQuote(spec.objective));
+	parts.push(shellQuote(renderTaskSpecPrompt(spec)));
 	return parts.join(" ");
 }
 

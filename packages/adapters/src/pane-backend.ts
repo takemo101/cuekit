@@ -72,6 +72,11 @@ export class PaneBackend {
 				`cat > ${shellQuote(params.transcriptPath)}`,
 			]);
 			if (pipeResult.exitCode !== 0) {
+				try {
+					await this.killTask(params.task_id);
+				} catch {
+					// Preserve the original pipe-pane failure; cleanup is best-effort here.
+				}
 				throw new Error(
 					`tmux pipe-pane for task ${params.task_id} failed: ${pipeResult.stderr.trim()}`,
 				);
