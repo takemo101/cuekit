@@ -36,8 +36,8 @@ export function taskArtifactPaths(cwd: string, task_id: string): TaskArtifactPat
 }
 
 // Wraps a shell launch command so that its exit code is written to the
-// per-task `exit-code` sentinel after the child exits. Uses POSIX sh
-// syntax (`{ ... ; } ; echo "cuekit_exit=$?" > …`), so it works under
+// per-task `exit-code` sentinel after the child exits. Uses a POSIX-sh
+// subshell (`( ... ) ; printf '...' > …`), so it works under
 // bash/zsh/dash/sh — the shell tmux picks to host the pane.
 //
 // The sentinel lets pane-adapter.status() tell the difference between a
@@ -45,9 +45,17 @@ export function taskArtifactPaths(cwd: string, task_id: string): TaskArtifactPat
 // crashed (non-zero → failed). Without it, every pane-death was
 // indistinguishable and got mapped to `failed`, which is why cuekit had
 // no `completed` path in v0.
+//
+// Why a subshell and not a brace group: the `exit` builtin run inside
+// `{ …; }` terminates the host shell before the trailing write can
+// run, leaving no sentinel — an `exit N` inside the inner command
+// would always look like SIGKILL to the outer layer. The `( … )`
+// subshell absorbs the `exit`, so `$?` in the parent captures the
+// real code and the sentinel is written. This was caught by the
+// real-tmux dogfood test driving a deliberate `exit 42`.
 export function wrapLaunchCommandWithExitCode(launchCommand: string, exitCodePath: string): string {
 	// The sentinel path contains only `t_<hex>` task ids and workspace
 	// paths. Quote anyway in case the worktree contains spaces.
 	const quoted = `'${exitCodePath.replace(/'/g, `'\\''`)}'`;
-	return `{ ${launchCommand} ; } ; printf 'cuekit_exit=%d\\n' "$?" > ${quoted} 2>/dev/null`;
+	return `( ${launchCommand} ) ; printf 'cuekit_exit=%d\\n' "$?" > ${quoted} 2>/dev/null`;
 }
