@@ -1,9 +1,11 @@
 import type { Database } from "bun:sqlite";
 import { mkdirSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import {
 	type AdapterCapabilities,
 	ensureCollectable,
+	globalTaskArtifactPaths,
 	isTerminalTaskStatus,
 	type JobError,
 	type Logger,
@@ -82,6 +84,12 @@ export interface PaneAdapterDeps {
 	// don't pollute test output; the `cuekit` binary injects an stderr
 	// logger so operators actually see warnings.
 	logger?: Logger;
+	// Cuekit's global directory (default `~/.cuekit/`). Used as the
+	// fallback location for the exit-code sentinel when the worktree-local
+	// `.cuekit/tasks/<id>/` is unwritable — without this fallback, every
+	// clean exit on a read-only worktree would surface as `failed`. Tests
+	// override with a tmpdir to avoid touching the operator's real home.
+	cuekitHomeDir?: string;
 }
 
 // Reads the exit-code sentinel written by the wrapped launch command.
@@ -120,6 +128,7 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 	const { db, panes } = deps;
 	const logger = deps.logger ?? silentLogger;
 	const onPaneDisappeared = config.onPaneDisappeared ?? defaultOnPaneDisappeared;
+	const cuekitHomeDir = deps.cuekitHomeDir ?? join(homedir(), ".cuekit");
 
 	// Ensures a task exists AND is managed by this adapter. Prevents one adapter
 	// from operating on another adapter's tasks even though they share the DB.
@@ -212,28 +221,50 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 			// best-effort: an unwritable cwd shouldn't block submit.
 			const paths = taskArtifactPaths(cwd, task_id);
 			let transcriptPath: string | undefined;
-			let exitCodeAvailable = false;
+			let sentinelPath: string | undefined;
 			try {
 				mkdirSync(paths.dir, { recursive: true });
 				transcriptPath = paths.transcriptPath;
-				exitCodeAvailable = true;
+				sentinelPath = paths.exitCodePath;
 			} catch (err) {
 				logger.warn("transcript capture disabled", {
 					task_id,
 					agent_kind: config.kind,
 					reason: errorMessage(err),
 				});
+				// Worktree-local artifact dir failed (read-only mount,
+				// ephemeral worktree, etc.). Fall back to the global
+				// sentinel dir under cuekit's home so completed inference
+				// still works for the pane-death path. Transcript stays
+				// disabled because pipe-pane writes need the worktree
+				// path verbatim — only the sentinel migrates.
+				try {
+					const globalPaths = globalTaskArtifactPaths(cuekitHomeDir, task_id);
+					mkdirSync(globalPaths.dir, { recursive: true });
+					sentinelPath = globalPaths.exitCodePath;
+					logger.info("exit-code sentinel falling back to cuekit home", {
+						task_id,
+						agent_kind: config.kind,
+						sentinel_path: sentinelPath,
+					});
+				} catch (fallbackErr) {
+					logger.warn("exit-code sentinel disabled (worktree and home both unwritable)", {
+						task_id,
+						agent_kind: config.kind,
+						reason: errorMessage(fallbackErr),
+					});
+				}
 			}
 
-			// Wrap the launch command so the child's exit code lands in a
-			// sentinel file after the pane's shell exits. Without this,
-			// `status()` couldn't tell a clean completion from a crash —
-			// that ambiguity is what blocked the entire `completed` path
-			// in v0. Only wrap when the artifact dir exists; otherwise run
-			// unwrapped (we'll fall through to the default "no sentinel →
-			// failed" decision on pane death).
-			const launchCommand = exitCodeAvailable
-				? wrapLaunchCommandWithExitCode(rawLaunchCommand, paths.exitCodePath)
+			// Wrap the launch command so the child's exit code lands in
+			// the chosen sentinel file (worktree-local or global fallback)
+			// after the pane's shell exits. Without this, `status()`
+			// couldn't tell a clean completion from a crash — that
+			// ambiguity is what blocked the entire `completed` path in
+			// v0. Run unwrapped only when both locations failed (the
+			// default hook will then map pane-death → failed).
+			const launchCommand = sentinelPath
+				? wrapLaunchCommandWithExitCode(rawLaunchCommand, sentinelPath)
 				: rawLaunchCommand;
 
 			try {
@@ -291,16 +322,23 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 					// adapter's override), then drive the same completeTask
 					// path the explicit cancel flow uses so summary / timestamps
 					// land consistently.
-					// Exit-code sentinel lives in the same dir as the transcript
-					// (see `taskArtifactPaths`). Derive the path from
-					// `transcript_ref` rather than re-resolving cwd so a task
-					// that overrode cwd at submit time still reads its own
-					// sentinel. If transcript capture was disabled there is
-					// no sentinel to read; the default hook treats that as
-					// `failed`.
-					const exitCode = live.transcript_ref
-						? readExitCodeSentinel(join(dirname(live.transcript_ref), "exit-code"))
-						: null;
+					// Exit-code sentinel lookup. Worktree-local first
+					// (the happy path — same dir as the transcript per
+					// `taskArtifactPaths`), then the global fallback
+					// under cuekit's home (see submit's mkdir cascade).
+					// The fallback is what makes completed inference work
+					// on read-only worktrees: without transcript_ref the
+					// only place a sentinel could exist is the global
+					// dir.
+					let exitCode: number | null = null;
+					if (live.transcript_ref) {
+						exitCode = readExitCodeSentinel(join(dirname(live.transcript_ref), "exit-code"));
+					}
+					if (exitCode === null) {
+						exitCode = readExitCodeSentinel(
+							globalTaskArtifactPaths(cuekitHomeDir, task_id).exitCodePath,
+						);
+					}
 					const decision = onPaneDisappeared({
 						task: live,
 						exitCode,

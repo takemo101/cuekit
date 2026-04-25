@@ -13,6 +13,7 @@ export interface PiAdapterOptions {
 	launchCommandOverride?: (spec: TaskSpec) => string;
 	piBin?: string;
 	logger?: Logger;
+	cuekitHomeDir?: string;
 }
 
 export function createPiAdapter(
@@ -39,6 +40,6 @@ export function createPiAdapter(
 			},
 			buildLaunchCommand: options.launchCommandOverride ?? buildLaunchCommand,
 		},
-		{ db, panes, logger: options.logger },
+		{ db, panes, logger: options.logger, cuekitHomeDir: options.cuekitHomeDir },
 	);
 }

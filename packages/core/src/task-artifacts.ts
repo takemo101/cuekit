@@ -35,6 +35,31 @@ export function taskArtifactPaths(cwd: string, task_id: string): TaskArtifactPat
 	};
 }
 
+// Global fallback for the exit-code sentinel when the worktree-local
+// `.cuekit/tasks/<id>/` is unwritable (read-only mount, ephemeral
+// worktree, deno-style permission gates). cuekit's home dir is
+// authoritative here — `~/.cuekit/sentinels/<id>/exit-code` mirrors
+// the per-task subdirectory shape so cleanup is still per-task.
+//
+// Without this fallback, every clean exit on a read-only worktree
+// surfaces as `failed` because the wrap can't write its sentinel —
+// directly contradicting the completed-path repair landed in #39.
+export interface GlobalTaskArtifactPaths {
+	dir: string;
+	exitCodePath: string;
+}
+
+export function globalTaskArtifactPaths(
+	cuekitHome: string,
+	task_id: string,
+): GlobalTaskArtifactPaths {
+	const dir = join(cuekitHome, "sentinels", task_id);
+	return {
+		dir,
+		exitCodePath: join(dir, "exit-code"),
+	};
+}
+
 // Wraps a shell launch command so that its exit code is written to the
 // per-task `exit-code` sentinel after the child exits. Uses a POSIX-sh
 // subshell (`( ... ) ; printf '...' > …`), so it works under
