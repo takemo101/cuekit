@@ -1,5 +1,5 @@
 import type { Database } from "bun:sqlite";
-import { mkdirSync, readFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import {
@@ -99,7 +99,12 @@ export interface PaneAdapterDeps {
 function readExitCodeSentinel(exitCodePath: string): number | null {
 	try {
 		const raw = readFileSync(exitCodePath, "utf8");
-		const match = raw.match(/cuekit_exit=(-?\d+)/);
+		// Anchored at the start of a line. The wrap writes exactly one
+		// `cuekit_exit=<n>\n`, but a hostile or buggy launch command
+		// could include the substring elsewhere in stdout (which doesn't
+		// reach this file in normal operation, but the anchor is cheap
+		// defense in depth).
+		const match = raw.match(/^cuekit_exit=(-?\d+)$/m);
 		if (!match?.[1]) return null;
 		const parsed = Number.parseInt(match[1], 10);
 		return Number.isFinite(parsed) ? parsed : null;
@@ -145,12 +150,22 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 			};
 		}
 		if (task.target_agent_kind !== config.kind) {
+			// `permission_denied` (not `task_not_found`): the row exists,
+			// the caller just routed it to the wrong adapter. Conflating
+			// the two codes blinds operators to "task is real, you're
+			// asking the wrong runtime" — that's a control-surface
+			// routing bug, not a missing-resource error.
 			return {
 				ok: false,
 				error: {
-					code: "task_not_found",
-					message: `task '${task_id}' is not managed by adapter '${config.kind}'`,
+					code: "permission_denied",
+					message: `task '${task_id}' is managed by adapter '${task.target_agent_kind}', not '${config.kind}'`,
 					retryable: false,
+					details: {
+						task_id,
+						owning_agent_kind: task.target_agent_kind,
+						attempted_by: config.kind,
+					},
 				},
 			};
 		}
@@ -282,6 +297,21 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 				return { ok: true as const, value: { task_id } };
 			} catch (err) {
 				updateTaskStatus(db, task_id, "failed");
+				// Spawn failed before the child ever ran, so any
+				// `.cuekit/tasks/<id>/` dir we created above is
+				// guaranteed-empty (no transcript flushed, no sentinel
+				// written). Remove it so a retry / next submit doesn't
+				// trip over an orphan and operators don't have to
+				// gc-by-hand. Best-effort: a chmod-flipped dir or a
+				// permission race shouldn't bubble — we already have
+				// the structured submit_failed below.
+				if (transcriptPath) {
+					try {
+						rmSync(paths.dir, { recursive: true, force: true });
+					} catch {
+						// ignore — cleanup is best-effort
+					}
+				}
 				return {
 					ok: false as const,
 					error: {
