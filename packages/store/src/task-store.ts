@@ -167,6 +167,11 @@ export function listTasks(db: Database, filter: TaskListFilter = {}): Task[] {
 export function updateTaskStatus(db: Database, id: string, status: TaskStatus): Task | null {
 	const current = getTaskById(db, id);
 	if (!current) return null;
+	// Same-state write is a no-op — return the current row without
+	// touching `updated_at`, so the row's "newest activity" ordering on
+	// listTasks isn't perturbed by a concurrent status-poll race that
+	// happens to re-confirm the existing status.
+	if (current.status === status) return current;
 	const check = validateTaskTransition(current.status, status);
 	if (!check.ok) {
 		throw new Error(`defect: ${check.error.message}`);

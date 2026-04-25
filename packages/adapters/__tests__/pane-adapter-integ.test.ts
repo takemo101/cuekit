@@ -116,4 +116,31 @@ suite("pane-adapter end-to-end against real tmux (dogfood)", () => {
 		expect(view.status).toBe("failed");
 		expect(view.summary).toMatch(/42/);
 	});
+
+	it("concurrent status() polls after pane death don't throw (race protection)", async () => {
+		// Oracle re-review caught this: two pollers both see the dead
+		// pane and both dispatch completeTask(completed). Pre-fix, the
+		// race-loser threw a defect on the (now-allowed) self-edge in
+		// validateTaskTransition. The first call should win; both should
+		// resolve to the same terminal view.
+		const result = await adapter.submit({
+			session_id: "s1",
+			spec: { agent_kind: "pi", cwd: tmpCwd, objective: "race" },
+		});
+		if (!result.ok) throw new Error(`submit failed: ${result.error.message}`);
+		const task_id = result.value.task_id;
+		expect(await waitForPaneDeath(panes, task_id)).toBe(true);
+
+		const [a, b, c] = await Promise.all([
+			adapter.status(task_id),
+			adapter.status(task_id),
+			adapter.status(task_id),
+		]);
+		expect(a.status).toBe("completed");
+		expect(b.status).toBe("completed");
+		expect(c.status).toBe("completed");
+		// completed_at converges across all racers.
+		expect(a.completed_at).toBe(b.completed_at);
+		expect(b.completed_at).toBe(c.completed_at);
+	});
 });
