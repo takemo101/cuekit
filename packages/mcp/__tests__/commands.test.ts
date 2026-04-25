@@ -109,6 +109,24 @@ describe("submit-task", () => {
 			expect(result.error.code).toBe("invalid_input");
 		}
 	});
+
+	it("accepts the full TaskSpec shape — context / constraints / inputs / expected_output (P2-3)", async () => {
+		// Earlier the SubmitTaskInputSchema was hand-written and silently
+		// dropped these four optional protocol fields. Now the schema is
+		// derived from `TaskSpecSchema` so anything the protocol accepts
+		// flows through. Verifies the schema accepts the shape (Zod
+		// validates).
+		const result = await runSubmitTask(ctx, {
+			objective: "Resolve flaky test",
+			agent_kind: "claude-code",
+			cwd: "/tmp",
+			context: "The test is in __tests__/foo.test.ts and fails ~3% of runs.",
+			constraints: ["must pass under bun test --bail", "no new dependencies"],
+			inputs: [{ kind: "text", ref: "see context", title: "background" }],
+			expected_output: { format: "summary", require_tests: true },
+		});
+		expect(result.accepted).toBe(true);
+	});
 });
 
 describe("get-task-status", () => {
