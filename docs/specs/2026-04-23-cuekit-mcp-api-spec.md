@@ -598,7 +598,7 @@ Describe installed or available adapters and their capabilities.
 }
 ```
 
-All three MVP adapters ride on the v0 tmux pane backend (see adapter spec Section 3.7), so `supports_attach` is `true` across the board. `get_task_status` surfaces an `attach_hint` such as `tmux attach-session -t cuekit-task-{task_id_short}` that a user can run to drop directly into the live child pane.
+All three MVP adapters ride on the v0 tmux pane backend (see adapter spec Section 3.7), so `supports_attach` is `true` across the board. `get_task_status` surfaces an `attach_hint` such as `tmux attach-session -t cuekit-task-{task_id}` that a user can run to drop directly into the live child pane.
 
 `available_models` is only surfaced when the adapter can enumerate its models reliably (e.g. claude-code). Adapters that cannot (or choose not to) publish a list omit the field; callers should then pass `model` at their own risk and handle `submit_failed` if the runtime rejects it. cuekit does not synthesize a default on the caller's behalf.
 
@@ -670,6 +670,33 @@ Ack (§4.1). On success:
 - Cascades child-task deletion in a single SQLite transaction.
 - Does **not** touch on-disk artifacts.
 
+**Note on session status**: cuekit does not check the session's own
+status (`active` / `completed` / `failed` / `cancelled`) before
+deleting. Only **child task terminality** is the gate. An `active`
+session with all-terminal tasks is deletable. This is intentional
+in v0 — session lifecycle is managed implicitly and an explicit
+"end session" op is not part of the v0 surface.
+
+### 11.5.3 Post-terminal mutability
+
+Adapters and the control surface may continue to write certain
+fields on a task **after** it reaches a terminal status:
+
+- `transcript_ref`, `result_ref` — adapters may flush late artifacts
+  (transcript tail, runtime-emitted result file).
+- `summary` — adapters may refine the human-readable summary.
+- `updated_at` — bumps on any field write.
+
+What stays **immutable** post-terminal:
+
+- `status` — once terminal, never transitions to anything else.
+  cuekit's state-machine validator (`validateTaskTransition`) treats
+  same-state writes as no-ops (idempotent — see §13.1 and the race
+  protection in pane-adapter `status()`), but cross-terminal flips
+  (`completed → failed`) are defects and throw.
+- `completed_at` — first terminal write wins via SQL `COALESCE`.
+- `started_at`, `created_at` — never updated post-creation.
+
 ---
 
 ## 11.6 Helper Tools
@@ -689,6 +716,14 @@ Callable via MCP itself as a self-describing install helper.
 
 Both fields optional. Defaults: `name = "cuekit"`,
 `bin = "cuekit"` (relies on PATH).
+
+**Caveat for pre-v0.1 / development installs**: cuekit isn't yet
+published to a package registry, so the default `bin = "cuekit"`
+assumes an operator has linked the binary onto PATH manually
+(e.g. `bun link` from the workspace, or a wrapper script). When
+running directly from source (`bun run packages/mcp/src/bin.ts`),
+pass an explicit absolute `bin` so the snippet is paste-ready
+without further editing.
 
 **Output**
 

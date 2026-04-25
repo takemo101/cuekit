@@ -445,14 +445,35 @@ Once terminal, the adapter must not resume the same task in place.
 interface AgentAdapter {
   kind: string;
   capabilities(): AdapterCapabilities;
-  submit(spec: TaskSpec): Promise<TaskHandle>;
+  submit(input: AdapterSubmitInput): Promise<AdapterResult<TaskHandle>>;
   status(task_id: string): Promise<TaskStatusView>;
   steer(message: SteeringMessage): Promise<Ack>;
-  collect(task_id: string): Promise<TaskResult>;
+  collect(task_id: string): Promise<AdapterResult<TaskResult>>;
   cancel(task_id: string): Promise<Ack>;
   list(filter?: TaskListFilter): Promise<TaskSummary[]>;
 }
+
+interface AdapterSubmitInput {
+  spec: TaskSpec;
+  session_id: string;  // resolved by the control surface — adapters
+                       // never auto-create sessions
+}
+
+type AdapterResult<T> =
+  | { ok: true; value: T }
+  | { ok: false; error: JobError };
 ```
+
+Notes:
+- `submit` is structured `AdapterResult` (not throw) because the control
+  surface needs to translate adapter-level recoverable failures
+  (`submit_failed`, `invalid_input`, `session_not_found`) into the same
+  Ack-shaped wire envelopes as the rest of the protocol.
+- `status` always returns a view; failure modes (e.g. `task_not_found`)
+  embed a `JobError` in the view rather than throwing — see §8 and the
+  MCP spec §6.5 error envelope.
+- `collect` mirrors `submit`'s `AdapterResult` shape; `steer` / `cancel`
+  return `Ack`.
 
 `capabilities()` is the source of truth for `list_adapters` output and for control-surface-level pre-flight validation (e.g. checking `TaskSpec.model` against `available_models` before calling `submit`).
 
