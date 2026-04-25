@@ -7,7 +7,7 @@ export const TaskSchema = z.object({
 	id: z.string().min(1),
 	session_id: z.string().min(1),
 	parent_task_id: z.string().min(1).nullable(),
-	target_agent_kind: z.string().min(1),
+	agent_kind: z.string().min(1),
 	model: z.string().min(1).nullable(),
 	objective: z.string().min(1),
 	status: TaskStatusSchema,

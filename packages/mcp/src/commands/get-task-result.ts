@@ -31,7 +31,7 @@ export async function runGetTaskResult(
 			},
 		};
 	}
-	const adapterRes = ctx.registry.require(task.target_agent_kind);
+	const adapterRes = ctx.registry.require(task.agent_kind);
 	if (!adapterRes.ok) {
 		return { ok: false, error: adapterRes.error };
 	}

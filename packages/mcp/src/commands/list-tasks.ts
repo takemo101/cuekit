@@ -42,7 +42,7 @@ export async function runListTasks(
 	return {
 		tasks: page.map((t) => ({
 			task_id: t.id,
-			agent_kind: t.target_agent_kind,
+			agent_kind: t.agent_kind,
 			status: t.status,
 			summary: t.summary ?? undefined,
 			updated_at: t.updated_at,

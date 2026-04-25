@@ -149,7 +149,7 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 				},
 			};
 		}
-		if (task.target_agent_kind !== config.kind) {
+		if (task.agent_kind !== config.kind) {
 			// `permission_denied` (not `task_not_found`): the row exists,
 			// the caller just routed it to the wrong adapter. Conflating
 			// the two codes blinds operators to "task is real, you're
@@ -159,11 +159,11 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 				ok: false,
 				error: {
 					code: "permission_denied",
-					message: `task '${task_id}' is managed by adapter '${task.target_agent_kind}', not '${config.kind}'`,
+					message: `task '${task_id}' is managed by adapter '${task.agent_kind}', not '${config.kind}'`,
 					retryable: false,
 					details: {
 						task_id,
-						owning_agent_kind: task.target_agent_kind,
+						owning_agent_kind: task.agent_kind,
 						attempted_by: config.kind,
 					},
 				},
@@ -222,7 +222,7 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 			createTask(db, {
 				id: task_id,
 				session_id: input.session_id,
-				target_agent_kind: config.kind,
+				agent_kind: config.kind,
 				model: input.spec.model,
 				objective: input.spec.objective,
 				status: "queued",
@@ -528,7 +528,7 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 			const tasks = listTasks(db, effectiveFilter);
 			return tasks.map((t) => ({
 				task_id: t.id,
-				agent_kind: t.target_agent_kind,
+				agent_kind: t.agent_kind,
 				status: t.status,
 				summary: t.summary ?? undefined,
 				updated_at: t.updated_at,

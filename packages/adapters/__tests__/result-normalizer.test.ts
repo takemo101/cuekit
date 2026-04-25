@@ -8,7 +8,7 @@ function makeTask(overrides: Partial<Task> = {}): Task {
 		id: "t_abc",
 		session_id: "s1",
 		parent_task_id: null,
-		target_agent_kind: "claude-code",
+		agent_kind: "claude-code",
 		model: null,
 		objective: "x",
 		status: "completed",

@@ -152,8 +152,8 @@ describe("deleteSession", () => {
 	});
 
 	it("cascades to child tasks in the same transaction", () => {
-		createTask(db, { id: "t1", session_id: "s1", target_agent_kind: "pi", objective: "a" });
-		createTask(db, { id: "t2", session_id: "s1", target_agent_kind: "pi", objective: "b" });
+		createTask(db, { id: "t1", session_id: "s1", agent_kind: "pi", objective: "a" });
+		createTask(db, { id: "t2", session_id: "s1", agent_kind: "pi", objective: "b" });
 		expect(listTasksBySession(db, "s1")).toHaveLength(2);
 		expect(deleteSession(db, "s1")).toBe(true);
 		expect(listTasksBySession(db, "s1")).toHaveLength(0);
@@ -163,7 +163,7 @@ describe("deleteSession", () => {
 	it("does not enforce child-task terminal status — that's the command layer's job", () => {
 		// The store trusts its input; callers that need policy must
 		// filter listTasksBySession before calling.
-		createTask(db, { id: "t1", session_id: "s1", target_agent_kind: "pi", objective: "a" });
+		createTask(db, { id: "t1", session_id: "s1", agent_kind: "pi", objective: "a" });
 		expect(deleteSession(db, "s1")).toBe(true);
 	});
 
@@ -172,7 +172,7 @@ describe("deleteSession", () => {
 		// SQLite with FK ON, but we can assert the transaction wrapper
 		// is in place by confirming no partial state ever leaks after a
 		// successful call.
-		createTask(db, { id: "t1", session_id: "s1", target_agent_kind: "pi", objective: "a" });
+		createTask(db, { id: "t1", session_id: "s1", agent_kind: "pi", objective: "a" });
 		deleteSession(db, "s1");
 		// Session gone AND task gone — never "session gone, task orphan".
 		expect(getSessionById(db, "s1")).toBeNull();

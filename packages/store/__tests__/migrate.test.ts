@@ -43,7 +43,7 @@ describe("runMigrations", () => {
 		expect(names).toContain("idx_tasks_session_id");
 		expect(names).toContain("idx_tasks_parent_task_id");
 		expect(names).toContain("idx_tasks_status");
-		expect(names).toContain("idx_tasks_target_agent_kind");
+		expect(names).toContain("idx_tasks_agent_kind");
 	});
 
 	it("is idempotent — running twice does not duplicate recorded versions", () => {

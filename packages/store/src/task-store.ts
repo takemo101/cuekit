@@ -12,7 +12,7 @@ export interface CreateTaskInput {
 	id: string;
 	session_id: string;
 	parent_task_id?: string;
-	target_agent_kind: string;
+	agent_kind: string;
 	model?: string;
 	objective: string;
 	status?: TaskStatus;
@@ -23,7 +23,7 @@ export function createTask(db: Database, input: CreateTaskInput): Task {
 	const now = new Date().toISOString();
 	db.prepare(
 		`insert into tasks (
-			id, session_id, parent_task_id, target_agent_kind, model, objective, status,
+			id, session_id, parent_task_id, agent_kind, model, objective, status,
 			native_task_ref, summary, result_ref, transcript_ref,
 			created_at, updated_at, completed_at
 		) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -31,7 +31,7 @@ export function createTask(db: Database, input: CreateTaskInput): Task {
 		input.id,
 		input.session_id,
 		input.parent_task_id ?? null,
-		input.target_agent_kind,
+		input.agent_kind,
 		input.model ?? null,
 		input.objective,
 		input.status ?? "queued",
@@ -113,7 +113,7 @@ export function listTasks(db: Database, filter: TaskListFilter = {}): Task[] {
 		bindings[":status"] = filter.status;
 	}
 	if (filter.agent_kind) {
-		conditions.push("t.target_agent_kind = :agent_kind");
+		conditions.push("t.agent_kind = :agent_kind");
 		bindings[":agent_kind"] = filter.agent_kind;
 	}
 	if (filter.session_id) {

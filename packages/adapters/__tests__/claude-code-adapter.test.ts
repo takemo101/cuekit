@@ -66,7 +66,7 @@ describe("submit", () => {
 		const task_id = result.value.task_id;
 		const task = getTaskById(db, task_id);
 		expect(task?.status).toBe("running");
-		expect(task?.target_agent_kind).toBe("claude-code");
+		expect(task?.agent_kind).toBe("claude-code");
 		expect(task?.model).toBe("sonnet");
 		expect(task?.native_task_ref).toMatch(/^%\d+$/);
 		expect(runner.calls[0]?.[0]).toBe("new-session");
