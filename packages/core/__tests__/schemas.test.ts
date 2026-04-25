@@ -336,6 +336,41 @@ describe("TaskStatusViewSchema", () => {
 		});
 		expect(result.success).toBe(true);
 	});
+
+	it("accepts a minimal error envelope (mcp-api-spec §6.5)", () => {
+		// task_not_found / permission_denied — no fake timestamps, no
+		// fake agent_kind. The `error` field is the discriminator.
+		const result = TaskStatusViewSchema.safeParse({
+			task_id: "t_nope",
+			status: "failed",
+			error: { code: "task_not_found", message: "task 't_nope' not found" },
+		});
+		expect(result.success).toBe(true);
+	});
+
+	it("rejects a half-success envelope — missing timestamps, no error either", () => {
+		// Closing #52: a buggy success-shape that silently dropped
+		// timestamps used to validate. The refine() now requires
+		// either a full success envelope or an error envelope.
+		const result = TaskStatusViewSchema.safeParse({
+			task_id: "t1",
+			agent_kind: "claude-code",
+			status: "running",
+			// created_at / updated_at omitted, no error field — invalid.
+		});
+		expect(result.success).toBe(false);
+	});
+
+	it("rejects a half-success envelope — agent_kind missing, no error", () => {
+		const result = TaskStatusViewSchema.safeParse({
+			task_id: "t1",
+			status: "running",
+			created_at: "2026-04-24T10:00:00Z",
+			updated_at: "2026-04-24T10:02:00Z",
+			// agent_kind missing, no error — invalid.
+		});
+		expect(result.success).toBe(false);
+	});
 });
 
 describe("TaskSummarySchema", () => {
