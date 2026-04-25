@@ -13,6 +13,7 @@ export interface OpenCodeAdapterOptions {
 	launchCommandOverride?: (spec: TaskSpec) => string;
 	openCodeBin?: string;
 	logger?: Logger;
+	cuekitHomeDir?: string;
 }
 
 export function createOpenCodeAdapter(
@@ -44,6 +45,6 @@ export function createOpenCodeAdapter(
 			},
 			buildLaunchCommand: options.launchCommandOverride ?? buildLaunchCommand,
 		},
-		{ db, panes, logger: options.logger },
+		{ db, panes, logger: options.logger, cuekitHomeDir: options.cuekitHomeDir },
 	);
 }

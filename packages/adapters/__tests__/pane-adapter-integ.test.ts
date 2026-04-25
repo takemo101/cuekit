@@ -1,9 +1,9 @@
 import { Database } from "bun:sqlite";
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { chmodSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { taskArtifactPaths } from "@cuekit/core";
+import { globalTaskArtifactPaths, taskArtifactPaths } from "@cuekit/core";
 import { createSession, getTaskById, runMigrations } from "@cuekit/store";
 import { PaneBackend } from "../src/pane-backend.ts";
 import { createPiAdapter } from "../src/pi-adapter.ts";
@@ -115,6 +115,62 @@ suite("pane-adapter end-to-end against real tmux (dogfood)", () => {
 		const view = await adapter.status(task_id);
 		expect(view.status).toBe("failed");
 		expect(view.summary).toMatch(/42/);
+	});
+
+	it("read-only worktree falls back to ~/.cuekit/sentinels and still infers completed", async () => {
+		// Simulates the case Oracle re-review P1-3 flagged: a worktree
+		// where mkdirSync fails (read-only mount, ephemeral container,
+		// hardened deno permissions). Without the global fallback,
+		// every clean exit would surface as `failed` because the wrap
+		// has nowhere to write its sentinel.
+		const readOnlyCwd = mkdtempSync(join(tmpdir(), "cuekit-readonly-"));
+		const fakeCuekitHome = mkdtempSync(join(tmpdir(), "cuekit-home-"));
+		// 0o500 = read + execute, no write. mkdirSync inside the
+		// worktree will EACCES.
+		chmodSync(readOnlyCwd, 0o500);
+
+		const localDb = new Database(":memory:");
+		localDb.exec("pragma foreign_keys = ON;");
+		runMigrations(localDb);
+		createSession(localDb, {
+			id: "s1",
+			project_root: readOnlyCwd,
+			worktree_path: readOnlyCwd,
+			parent_agent_kind: "cuekit-cli",
+		});
+		const localPanes = new PaneBackend({ sendKeysDelayMs: 0 });
+		// Pass cuekitHomeDir explicitly so the test never touches the
+		// operator's real ~/.cuekit/.
+		const localAdapter = createPiAdapter(localDb, localPanes, {
+			launchCommandOverride: () => "true",
+			cuekitHomeDir: fakeCuekitHome,
+		});
+
+		try {
+			const result = await localAdapter.submit({
+				session_id: "s1",
+				spec: { agent_kind: "pi", cwd: readOnlyCwd, objective: "no-op" },
+			});
+			if (!result.ok) throw new Error(`submit failed: ${result.error.message}`);
+			const task_id = result.value.task_id;
+
+			expect(await waitForPaneDeath(localPanes, task_id)).toBe(true);
+
+			// Sentinel must be in the global fallback dir, not the
+			// (unwritable) worktree.
+			const globalSentinel = globalTaskArtifactPaths(fakeCuekitHome, task_id).exitCodePath;
+			expect(readFileSync(globalSentinel, "utf8")).toMatch(/cuekit_exit=0/);
+
+			const view = await localAdapter.status(task_id);
+			expect(view.status).toBe("completed");
+			expect(getTaskById(localDb, task_id)?.status).toBe("completed");
+		} finally {
+			localDb.close();
+			// Restore writable so cleanup works.
+			chmodSync(readOnlyCwd, 0o700);
+			rmSync(readOnlyCwd, { recursive: true, force: true });
+			rmSync(fakeCuekitHome, { recursive: true, force: true });
+		}
 	});
 
 	it("concurrent status() polls after pane death don't throw (race protection)", async () => {

@@ -15,6 +15,10 @@ export interface ClaudeCodeAdapterOptions {
 	availableModels?: string[];
 	// Optional logger forwarded to the shared pane adapter. Defaults silent.
 	logger?: Logger;
+	// Override cuekit's home dir (default `~/.cuekit/`). Used as the
+	// fallback location for the exit-code sentinel when the worktree
+	// is unwritable. Tests set this to a tmpdir.
+	cuekitHomeDir?: string;
 }
 
 export interface BuildClaudeCodeLaunchCommandOptions {
@@ -71,6 +75,6 @@ export function createClaudeCodeAdapter(
 			},
 			buildLaunchCommand: builder,
 		},
-		{ db, panes, logger: options.logger },
+		{ db, panes, logger: options.logger, cuekitHomeDir: options.cuekitHomeDir },
 	);
 }
