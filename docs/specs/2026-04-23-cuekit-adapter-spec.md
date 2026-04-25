@@ -125,7 +125,7 @@ This layout is the flat one proven by isuner (1 issue = 1 tmux session). Claude 
 #### 3.7.1 Layout
 
 - one tmux session per cuekit task
-  - name: `cuekit-task-{task_id_short}` (stable for the life of the task)
+  - name: `cuekit-task-{task_id}` (stable for the life of the task)
   - created at `submit` time, killed at terminal state
   - holds exactly one pane running the child runtime
 - the cuekit orchestration session is **not** represented in tmux; it only lives as a `session_id` foreign key on the task row
@@ -175,7 +175,7 @@ The pane backend makes debug attach a first-class v0 capability.
 Each live task exposes an `attach_hint` string that a human (or a parent tool) can run to drop directly into the live child pane:
 
 ```text
-tmux attach-session -t cuekit-task-{task_id_short}
+tmux attach-session -t cuekit-task-{task_id}
 ```
 
 `attach_hint` is returned from `status()` while the task is non-terminal and `supports_attach` is `true`.
@@ -217,7 +217,7 @@ interface PersistedTaskRecord {
   status: TaskStatus;
   native: {
     // v0 pane backend (tmux), 1 task = 1 tmux session
-    tmux_session_name?: string;   // e.g. "cuekit-task-{task_id_short}"
+    tmux_session_name?: string;   // e.g. "cuekit-task-{task_id}"
     tmux_pane_id?: string;        // also surfaced as native_task_ref
     // runtime-native identifiers, if the child runtime exposes them
     runtime_session_id?: string;
@@ -304,6 +304,16 @@ Adapters should infer `files_changed` from the best available source in this ord
 2. patch/diff artifact
 3. transcript parsing
 4. empty array if unavailable
+
+**v0 limitation**: the shipped pane adapters (`pi`, `claude-code`,
+`opencode`) all return `files_changed: []` regardless of whether the
+child actually touched files. None of the runtimes currently emit
+machine-readable file-change metadata, and transcript parsing is
+deferred to v0.2. Callers that need file enumeration should either
+diff the worktree themselves (`git status` against the
+session's `worktree_path`) or wait for adapter-specific transcript
+parsers. The `artifacts` array is correctly populated in v0
+(transcript ref + result.json ref when present).
 
 ### 6.3 artifacts
 

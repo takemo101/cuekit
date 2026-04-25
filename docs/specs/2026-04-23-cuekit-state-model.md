@@ -169,7 +169,13 @@ type TaskStatus =
 - `summary` may be used for either the latest normalized status summary or the final result summary
 - `result_ref` and `transcript_ref` are optional because not all runtimes can guarantee both
 - `parent_task_id` is sufficient for simple lineage in v0; a dedicated lineage table is not needed yet
-- `native_task_ref` under the v0 tmux pane backend stores the tmux `pane_id` of the child (see adapter spec Section 3.7). The tmux session name (`cuekit-task-{task_id_short}`) is derivable from `id`, so it does not need its own column. v0 uses a flat 1 task = 1 tmux session layout (no window hierarchy).
+- `native_task_ref` under the v0 tmux pane backend stores the tmux `pane_id` of the child (see adapter spec Section 3.7). The tmux session name (`cuekit-task-{task_id}`) is derivable from `id`, so it does not need its own column. v0 uses a flat 1 task = 1 tmux session layout (no window hierarchy).
+- **Naming map** — the same value surfaces under three names across
+  three layers (historical, kept stable for v0; reconcile in v0.2):
+  - DB column: `native_task_ref` — generic so non-tmux adapters can reuse it.
+  - `TaskStatusView.native_task_id` — protocol-facing field name.
+  - `TaskStatusView.metadata.tmux_pane_id` — adapter-specific echo so callers operating on tmux don't have to know what "native" means.
+  Operators reading `get_task_status` can treat all three as redundant projections of the same value.
 - `model` stores the requested runtime model name (e.g. `sonnet` for claude-code) if the caller asked for one. Null means the adapter launched the runtime without a model flag and the runtime used its own default. See protocol spec Section 3.4.
 
 ---
