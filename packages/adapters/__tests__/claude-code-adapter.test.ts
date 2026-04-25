@@ -162,6 +162,40 @@ describe("submit", () => {
 			expect(result.error.code).toBe("submit_failed");
 		}
 	});
+
+	it("cleans up the orphan .cuekit/tasks/<id>/ dir on spawn failure (P2-6)", async () => {
+		// When mkdirSync succeeds but tmux spawn fails, the per-task
+		// dir would otherwise remain empty on disk (no transcript ever
+		// flushes, no sentinel ever writes). Operators had to gc by
+		// hand. Submit now removes the dir on the failure path.
+		const { existsSync, mkdtempSync, rmSync } = await import("node:fs");
+		const { tmpdir: osTmpdir } = await import("node:os");
+		const { join: pathJoin } = await import("node:path");
+		const tmp = mkdtempSync(pathJoin(osTmpdir(), "cuekit-orphan-"));
+		try {
+			createSession(db, {
+				id: "s_tmp",
+				project_root: tmp,
+				worktree_path: tmp,
+				parent_agent_kind: "claude-code",
+			});
+			runner.queueResponse({ stdout: "", stderr: "tmux: boom", exitCode: 1 });
+			const result = await adapter.submit({
+				spec: { agent_kind: "claude-code", cwd: tmp, objective: "x" },
+				session_id: "s_tmp",
+			});
+			expect(result.ok).toBe(false);
+			// The .cuekit/tasks/* dir for this task must NOT linger.
+			const tasksDir = pathJoin(tmp, ".cuekit", "tasks");
+			if (existsSync(tasksDir)) {
+				const { readdirSync } = await import("node:fs");
+				const entries = readdirSync(tasksDir);
+				expect(entries).toHaveLength(0);
+			}
+		} finally {
+			rmSync(tmp, { recursive: true, force: true });
+		}
+	});
 });
 
 describe("status", () => {
@@ -196,7 +230,11 @@ describe("status", () => {
 		expect(view.error?.code).toBe("task_not_found");
 	});
 
-	it("returns task_not_found for a task owned by a different adapter (cross-adapter guard)", async () => {
+	it("returns permission_denied for a task owned by a different adapter (cross-adapter guard)", async () => {
+		// Oracle P2-4 (v0): cross-adapter access is `permission_denied`,
+		// not `task_not_found`. The row exists; the caller routed it to
+		// the wrong runtime. Conflating the two codes blinds operators
+		// to a real control-surface routing bug.
 		const piAdapter = createPiAdapter(db, new PaneBackend({ runner, sendKeysDelayMs: 0 }), {
 			launchCommandOverride: () => "sleep 60",
 		});
@@ -207,8 +245,13 @@ describe("status", () => {
 		if (!piResult.ok) throw new Error("setup failed");
 		const view = await adapter.status(piResult.value.task_id);
 		expect(view.status).toBe("failed");
-		expect(view.error?.code).toBe("task_not_found");
+		expect(view.error?.code).toBe("permission_denied");
+		expect(view.error?.message).toContain("pi");
 		expect(view.error?.message).toContain("claude-code");
+		expect(view.error?.details).toMatchObject({
+			owning_agent_kind: "pi",
+			attempted_by: "claude-code",
+		});
 		// Regression for Oracle re-review P1-4: the cross-adapter
 		// rejection path used to emit `created_at = updated_at =
 		// "1970-01-01..."` to satisfy a stricter schema. Now the
@@ -310,7 +353,7 @@ describe("cancel", () => {
 		expect(ack.ok).toBe(false);
 	});
 
-	it("returns task_not_found for cross-adapter task (guard)", async () => {
+	it("returns permission_denied for cross-adapter task (guard)", async () => {
 		const piAdapter = createPiAdapter(db, new PaneBackend({ runner, sendKeysDelayMs: 0 }), {
 			launchCommandOverride: () => "sleep 60",
 		});
@@ -322,7 +365,8 @@ describe("cancel", () => {
 		const ack = await adapter.cancel(piResult.value.task_id);
 		expect(ack.ok).toBe(false);
 		if (!ack.ok) {
-			expect(ack.error.code).toBe("task_not_found");
+			// P2-4 (v0): cross-adapter access is permission_denied, not task_not_found.
+			expect(ack.error.code).toBe("permission_denied");
 		}
 		// Pi's task should remain untouched
 		const piTask = getTaskById(db, piResult.value.task_id);

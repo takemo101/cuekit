@@ -82,5 +82,12 @@ export function wrapLaunchCommandWithExitCode(launchCommand: string, exitCodePat
 	// The sentinel path contains only `t_<hex>` task ids and workspace
 	// paths. Quote anyway in case the worktree contains spaces.
 	const quoted = `'${exitCodePath.replace(/'/g, `'\\''`)}'`;
-	return `( ${launchCommand} ) ; printf 'cuekit_exit=%d\\n' "$?" > ${quoted} 2>/dev/null`;
+	const errQuoted = `'${`${exitCodePath}.err`.replace(/'/g, `'\\''`)}'`;
+	// Redirect stderr from the sentinel write to a sibling `.err` file
+	// rather than `/dev/null`, so a write failure (disk full, permission
+	// flip mid-run, etc.) leaves a diagnosable trace next to the
+	// sentinel — earlier the trailer's stderr was discarded outright,
+	// hiding real ops issues. status() ignores `.err`; operators see it
+	// when they list the task dir. Non-existent `.err` is the happy path.
+	return `( ${launchCommand} ) ; printf 'cuekit_exit=%d\\n' "$?" > ${quoted} 2>${errQuoted}`;
 }

@@ -68,9 +68,13 @@ describe("wrapLaunchCommandWithExitCode", () => {
 		expect(wrapped).toContain("printf 'cuekit_exit=%d\\n'");
 	});
 
-	it("redirects stderr of the trailer so a write failure doesn't pollute the transcript", () => {
+	it("redirects stderr of the trailer to a sibling .err file (diagnosable, no transcript pollution)", () => {
 		const wrapped = wrapLaunchCommandWithExitCode("anything", SENTINEL);
-		expect(wrapped).toContain("2>/dev/null");
+		// Earlier the trailer used `2>/dev/null`, which hid disk-full /
+		// permission-flip diagnostics. The sibling `.err` file lets ops
+		// recover the real failure reason without leaking into the pane.
+		expect(wrapped).toContain(`2>'${SENTINEL}.err'`);
+		expect(wrapped).not.toContain("2>/dev/null");
 	});
 
 	it("single-quotes the sentinel path so worktrees with spaces survive", () => {
