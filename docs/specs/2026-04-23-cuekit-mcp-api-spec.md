@@ -30,6 +30,7 @@ The cuekit MCP API is designed to be:
 4. **truthful** — capability differences are surfaced explicitly, not hidden
 5. **agent-friendly** — request/response shapes are easy for coding agents to use reliably
 6. **schema-driven** — command input/output schemas are defined once in Zod and reused for CLI, MCP, store decoding, and adapter normalization
+7. **operator-friendly** — minimal admin / helper tools for DB hygiene and self-describing install live alongside the protocol projection, so cuekit can be operated without standing up a parallel admin surface (see §11.5 / §11.6)
 
 ---
 
@@ -42,7 +43,8 @@ Implications:
 - each cuekit operation is defined as an `incur` command
 - command args/options/output are described with Zod schemas
 - the same command definition is used for both CLI execution and MCP tool exposure
-- MCP should remain a thin projection of cuekit protocol operations, not a separate orchestration layer
+- the MCP **protocol projection** (§5–§11) must remain thin: each tool maps 1:1 to a cuekit-protocol operation, not a higher-level orchestration step
+- **management** (§11.5) and **helper** (§11.6) tools may exist outside the protocol projection. They serve goal #7 (operator-friendly) without inflating the protocol surface itself; conformance clients can still ignore them and project the protocol cleanly
 
 ---
 
