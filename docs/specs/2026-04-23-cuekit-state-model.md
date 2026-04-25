@@ -138,7 +138,8 @@ Represents a delegated child task created by an orchestration session.
 | `transcript_ref` | text | no | Path/reference to transcript/log file |
 | `created_at` | text | yes | ISO 8601 timestamp |
 | `updated_at` | text | yes | ISO 8601 timestamp |
-| `completed_at` | text | no | ISO 8601 timestamp |
+| `started_at` | text | no | ISO 8601 timestamp; written on the first `queued → running` transition, preserved across later transitions |
+| `completed_at` | text | no | ISO 8601 timestamp; written on the first transition into a terminal status, preserved (COALESCE) across same-state idempotent re-writes |
 
 ### 6.3 Task Status Enum
 
@@ -229,6 +230,7 @@ create table tasks (
   transcript_ref text,
   created_at text not null,
   updated_at text not null,
+  started_at text,
   completed_at text,
   foreign key(session_id) references sessions(id)
 );
@@ -306,11 +308,30 @@ queued -> running -> blocked
 ```text
 <worktree>/.cuekit/
   tasks/
-    <task-id>.result.json
-    <task-id>.transcript.md
+    <task-id>/
+      transcript.txt   # tmux pipe-pane capture of the child's session
+      result.json      # runtime-emitted normalized result, if any
+      exit-code        # `cuekit_exit=<n>` written by the wrapped
+                       # launch command on child exit
 ```
 
-This keeps the persistent index global while storing large outputs close to the actual worktree.
+Each task gets its own subdirectory so transcript, result, and the
+exit-code sentinel travel together and can be deleted as a unit.
+
+The **exit-code sentinel** is what lets cuekit distinguish a clean
+child exit (`completed`) from a runtime crash (`failed`). The pane
+backend wraps the adapter's launch command with a POSIX-sh trailer
+`( <cmd> ) ; printf 'cuekit_exit=%d\n' "$?" > exit-code`, so the
+child's real exit code lands on disk after the host shell exits. Pane
+adapters read this on pane-death detection and map exit 0 to
+`completed`, non-zero to `failed`. A missing sentinel (the host shell
+was SIGKILL'd before it could write) is treated as `failed` with a
+"without writing exit code" summary.
+
+This keeps the persistent index global while storing large outputs
+close to the actual worktree. Operators can delete `<worktree>/.cuekit/`
+to fully reset a workspace's task history without touching the global
+DB.
 
 ---
 
