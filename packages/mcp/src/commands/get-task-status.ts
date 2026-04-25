@@ -18,13 +18,16 @@ export async function runGetTaskStatus(
 ): Promise<GetTaskStatusOutput> {
 	const task = getTaskById(ctx.db, input.task_id);
 	if (!task) {
-		const now = new Date().toISOString();
+		// Minimal error envelope (mcp-api-spec §6.5). Earlier revisions
+		// fabricated `created_at = updated_at = new Date()` and
+		// `agent_kind: "unknown"` to satisfy a stricter schema; that
+		// produced a typed lie callers couldn't distinguish from a real
+		// just-started task. The schema (#TaskStatusViewSchema) now
+		// makes those fields optional precisely so this case can be
+		// honest about what it doesn't know.
 		return {
 			task_id: input.task_id,
-			agent_kind: "unknown",
 			status: "failed",
-			created_at: now,
-			updated_at: now,
 			error: {
 				code: "task_not_found",
 				message: `task '${input.task_id}' not found`,
@@ -34,6 +37,10 @@ export async function runGetTaskStatus(
 	}
 	const adapterRes = ctx.registry.require(task.target_agent_kind);
 	if (!adapterRes.ok) {
+		// Adapter is unregistered — we know the task's real timestamps
+		// from the row, so emit them honestly. agent_kind is the
+		// runtime the row claims to belong to (still useful even if
+		// the adapter is missing).
 		return {
 			task_id: input.task_id,
 			agent_kind: task.target_agent_kind,

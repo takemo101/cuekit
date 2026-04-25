@@ -209,6 +209,12 @@ describe("status", () => {
 		expect(view.status).toBe("failed");
 		expect(view.error?.code).toBe("task_not_found");
 		expect(view.error?.message).toContain("claude-code");
+		// Regression for Oracle re-review P1-4: the cross-adapter
+		// rejection path used to emit `created_at = updated_at =
+		// "1970-01-01..."` to satisfy a stricter schema. Now the
+		// envelope must be honest and omit them.
+		expect(view.created_at).toBeUndefined();
+		expect(view.updated_at).toBeUndefined();
 	});
 });
 
