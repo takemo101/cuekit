@@ -176,14 +176,18 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 			if (!specCheck.ok) {
 				return { ok: false, error: specCheck.error };
 			}
-			// Guard against bogus session_id — createTask would throw a raw FK
-			// error, which should be a structured invalid_input instead.
+			// Guard against bogus session_id — createTask would throw a raw
+			// FK error otherwise. Use `session_not_found` (matches
+			// delete_session and the spec §12.2 / protocol §12 enum) so
+			// callers can distinguish a missing session from generic
+			// invalid input. Earlier revisions returned `invalid_input`,
+			// which conflicted with the spec sync landed in #40.
 			const session = getSessionById(db, input.session_id);
 			if (!session) {
 				return {
 					ok: false,
 					error: {
-						code: "invalid_input",
+						code: "session_not_found",
 						message: `session '${input.session_id}' not found`,
 						retryable: false,
 					},

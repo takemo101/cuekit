@@ -161,26 +161,35 @@ describe("updateTaskStatus", () => {
 		expect(() => updateTaskStatus(db, "t1", "completed")).toThrow(/defect/);
 	});
 
-	it("preserves completed_at across repeated terminal updates", () => {
-		// running → completed → failed is allowed per ALLOWED_TRANSITIONS.
-		// Wait — completed is terminal, so completed → failed is actually
-		// forbidden. Use the legitimate path: running → completed → (defect
-		// throw). Instead test preservation via running → failed → (defect
-		// throw on re-completion). The underlying invariant (once set,
-		// completed_at is sticky) is still meaningful when a future caller
-		// adds a new terminal transition the spec might allow.
+	it("rejects a terminal→terminal cross-state flip as a defect (e.g. completed → failed)", () => {
+		// Same-state re-writes are idempotent (see "is idempotent on
+		// same-state writes" above), but a flip between two distinct
+		// terminal states is still forbidden per spec §13.1 — once
+		// completed, a task cannot become failed.
 		updateTaskStatus(db, "t1", "running");
-		const first = updateTaskStatus(db, "t1", "completed");
-		const firstEnd = first?.completed_at;
-		// Second terminal transition should be a defect, but if it ever
-		// is allowed in the future, completed_at must be sticky.
+		updateTaskStatus(db, "t1", "completed");
 		expect(() => updateTaskStatus(db, "t1", "failed")).toThrow(/defect/);
-		const after = getTaskById(db, "t1");
-		expect(after?.completed_at).toBe(firstEnd ?? "");
 	});
 
 	it("returns null for unknown id", () => {
 		expect(updateTaskStatus(db, "nope", "running")).toBeNull();
+	});
+
+	it("is idempotent on same-state writes (no-op, no updated_at bump)", async () => {
+		// The Oracle re-review caught a race: two concurrent status() polls
+		// can both see a dead pane and both call completeTask(completed).
+		// validateTaskTransition used to throw on `completed → completed`,
+		// which surfaced as a defect on the racer-loser. Self-edges are now
+		// no-ops at the validator AND short-circuit before the SQL update,
+		// so updated_at doesn't bump on a same-state observation either.
+		updateTaskStatus(db, "t1", "running");
+		const first = getTaskById(db, "t1");
+		await Bun.sleep(2);
+		// Same-state again: should be a no-op, return current row.
+		const second = updateTaskStatus(db, "t1", "running");
+		expect(second?.updated_at).toBe(first?.updated_at ?? "");
+		// And no defect — the second arrival in the race must not throw.
+		expect(() => updateTaskStatus(db, "t1", "running")).not.toThrow();
 	});
 });
 
@@ -333,6 +342,20 @@ describe("completeTask", () => {
 		// forbidden by ALLOWED_TRANSITIONS).
 		completeTask(db, { id: "t1", status: "completed" });
 		expect(() => completeTask(db, { id: "t1", status: "failed" })).toThrow(/defect/);
+	});
+
+	it("is idempotent on a same-terminal repeat (concurrent-status race protection)", () => {
+		// Two concurrent status() polls both see a dead pane and both
+		// dispatch completeTask(completed). The race-loser previously
+		// threw a defect on `completed → completed`. With self-edges
+		// allowed at the validator, the second arrival now succeeds
+		// without disturbing the row. completed_at stays sticky via
+		// COALESCE.
+		const first = completeTask(db, { id: "t1", status: "completed" });
+		const firstEnd = first?.completed_at;
+		expect(() => completeTask(db, { id: "t1", status: "completed" })).not.toThrow();
+		const after = getTaskById(db, "t1");
+		expect(after?.completed_at).toBe(firstEnd ?? "");
 	});
 
 	// Regression: earlier impl blindly set summary/result_ref/transcript_ref

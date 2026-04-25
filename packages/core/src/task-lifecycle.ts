@@ -56,6 +56,14 @@ const ALLOWED_TRANSITIONS: Readonly<Record<TaskStatus, ReadonlyArray<TaskStatus>
 };
 
 export function validateTaskTransition(from: TaskStatus, to: TaskStatus): LifecycleCheck {
+	// Same-state writes are no-ops, not transitions. Concurrent observers
+	// that race to the same terminal status (e.g. two `status()` polls
+	// both seeing the pane die and both calling `completeTask(completed)`)
+	// must not throw a defect — the second arrival sees the row already
+	// in the target state and should return cleanly. Allowing self-edges
+	// here is the simplest way to make that race idempotent at the only
+	// validation site.
+	if (from === to) return { ok: true };
 	if (!ALLOWED_TRANSITIONS[from].includes(to)) {
 		return {
 			ok: false,

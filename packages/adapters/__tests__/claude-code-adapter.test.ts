@@ -100,14 +100,18 @@ describe("submit", () => {
 		expect(runner.calls).toHaveLength(0);
 	});
 
-	it("rejects unknown session_id with invalid_input (no FK error leaks)", async () => {
+	it("rejects unknown session_id with session_not_found (no FK error leaks)", async () => {
+		// Earlier revisions returned `invalid_input` here, but the spec
+		// sync in #40 carved out `session_not_found` as the canonical
+		// code for "session id is well-formed but the row is missing"
+		// (matches what delete_session returns).
 		const result = await adapter.submit({
 			spec: { agent_kind: "claude-code", objective: "x" },
 			session_id: "s_missing",
 		});
 		expect(result.ok).toBe(false);
 		if (!result.ok) {
-			expect(result.error.code).toBe("invalid_input");
+			expect(result.error.code).toBe("session_not_found");
 			expect(result.error.message).toContain("s_missing");
 		}
 		// And nothing in tmux either

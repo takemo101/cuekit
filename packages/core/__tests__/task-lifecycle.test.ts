@@ -105,12 +105,15 @@ describe("validateTaskTransition", () => {
 		expect(validateTaskTransition("blocked", "running").ok).toBe(true);
 	});
 
-	it("rejects same-state transitions", () => {
-		const result = validateTaskTransition("running", "running");
-		expect(result.ok).toBe(false);
-		if (!result.ok) {
-			expect(result.error.code).toBe("invalid_state");
-		}
+	it("allows same-state self-edges (idempotent — concurrent observer races)", () => {
+		// Self-edges aren't transitions; the validator deliberately
+		// accepts them so a concurrent status() race that re-confirms
+		// an already-set terminal state doesn't throw a defect on the
+		// race-loser. See task-store.completeTask / updateTaskStatus
+		// for the call-site short-circuits that pair with this.
+		expect(validateTaskTransition("running", "running").ok).toBe(true);
+		expect(validateTaskTransition("completed", "completed").ok).toBe(true);
+		expect(validateTaskTransition("failed", "failed").ok).toBe(true);
 	});
 
 	it("rejects queued → completed (cannot skip running)", () => {
