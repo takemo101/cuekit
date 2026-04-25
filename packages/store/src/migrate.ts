@@ -8,6 +8,7 @@ const MIGRATIONS = [
 	"001-init.sql",
 	"002-tasks-updated-at-index.sql",
 	"003-tasks-started-at.sql",
+	"004-tasks-rename-target-agent-kind.sql",
 ] as const;
 
 // Bootstrap table created outside the migration files so it can be relied on

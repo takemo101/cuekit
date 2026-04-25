@@ -36,7 +36,7 @@ describe("createTask", () => {
 		const t = createTask(db, {
 			id: "t1",
 			session_id: "s1",
-			target_agent_kind: "claude-code",
+			agent_kind: "claude-code",
 			objective: "Do a thing",
 		});
 		expect(t.status).toBe("queued");
@@ -49,7 +49,7 @@ describe("createTask", () => {
 		const inserted = createTask(db, {
 			id: "t1",
 			session_id: "s1",
-			target_agent_kind: "pi",
+			agent_kind: "pi",
 			objective: "x",
 		});
 		const fetched = getTaskById(db, "t1");
@@ -60,7 +60,7 @@ describe("createTask", () => {
 		const t = createTask(db, {
 			id: "t1",
 			session_id: "s1",
-			target_agent_kind: "claude-code",
+			agent_kind: "claude-code",
 			model: "sonnet",
 			objective: "x",
 		});
@@ -68,11 +68,11 @@ describe("createTask", () => {
 	});
 
 	it("persists parent_task_id for lineage", () => {
-		createTask(db, { id: "t1", session_id: "s1", target_agent_kind: "pi", objective: "a" });
+		createTask(db, { id: "t1", session_id: "s1", agent_kind: "pi", objective: "a" });
 		const t2 = createTask(db, {
 			id: "t2",
 			session_id: "s1",
-			target_agent_kind: "pi",
+			agent_kind: "pi",
 			objective: "b",
 			parent_task_id: "t1",
 		});
@@ -84,7 +84,7 @@ describe("createTask", () => {
 			createTask(db, {
 				id: "t1",
 				session_id: "missing",
-				target_agent_kind: "pi",
+				agent_kind: "pi",
 				objective: "x",
 			}),
 		).toThrow();
@@ -97,7 +97,7 @@ describe("getTaskById", () => {
 	});
 
 	it("returns the stored task", () => {
-		createTask(db, { id: "t1", session_id: "s1", target_agent_kind: "pi", objective: "x" });
+		createTask(db, { id: "t1", session_id: "s1", agent_kind: "pi", objective: "x" });
 		const t = getTaskById(db, "t1");
 		expect(t?.id).toBe("t1");
 	});
@@ -111,8 +111,8 @@ describe("listTasksBySession", () => {
 			worktree_path: "/w",
 			parent_agent_kind: "pi",
 		});
-		createTask(db, { id: "t1", session_id: "s1", target_agent_kind: "pi", objective: "a" });
-		createTask(db, { id: "t2", session_id: "s2", target_agent_kind: "pi", objective: "b" });
+		createTask(db, { id: "t1", session_id: "s1", agent_kind: "pi", objective: "a" });
+		createTask(db, { id: "t2", session_id: "s2", agent_kind: "pi", objective: "b" });
 		const list = listTasksBySession(db, "s1");
 		expect(list).toHaveLength(1);
 		expect(list[0]?.id).toBe("t1");
@@ -125,7 +125,7 @@ describe("listTasksBySession", () => {
 
 describe("updateTaskStatus", () => {
 	beforeEach(() => {
-		createTask(db, { id: "t1", session_id: "s1", target_agent_kind: "pi", objective: "x" });
+		createTask(db, { id: "t1", session_id: "s1", agent_kind: "pi", objective: "x" });
 	});
 
 	it("sets completed_at on terminal transitions", () => {
@@ -195,7 +195,7 @@ describe("updateTaskStatus", () => {
 
 describe("updateTaskNativeRef", () => {
 	beforeEach(() => {
-		createTask(db, { id: "t1", session_id: "s1", target_agent_kind: "pi", objective: "x" });
+		createTask(db, { id: "t1", session_id: "s1", agent_kind: "pi", objective: "x" });
 	});
 
 	it("sets the native_task_ref (e.g. tmux pane_id after adapter spawn)", () => {
@@ -223,7 +223,7 @@ describe("updateTaskNativeRef", () => {
 
 describe("updateTaskSummary", () => {
 	beforeEach(() => {
-		createTask(db, { id: "t1", session_id: "s1", target_agent_kind: "pi", objective: "x" });
+		createTask(db, { id: "t1", session_id: "s1", agent_kind: "pi", objective: "x" });
 	});
 
 	it("sets the summary for progress reporting", () => {
@@ -246,7 +246,7 @@ describe("updateTaskSummary", () => {
 
 describe("updateTaskRefs", () => {
 	beforeEach(() => {
-		createTask(db, { id: "t1", session_id: "s1", target_agent_kind: "pi", objective: "x" });
+		createTask(db, { id: "t1", session_id: "s1", agent_kind: "pi", objective: "x" });
 	});
 
 	it("sets transcript_ref alone", () => {
@@ -304,7 +304,7 @@ describe("completeTask", () => {
 	// `cancelled` / `failed` don't need this since both are reachable
 	// from queued, but running through it keeps fixtures uniform.
 	beforeEach(() => {
-		createTask(db, { id: "t1", session_id: "s1", target_agent_kind: "pi", objective: "x" });
+		createTask(db, { id: "t1", session_id: "s1", agent_kind: "pi", objective: "x" });
 		updateTaskStatus(db, "t1", "running");
 	});
 
@@ -409,7 +409,7 @@ describe("listTasks (cross-session filter + keyset pagination)", () => {
 			createTask(db, {
 				id: `${session}-${agent}-${i}`,
 				session_id: session,
-				target_agent_kind: agent,
+				agent_kind: agent,
 				objective: `obj ${i}`,
 			});
 			// Tick so `updated_at` differs and the walk is deterministic.
@@ -551,7 +551,7 @@ describe("listTasks (cross-session filter + keyset pagination)", () => {
 			createTask(db, {
 				id: `fixed-${i}`,
 				session_id: "s1",
-				target_agent_kind: "pi",
+				agent_kind: "pi",
 				objective: `x${i}`,
 			});
 		}
@@ -588,7 +588,7 @@ describe("listTasks (cross-session filter + keyset pagination)", () => {
 		createTask(db, {
 			id: "mid-walk",
 			session_id: "s1",
-			target_agent_kind: "pi",
+			agent_kind: "pi",
 			objective: "arrived mid-walk",
 		});
 		const next = listTasks(db, { limit: 2, cursor: cursorOf(anchor) });
@@ -605,7 +605,7 @@ describe("listTasks (cross-session filter + keyset pagination)", () => {
 
 describe("deleteTask", () => {
 	beforeEach(() => {
-		createTask(db, { id: "t1", session_id: "s1", target_agent_kind: "pi", objective: "x" });
+		createTask(db, { id: "t1", session_id: "s1", agent_kind: "pi", objective: "x" });
 	});
 
 	it("removes the row and returns true", () => {

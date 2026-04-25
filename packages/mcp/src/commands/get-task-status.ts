@@ -35,7 +35,7 @@ export async function runGetTaskStatus(
 			},
 		};
 	}
-	const adapterRes = ctx.registry.require(task.target_agent_kind);
+	const adapterRes = ctx.registry.require(task.agent_kind);
 	if (!adapterRes.ok) {
 		// Adapter is unregistered — we know the task's real timestamps
 		// from the row, so emit them honestly. agent_kind is the
@@ -43,7 +43,7 @@ export async function runGetTaskStatus(
 		// the adapter is missing).
 		return {
 			task_id: input.task_id,
-			agent_kind: task.target_agent_kind,
+			agent_kind: task.agent_kind,
 			status: "failed",
 			created_at: task.created_at,
 			updated_at: task.updated_at,

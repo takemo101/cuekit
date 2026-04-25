@@ -51,9 +51,9 @@ beforeEach(() => {
 afterEach(async () => {
 	// Defensive cleanup: kill any lingering tmux sessions from this run so
 	// parallel test invocations don't leak state.
-	const rows = db
-		.prepare("select id from tasks where target_agent_kind = 'claude-code'")
-		.all() as Array<{ id: string }>;
+	const rows = db.prepare("select id from tasks where agent_kind = 'claude-code'").all() as Array<{
+		id: string;
+	}>;
 	for (const row of rows) {
 		try {
 			await panes.killTask(row.id);

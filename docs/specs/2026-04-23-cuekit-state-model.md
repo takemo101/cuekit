@@ -128,7 +128,7 @@ Represents a delegated child task created by an orchestration session.
 | `id` | text | yes | Primary key |
 | `session_id` | text | yes | Foreign key to `sessions.id` |
 | `parent_task_id` | text | no | Optional self-reference for simple task lineage |
-| `target_agent_kind` | text | yes | Child runtime family |
+| `agent_kind` | text | yes | Child runtime family |
 | `model` | text | no | Requested runtime model name (e.g. `sonnet`); null if not specified at submit |
 | `objective` | text | yes | Human-readable task objective |
 | `status` | text | yes | Task lifecycle status |
@@ -226,7 +226,7 @@ create table tasks (
   id text primary key,
   session_id text not null,
   parent_task_id text,
-  target_agent_kind text not null,
+  agent_kind text not null,
   model text,
   objective text not null,
   status text not null,
@@ -256,7 +256,7 @@ create index idx_sessions_status on sessions(status);
 create index idx_tasks_session_id on tasks(session_id);
 create index idx_tasks_parent_task_id on tasks(parent_task_id);
 create index idx_tasks_status on tasks(status);
-create index idx_tasks_target_agent_kind on tasks(target_agent_kind);
+create index idx_tasks_agent_kind on tasks(agent_kind);
 ```
 
 These are enough for:
