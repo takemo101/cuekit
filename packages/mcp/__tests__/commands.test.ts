@@ -24,6 +24,7 @@ import { runDeleteTask } from "../src/commands/delete-task.ts";
 import { runGetTaskResult } from "../src/commands/get-task-result.ts";
 import { runGetTaskStatus } from "../src/commands/get-task-status.ts";
 import { runListAdapters } from "../src/commands/list-adapters.ts";
+import { runListTaskEvents } from "../src/commands/list-task-events.ts";
 import { runListTasks } from "../src/commands/list-tasks.ts";
 import { runReportTaskEvent } from "../src/commands/report-task-event.ts";
 import { runShowMcpConfig } from "../src/commands/show-mcp-config.ts";
@@ -382,6 +383,47 @@ describe("report-task-event", () => {
 		expect(result.ok).toBe(false);
 		if (!result.ok) expect(result.error.code).toBe("invalid_input");
 		expect(listTaskEvents(db, task_id)).toEqual([]);
+	});
+});
+
+describe("list-task-events", () => {
+	it("returns task events in canonical sequence order", async () => {
+		const submit = await runSubmitTask(ctx, {
+			objective: "x",
+			agent_kind: "claude-code",
+			cwd: "/tmp",
+		});
+		if (!submit.accepted) throw new Error("setup failed");
+		updateTaskChildTokenHash(
+			db,
+			submit.task_id,
+			"sha256:3a6eb0790f39ac87c94f3856b2dd2c5d110e6811602261a9a923d3bb23adc8b7",
+		);
+		await runReportTaskEvent(ctx, {
+			task_id: submit.task_id,
+			child_token: "data",
+			type: "progress",
+			message: "Running tests",
+		});
+		await runReportTaskEvent(ctx, {
+			task_id: submit.task_id,
+			child_token: "data",
+			type: "completed",
+			message: "Done",
+		});
+
+		const result = await runListTaskEvents(ctx, { task_id: submit.task_id });
+		expect("events" in result).toBe(true);
+		if ("events" in result) {
+			expect(result.events.map((event) => event.type)).toEqual(["progress", "completed"]);
+			expect(result.events[0]?.message).toBe("Running tests");
+		}
+	});
+
+	it("returns task_not_found for unknown tasks", async () => {
+		const result = await runListTaskEvents(ctx, { task_id: "missing" });
+		expect("error" in result).toBe(true);
+		if ("error" in result) expect(result.error.code).toBe("task_not_found");
 	});
 });
 

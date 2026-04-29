@@ -49,6 +49,7 @@ describe("createCli", () => {
 		expect(new Set(mcpNames).size).toBe(mcpNames.length);
 		expect(new Set(cliPaths).size).toBe(cliPaths.length);
 		expect(cliPaths).toContain("task submit");
+		expect(cliPaths).toContain("task events");
 		expect(cliPaths).toContain("adapter list");
 		expect(cliPaths).toContain("tool report");
 		expect(cliPaths).toContain("session delete");
