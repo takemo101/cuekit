@@ -4,7 +4,7 @@
 
 **Goal:** Build cuekit v0 as a Bun/TypeScript monorepo with a minimal delegation protocol, SQLite-backed session/task state, an `incur`-based CLI/MCP control surface, and one end-to-end working adapter path.
 
-**Architecture:** cuekit is implemented as four packages: `@cuekit/core` for pure protocol/schema logic, `@cuekit/store` for SQLite persistence, `@cuekit/adapters` for runtime bindings, and `@cuekit/mcp` for an `incur`-based control surface that exposes the same command definitions as both CLI commands and MCP tools. v0 is delegation-first: submit, status, result, cancel are required; steering is optional.
+**Architecture:** cuekit is implemented as four packages: `@cuekit/core` for pure protocol/schema logic, `@cuekit/store` for SQLite persistence, `@cuekit/adapters` for runtime bindings, and `@cuekit/mcp` for an `incur`-based control surface that projects shared handlers and Zod schemas into grouped CLI commands and flat MCP tools. v0 is delegation-first: submit, status, result, cancel are required; steering is optional.
 
 **Tech Stack:** Bun 1.2+, TypeScript 5.8+, Bun workspaces, Biome 2, Vitest, Zod, Bun SQLite, `incur`, MCP TypeScript SDK.
 
@@ -503,10 +503,12 @@ Include dependencies on:
 - [ ] **Step 2: Implement the `incur` command bootstrap**
 
 Responsibilities:
-- create the shared command tree
-- attach Zod input/output schemas to each command
+- create the shared operation registry / command bootstrap
+- attach Zod input/output schemas to each operation
 - wire store + adapter registry through a command context
-- expose the same commands as CLI and MCP
+- expose operations as grouped CLI commands (`cuekit task submit`, `cuekit adapter list`, ...)
+- expose operations as flat MCP tools (`submit_task`, `list_adapters`, ...)
+- do not provide backwards-compatible flat CLI aliases
 
 - [ ] **Step 3: Write failing tests for `submit_task`**
 
@@ -522,7 +524,7 @@ Responsibilities:
 - call adapter submit
 - persist state
 - return normalized acceptance payload
-- define the command output schema so CLI and MCP share one contract
+- define the operation output schema so CLI and MCP share one contract
 
 - [ ] **Step 5: Write failing tests for `get_task_status` and `get_task_result`**
 
@@ -556,9 +558,9 @@ bun run --filter '@cuekit/mcp' typecheck
 ```
 Expected: all pass
 
-- [ ] **Step 11: Verify CLI/MCP parity manually**
+- [ ] **Step 11: Verify CLI/MCP semantic parity manually**
 
-Run representative flows through both surfaces and confirm they share the same validation and payload shapes.
+Run representative flows through both surfaces and confirm grouped CLI commands and flat MCP tools share the same validation, handlers, and payload shapes.
 
 - [ ] **Step 12: Run workspace checks**
 

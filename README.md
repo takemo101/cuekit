@@ -1,6 +1,6 @@
 # cuekit
 
-Protocol and adapter foundation for orchestrating coding agents. A single [incur](https://github.com/wevm/incur)-based command tree is surfaced as both a CLI and an MCP server, so the same command definitions back `cuekit submit-task ...` from a shell and `submit_task` as an MCP tool call.
+Protocol and adapter foundation for orchestrating coding agents. A single [incur](https://github.com/wevm/incur)-based command tree is surfaced as both a CLI and an MCP server, so the same command definitions back `cuekit submit_task ...` from a shell and `submit_task` as an MCP tool call.
 
 ## Shape
 
@@ -87,7 +87,7 @@ Start the stdio MCP server:
 cuekit --mcp
 ```
 
-Agents that speak MCP can list the `submit_task` / `get_task_status` / `get_task_result` / `cancel_task` / `list_tasks` / `list_adapters` / `steer_task` tools and call them over stdio. See the [incur docs](https://github.com/wevm/incur) for auto-registration via `cuekit mcp add`.
+Agents that speak MCP can list the `submit_task` / `get_task_status` / `get_task_result` / `cancel_task` / `list_tasks` / `list_adapters` / `steer_task` / `delete_task` / `delete_session` / `show_mcp_config` tools and call them over stdio. Use `cuekit show_mcp_config` to print a client configuration snippet.
 
 ## State
 
@@ -128,7 +128,7 @@ The automated suite stubs the child runtime with `sleep` so it never calls Anthr
 
 ```sh
 # One-time setup
-cd packages/mcp && bun link      # registers `cuekit` globally
+just install      # registers `cuekit` globally
 
 # In a real repo where you want the child to work:
 cuekit submit_task --objective "explain this repo in one paragraph" \

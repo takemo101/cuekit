@@ -8,7 +8,7 @@
 
 cuekit is a protocol-first foundation for coordinating coding agents such as pi, Claude Code, and OpenCode. Its core value is not a particular orchestrator implementation, but a shared task protocol and adapter model that let one agent session delegate work to another, monitor progress, steer execution, and collect normalized results.
 
-Orchestration skills, MCP servers, CLIs, and UIs are treated as optional control surfaces built on top of this core. In v0, the primary reference surface is implemented with `incur`, so the same command definitions can be exposed both as CLI commands and as MCP tools.
+Orchestration skills, MCP servers, CLIs, and UIs are treated as optional control surfaces built on top of this core. In v0, the primary reference surface is implemented with `incur`, so CLI commands and MCP tools can share schemas and handlers while presenting names optimized for their callers.
 
 ## 2. Problem
 
@@ -204,10 +204,32 @@ In v0, cuekit should define its reference control surface as typed commands impl
 
 This means:
 
-- the command tree is the primary definition of callable operations
-- CLI commands and MCP tools are generated from the same command definitions
-- input and output schemas are expressed with Zod and attached directly to commands
+- the operation registry is the primary definition of callable operations
+- CLI commands and MCP tools share schemas and handlers, but not necessarily public names
+- human-facing CLI commands are grouped by resource (`task`, `adapter`, `session`, `mcp`)
+- MCP tool names remain stable, flat, snake_case operation names for tool-using agents
+- input and output schemas are expressed with Zod and attached directly to operations
 - orchestration clients may use either CLI or MCP without changing the underlying protocol semantics
+
+The v0 CLI command layout is intentionally resource-oriented and does **not** keep backwards-compatible flat command aliases:
+
+```text
+cuekit task submit
+cuekit task status
+cuekit task result
+cuekit task cancel
+cuekit task list
+cuekit task steer
+cuekit task delete
+
+cuekit adapter list
+
+cuekit session delete
+
+cuekit mcp config
+```
+
+The MCP surface keeps the existing flat tool names (`submit_task`, `get_task_status`, `get_task_result`, `cancel_task`, `list_tasks`, `steer_task`, `delete_task`, `list_adapters`, `delete_session`, `show_mcp_config`) because MCP tools are a protocol-facing contract, not a human CLI vocabulary.
 
 The `@cuekit/mcp` package therefore acts as a control-surface package even though its primary practical role remains MCP exposure for agent callers.
 
@@ -315,7 +337,7 @@ cuekit itself is not the orchestrator. It enables orchestrators.
 - **CLI** for manual submission and inspection
 - **HTTP API** for external controllers
 
-In v0, the MCP server and CLI should be implemented from one `incur` command tree rather than as separate hand-maintained surfaces.
+In v0, the MCP server and CLI should be projected from one schema-backed operation registry rather than as separate hand-maintained surfaces. MCP uses stable flat snake_case tool names; the CLI uses grouped resource commands for human ergonomics.
 
 The orchestrator skill is therefore an optional reference layer that explains how a parent agent should use adapters and protocol operations. It should be explicit-invocation only, never auto-activated during ordinary coding work.
 
