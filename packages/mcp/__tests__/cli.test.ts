@@ -13,13 +13,19 @@ import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { AdapterRegistry, createClaudeCodeAdapter, PaneBackend } from "@cuekit/adapters";
 import { FakeTmuxRunner } from "@cuekit/adapters/testing";
-import { runMigrations } from "@cuekit/store";
+import {
+	createSession,
+	createTask,
+	listTaskEvents,
+	runMigrations,
+	updateTaskChildTokenHash,
+} from "@cuekit/store";
 import { createCli } from "../src/cli.ts";
 import { CUEKIT_OPERATIONS } from "../src/operations.ts";
 
 const WORKSPACE_ROOT = resolve(import.meta.dir, "..", "..", "..");
 
-function makeCli() {
+function makeCliHarness() {
 	const db = new Database(":memory:");
 	db.exec("pragma foreign_keys = ON;");
 	runMigrations(db);
@@ -28,7 +34,11 @@ function makeCli() {
 	registry.register(
 		createClaudeCodeAdapter(db, panes, { launchCommandOverride: () => "sleep 60" }),
 	);
-	return createCli({ db, registry });
+	return { cli: createCli({ db, registry }), db };
+}
+
+function makeCli() {
+	return makeCliHarness().cli;
 }
 
 describe("createCli", () => {
@@ -40,6 +50,7 @@ describe("createCli", () => {
 		expect(new Set(cliPaths).size).toBe(cliPaths.length);
 		expect(cliPaths).toContain("task submit");
 		expect(cliPaths).toContain("adapter list");
+		expect(cliPaths).toContain("tool report");
 		expect(cliPaths).toContain("session delete");
 		expect(cliPaths).toContain("mcp config");
 	});
@@ -283,6 +294,52 @@ describe("createCli", () => {
 		};
 		expect(body.ok).toBe(true);
 		expect(body.data.tasks).toEqual([]);
+	});
+
+	it("serves child report fallback through cuekit tool report", async () => {
+		const { cli, db } = makeCliHarness();
+		createSession(db, {
+			id: "s_cli",
+			project_root: "/tmp",
+			worktree_path: "/tmp",
+			parent_agent_kind: "cuekit-cli",
+		});
+		createTask(db, {
+			id: "t_cli",
+			session_id: "s_cli",
+			agent_kind: "claude-code",
+			objective: "x",
+			status: "running",
+		});
+		updateTaskChildTokenHash(
+			db,
+			"t_cli",
+			"sha256:3a6eb0790f39ac87c94f3856b2dd2c5d110e6811602261a9a923d3bb23adc8b7",
+		);
+		const previousTaskId = process.env.CUEKIT_TASK_ID;
+		const previousToken = process.env.CUEKIT_CHILD_TOKEN;
+		process.env.CUEKIT_TASK_ID = "t_cli";
+		process.env.CUEKIT_CHILD_TOKEN = "data";
+		try {
+			const res = await cli.fetch(
+				new Request(
+					'http://localhost/tool/report?type=progress&message=Running%20tests&payload={"phase":"testing"}',
+				),
+			);
+			expect(res.ok).toBe(true);
+			const body = (await res.json()) as { ok: boolean; data: { ok: boolean } };
+			expect(body.ok).toBe(true);
+			expect(body.data.ok).toBe(true);
+			const events = listTaskEvents(db, "t_cli");
+			expect(events).toHaveLength(1);
+			expect(events[0]?.type).toBe("progress");
+			expect(events[0]?.payload).toEqual({ phase: "testing" });
+		} finally {
+			if (previousTaskId === undefined) delete process.env.CUEKIT_TASK_ID;
+			else process.env.CUEKIT_TASK_ID = previousTaskId;
+			if (previousToken === undefined) delete process.env.CUEKIT_CHILD_TOKEN;
+			else process.env.CUEKIT_CHILD_TOKEN = previousToken;
+		}
 	});
 
 	it("does not keep flat task CLI aliases", async () => {

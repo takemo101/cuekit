@@ -13,7 +13,9 @@ import {
 	getSessionById,
 	getTaskById,
 	listSessionsByWorktree,
+	listTaskEvents,
 	runMigrations,
+	updateTaskChildTokenHash,
 } from "@cuekit/store";
 import type { CommandContext } from "../src/command-context.ts";
 import { runCancelTask } from "../src/commands/cancel-task.ts";
@@ -23,6 +25,7 @@ import { runGetTaskResult } from "../src/commands/get-task-result.ts";
 import { runGetTaskStatus } from "../src/commands/get-task-status.ts";
 import { runListAdapters } from "../src/commands/list-adapters.ts";
 import { runListTasks } from "../src/commands/list-tasks.ts";
+import { runReportTaskEvent } from "../src/commands/report-task-event.ts";
 import { runShowMcpConfig } from "../src/commands/show-mcp-config.ts";
 import { runSteerTask } from "../src/commands/steer-task.ts";
 import { runSubmitTask } from "../src/commands/submit-task.ts";
@@ -236,6 +239,149 @@ describe("cancel-task", () => {
 	it("returns task_not_found for unknown id", async () => {
 		const ack = await runCancelTask(ctx, { task_id: "t_nope" });
 		expect(ack.ok).toBe(false);
+	});
+});
+
+describe("report-task-event", () => {
+	async function submitWithChildToken() {
+		const submit = await runSubmitTask(ctx, {
+			objective: "x",
+			agent_kind: "claude-code",
+			cwd: "/tmp",
+		});
+		if (!submit.accepted) throw new Error("setup failed");
+		updateTaskChildTokenHash(
+			db,
+			submit.task_id,
+			"sha256:3a6eb0790f39ac87c94f3856b2dd2c5d110e6811602261a9a923d3bb23adc8b7",
+		);
+		return submit.task_id;
+	}
+
+	it("appends a progress event after validating the child token", async () => {
+		const task_id = await submitWithChildToken();
+		const result = await runReportTaskEvent(ctx, {
+			task_id,
+			child_token: "data",
+			type: "progress",
+			message: "Running tests",
+			payload: { command: "bun test" },
+		});
+
+		expect(result.ok).toBe(true);
+		const events = listTaskEvents(db, task_id);
+		expect(events).toHaveLength(1);
+		expect(events[0]?.type).toBe("progress");
+		expect(events[0]?.payload).toEqual({ command: "bun test" });
+		expect(getTaskById(db, task_id)?.status).toBe("running");
+	});
+
+	it("falls back to CUEKIT_TASK_ID and CUEKIT_CHILD_TOKEN", async () => {
+		const task_id = await submitWithChildToken();
+		const previousTaskId = process.env.CUEKIT_TASK_ID;
+		const previousToken = process.env.CUEKIT_CHILD_TOKEN;
+		process.env.CUEKIT_TASK_ID = task_id;
+		process.env.CUEKIT_CHILD_TOKEN = "data";
+		try {
+			const result = await runReportTaskEvent(ctx, { type: "progress", message: "wip" });
+			expect(result.ok).toBe(true);
+			expect(listTaskEvents(db, task_id)).toHaveLength(1);
+		} finally {
+			if (previousTaskId === undefined) delete process.env.CUEKIT_TASK_ID;
+			else process.env.CUEKIT_TASK_ID = previousTaskId;
+			if (previousToken === undefined) delete process.env.CUEKIT_CHILD_TOKEN;
+			else process.env.CUEKIT_CHILD_TOKEN = previousToken;
+		}
+	});
+
+	it("terminal reports update task status without waiting for process exit", async () => {
+		const task_id = await submitWithChildToken();
+		const result = await runReportTaskEvent(ctx, {
+			task_id,
+			child_token: "data",
+			type: "completed",
+			message: "Done",
+		});
+
+		expect(result.ok).toBe(true);
+		expect(getTaskById(db, task_id)?.status).toBe("completed");
+		expect(listTaskEvents(db, task_id).map((event) => event.type)).toEqual(["completed"]);
+	});
+
+	it("failed reports set the child-declared failed status", async () => {
+		const task_id = await submitWithChildToken();
+		const result = await runReportTaskEvent(ctx, {
+			task_id,
+			child_token: "data",
+			type: "failed",
+			message: "Tests failed",
+		});
+
+		expect(result.ok).toBe(true);
+		expect(getTaskById(db, task_id)?.status).toBe("failed");
+	});
+
+	it("blocked reports set the child-declared blocked status", async () => {
+		const task_id = await submitWithChildToken();
+		const result = await runReportTaskEvent(ctx, {
+			task_id,
+			child_token: "data",
+			type: "blocked",
+			message: "Need product clarification",
+		});
+
+		expect(result.ok).toBe(true);
+		expect(getTaskById(db, task_id)?.status).toBe("blocked");
+	});
+
+	it("accepts non-terminal help_requested and log report types", async () => {
+		const task_id = await submitWithChildToken();
+		await runReportTaskEvent(ctx, {
+			task_id,
+			child_token: "data",
+			type: "help_requested",
+			message: "Which migration should I use?",
+		});
+		await runReportTaskEvent(ctx, {
+			task_id,
+			child_token: "data",
+			type: "log",
+			message: "debug note",
+		});
+
+		expect(listTaskEvents(db, task_id).map((event) => event.type)).toEqual([
+			"help_requested",
+			"log",
+		]);
+		expect(getTaskById(db, task_id)?.status).toBe("running");
+	});
+
+	it("rejects invalid child tokens without appending an event", async () => {
+		const task_id = await submitWithChildToken();
+		const result = await runReportTaskEvent(ctx, {
+			task_id,
+			child_token: "wrong",
+			type: "progress",
+			message: "wip",
+		});
+
+		expect(result.ok).toBe(false);
+		if (!result.ok) expect(result.error.code).toBe("permission_denied");
+		expect(listTaskEvents(db, task_id)).toEqual([]);
+	});
+
+	it("rejects malformed JSON-looking payload strings", async () => {
+		const task_id = await submitWithChildToken();
+		const result = await runReportTaskEvent(ctx, {
+			task_id,
+			child_token: "data",
+			type: "progress",
+			payload: "{bad",
+		});
+
+		expect(result.ok).toBe(false);
+		if (!result.ok) expect(result.error.code).toBe("invalid_input");
+		expect(listTaskEvents(db, task_id)).toEqual([]);
 	});
 });
 
