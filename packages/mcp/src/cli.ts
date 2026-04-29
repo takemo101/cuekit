@@ -27,20 +27,23 @@ export function createCli(ctx: CommandContext) {
 		version: pkg.version,
 		description: "cuekit — delegation substrate for coding agents.",
 	});
-	const taskCli = Cli.create("task", {
-		description: "Task lifecycle commands.",
-	});
+	const groups = new Map<string, ReturnType<typeof Cli.create>>();
 
 	for (const operation of CUEKIT_OPERATIONS) {
 		const [group, leaf] = operation.cliPath;
-		if (group === "task") {
-			registerOperation(taskCli, leaf, ctx, operation);
-		} else {
-			registerOperation(cli, operation.mcpName, ctx, operation);
+		let groupCli = groups.get(group);
+		if (!groupCli) {
+			groupCli = Cli.create(group, {
+				description: `${group} commands.`,
+			});
+			groups.set(group, groupCli);
 		}
+		registerOperation(groupCli, leaf, ctx, operation);
 	}
 
-	cli.command(taskCli);
+	for (const groupCli of groups.values()) {
+		cli.command(groupCli);
+	}
 
 	return cli;
 }
@@ -57,5 +60,20 @@ export function createMcpCli(ctx: CommandContext) {
 		registerOperation(cli, operation.mcpName, ctx, operation);
 	}
 
+	return cli;
+}
+
+// `incur` reserves `mcp` as a built-in top-level command for registration,
+// so the real argv path `cuekit mcp config` must be handled before generic
+// `serve()` dispatch. This small projection keeps the helper command on the
+// designed CLI path without changing the MCP tool name (`show_mcp_config`).
+export function createMcpConfigCli(ctx: CommandContext) {
+	const cli = Cli.create("cuekit", {
+		version: pkg.version,
+		description: "cuekit — delegation substrate for coding agents.",
+	});
+	const operation = CUEKIT_OPERATIONS.find((entry) => entry.mcpName === "show_mcp_config");
+	if (!operation) throw new Error("missing show_mcp_config operation");
+	registerOperation(cli, "config", ctx, operation);
 	return cli;
 }
