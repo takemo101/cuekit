@@ -4,6 +4,7 @@ import { AdapterRegistry, createClaudeCodeAdapter, PaneBackend } from "@cuekit/a
 import { FakeTmuxRunner } from "@cuekit/adapters/testing";
 import { runMigrations } from "@cuekit/store";
 import { createCli } from "../src/cli.ts";
+import { CUEKIT_OPERATIONS } from "../src/operations.ts";
 
 function makeCli() {
 	const db = new Database(":memory:");
@@ -18,6 +19,18 @@ function makeCli() {
 }
 
 describe("createCli", () => {
+	it("defines unique MCP names and future CLI paths for every operation", () => {
+		const mcpNames = CUEKIT_OPERATIONS.map((operation) => operation.mcpName);
+		const cliPaths = CUEKIT_OPERATIONS.map((operation) => operation.cliPath.join(" "));
+
+		expect(new Set(mcpNames).size).toBe(mcpNames.length);
+		expect(new Set(cliPaths).size).toBe(cliPaths.length);
+		expect(cliPaths).toContain("task submit");
+		expect(cliPaths).toContain("adapter list");
+		expect(cliPaths).toContain("session delete");
+		expect(cliPaths).toContain("mcp config");
+	});
+
 	it("builds an incur CLI without throwing", () => {
 		expect(makeCli()).toBeDefined();
 	});
