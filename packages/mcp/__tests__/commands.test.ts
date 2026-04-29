@@ -30,6 +30,8 @@ import { runReportTaskEvent } from "../src/commands/report-task-event.ts";
 import { runShowMcpConfig } from "../src/commands/show-mcp-config.ts";
 import { runSteerTask } from "../src/commands/steer-task.ts";
 import { runSubmitTask } from "../src/commands/submit-task.ts";
+import { runWaitTask } from "../src/commands/wait-task.ts";
+import { runWaitTasks } from "../src/commands/wait-tasks.ts";
 
 let db: Database;
 let runner: FakeTmuxRunner;
@@ -424,6 +426,241 @@ describe("list-task-events", () => {
 		const result = await runListTaskEvents(ctx, { task_id: "missing" });
 		expect("error" in result).toBe(true);
 		if ("error" in result) expect(result.error.code).toBe("task_not_found");
+	});
+});
+
+describe("wait-tasks", () => {
+	it("timeout_ms 0 returns a non-blocking snapshot without cancelling the task", async () => {
+		const submitted = await runSubmitTask(ctx, {
+			objective: "x",
+			agent_kind: "claude-code",
+			cwd: "/my/project",
+		});
+		if (!submitted.accepted) throw new Error("setup failed");
+
+		const waited = await runWaitTasks(ctx, {
+			task_ids: [submitted.task_id],
+			session_id: submitted.session_id,
+			timeout_ms: 0,
+			poll_interval_ms: 1,
+		});
+
+		expect(waited.done).toBe(false);
+		expect(waited.timed_out).toBe(true);
+		expect(waited.tasks).toHaveLength(1);
+		expect(waited.tasks[0]?.status).toBe("running");
+		expect(getTaskById(db, submitted.task_id)?.status).toBe("running");
+	});
+
+	it("returns immediately when all scoped tasks are already terminal", async () => {
+		const submitted = await runSubmitTask(ctx, {
+			objective: "x",
+			agent_kind: "claude-code",
+			cwd: "/my/project",
+		});
+		if (!submitted.accepted) throw new Error("setup failed");
+		await runCancelTask(ctx, { task_id: submitted.task_id });
+
+		const waited = await runWaitTasks(ctx, {
+			task_ids: [submitted.task_id],
+			session_id: submitted.session_id,
+			mode: "all",
+			timeout_ms: 1,
+			poll_interval_ms: 1,
+			include_results: true,
+		});
+
+		expect(waited.done).toBe(true);
+		expect(waited.timed_out).toBe(false);
+		expect(waited.tasks).toHaveLength(1);
+		expect(waited.tasks[0]?.status).toBe("cancelled");
+		expect(waited.tasks[0]?.terminal).toBe(true);
+		expect(waited.tasks[0]?.result?.status).toBe("cancelled");
+	});
+
+	it("all mode waits until every task is terminal", async () => {
+		const first = await runSubmitTask(ctx, {
+			objective: "first",
+			agent_kind: "claude-code",
+			cwd: "/my/project",
+		});
+		const second = await runSubmitTask(ctx, {
+			objective: "second",
+			agent_kind: "claude-code",
+			cwd: "/my/project",
+		});
+		if (!first.accepted || !second.accepted) throw new Error("setup failed");
+
+		const waitPromise = runWaitTasks(ctx, {
+			task_ids: [first.task_id, second.task_id],
+			session_id: first.session_id,
+			mode: "all",
+			timeout_ms: 1000,
+			poll_interval_ms: 5,
+		});
+		setTimeout(() => {
+			void runCancelTask(ctx, { task_id: first.task_id });
+		}, 1);
+		setTimeout(() => {
+			void runCancelTask(ctx, { task_id: second.task_id });
+		}, 10);
+
+		const waited = await waitPromise;
+
+		expect(waited.done).toBe(true);
+		expect(waited.tasks.map((task) => task.status).sort()).toEqual(["cancelled", "cancelled"]);
+	});
+
+	it("stop_on_failed returns early for failure-like statuses without waiting for all tasks", async () => {
+		const first = await runSubmitTask(ctx, {
+			objective: "first",
+			agent_kind: "claude-code",
+			cwd: "/my/project",
+		});
+		const second = await runSubmitTask(ctx, {
+			objective: "second",
+			agent_kind: "claude-code",
+			cwd: "/my/project",
+		});
+		if (!first.accepted || !second.accepted) throw new Error("setup failed");
+		updateTaskChildTokenHash(
+			db,
+			first.task_id,
+			"sha256:3a6eb0790f39ac87c94f3856b2dd2c5d110e6811602261a9a923d3bb23adc8b7",
+		);
+
+		const waitPromise = runWaitTasks(ctx, {
+			task_ids: [first.task_id, second.task_id],
+			session_id: first.session_id,
+			mode: "all",
+			stop_on_failed: true,
+			timeout_ms: 1000,
+			poll_interval_ms: 5,
+		});
+		setTimeout(() => {
+			void runReportTaskEvent(ctx, {
+				task_id: first.task_id,
+				child_token: "data",
+				type: "failed",
+				message: "failed",
+			});
+		}, 1);
+
+		const waited = await waitPromise;
+
+		expect(waited.done).toBe(true);
+		expect(waited.tasks.find((task) => task.task_id === first.task_id)?.status).toBe("failed");
+		expect(waited.tasks.find((task) => task.task_id === second.task_id)?.status).toBe("running");
+	});
+
+	it("waits until child reporting makes any task terminal", async () => {
+		const first = await runSubmitTask(ctx, {
+			objective: "first",
+			agent_kind: "claude-code",
+			cwd: "/my/project",
+		});
+		const second = await runSubmitTask(ctx, {
+			objective: "second",
+			agent_kind: "claude-code",
+			cwd: "/my/project",
+		});
+		if (!first.accepted || !second.accepted) throw new Error("setup failed");
+		updateTaskChildTokenHash(
+			db,
+			second.task_id,
+			"sha256:3a6eb0790f39ac87c94f3856b2dd2c5d110e6811602261a9a923d3bb23adc8b7",
+		);
+
+		const waitPromise = runWaitTasks(ctx, {
+			task_ids: [first.task_id, second.task_id],
+			session_id: first.session_id,
+			mode: "any",
+			timeout_ms: 1000,
+			poll_interval_ms: 5,
+			include_events: true,
+		});
+		setTimeout(() => {
+			void runReportTaskEvent(ctx, {
+				task_id: second.task_id,
+				child_token: "data",
+				type: "completed",
+				message: "done",
+			});
+		}, 1);
+
+		const waited = await waitPromise;
+
+		expect(waited.done).toBe(true);
+		expect(waited.timed_out).toBe(false);
+		expect(waited.tasks.find((task) => task.task_id === second.task_id)?.status).toBe("completed");
+		expect(
+			waited.tasks
+				.find((task) => task.task_id === second.task_id)
+				?.events?.map((event) => event.type),
+		).toEqual(["completed"]);
+	});
+
+	it("rejects tasks outside the requested session scope", async () => {
+		const owned = await runSubmitTask(ctx, {
+			objective: "owned",
+			agent_kind: "claude-code",
+			cwd: "/my/project",
+		});
+		const foreign = await runSubmitTask(ctx, {
+			objective: "foreign",
+			agent_kind: "claude-code",
+			cwd: "/other/project",
+		});
+		if (!owned.accepted || !foreign.accepted) throw new Error("setup failed");
+
+		const waited = await runWaitTasks(ctx, {
+			task_ids: [owned.task_id, foreign.task_id],
+			session_id: owned.session_id,
+			timeout_ms: 1,
+			poll_interval_ms: 1,
+		});
+
+		expect(waited.done).toBe(false);
+		expect(waited.error?.code).toBe("permission_denied");
+	});
+
+	it("rejects tasks outside the requested cwd scope", async () => {
+		const submitted = await runSubmitTask(ctx, {
+			objective: "x",
+			agent_kind: "claude-code",
+			cwd: "/my/project",
+		});
+		if (!submitted.accepted) throw new Error("setup failed");
+
+		const waited = await runWaitTasks(ctx, {
+			task_ids: [submitted.task_id],
+			cwd: "/other/project",
+			timeout_ms: 1,
+			poll_interval_ms: 1,
+		});
+
+		expect(waited.error?.code).toBe("permission_denied");
+	});
+
+	it("wait_task wraps wait_tasks for a single task", async () => {
+		const submitted = await runSubmitTask(ctx, {
+			objective: "x",
+			agent_kind: "claude-code",
+			cwd: "/my/project",
+		});
+		if (!submitted.accepted) throw new Error("setup failed");
+		await runCancelTask(ctx, { task_id: submitted.task_id });
+
+		const waited = await runWaitTask(ctx, {
+			task_id: submitted.task_id,
+			session_id: submitted.session_id,
+			timeout_ms: 1,
+			poll_interval_ms: 1,
+		});
+
+		expect(waited.done).toBe(true);
+		expect(waited.status).toBe("cancelled");
+		expect(waited.result?.status).toBe("cancelled");
 	});
 });
 
