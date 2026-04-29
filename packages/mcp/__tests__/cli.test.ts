@@ -47,6 +47,34 @@ describe("createCli", () => {
 		expect(body.data.adapters.map((a) => a.agent_kind)).toContain("claude-code");
 	});
 
+	it("serves task commands through grouped cli.fetch paths", async () => {
+		const cli = makeCli();
+		const res = await cli.fetch(new Request("http://localhost/task/list"));
+		expect(res.ok).toBe(true);
+		const body = (await res.json()) as {
+			ok: boolean;
+			data: { tasks: Array<{ task_id: string }> };
+		};
+		expect(body.ok).toBe(true);
+		expect(body.data.tasks).toEqual([]);
+	});
+
+	it("does not keep flat task CLI aliases", async () => {
+		const cli = makeCli();
+		for (const path of [
+			"submit_task",
+			"get_task_status",
+			"get_task_result",
+			"cancel_task",
+			"list_tasks",
+			"steer_task",
+			"delete_task",
+		]) {
+			const res = await cli.fetch(new Request(`http://localhost/${path}`));
+			expect(res.ok).toBe(false);
+		}
+	});
+
 	it("exposes cuekit version from package.json", async () => {
 		const cli = makeCli();
 		// incur's --version flag is served via argv; just verify the CLI
