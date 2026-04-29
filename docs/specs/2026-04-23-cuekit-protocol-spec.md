@@ -353,7 +353,7 @@ interface ArtifactRef {
 ```json
 {
   "kind": "transcript",
-  "ref": ".cuekit/tasks/task-123/transcript.md"
+  "ref": ".cuekit/tasks/task-123/transcript.txt"
 }
 ```
 
@@ -420,8 +420,7 @@ input_required -> failed
 input_required -> cancelled
 input_required -> timed_out
 
-blocked -> running       (optional, after external remediation)
-blocked -> cancelled
+blocked is terminal; create a new task after external remediation.
 ```
 
 ### 13.2 Terminal States
@@ -442,6 +441,9 @@ Once terminal, the adapter must not resume the same task in place.
 ### 14.1 Interface
 
 ```ts
+// This is the public adapter/wrapper contract. Concrete runtime-specific
+// extractors may return fallback evidence internally; the wrapper/shared
+// result normalizer still returns TaskResult to protocol callers.
 interface AgentAdapter {
   kind: string;
   capabilities(): AdapterCapabilities;
@@ -472,7 +474,7 @@ Notes:
 - `status` always returns a view; failure modes (e.g. `task_not_found`)
   embed a `JobError` in the view rather than throwing — see §8 and the
   MCP spec §6.5 error envelope.
-- `collect` mirrors `submit`'s `AdapterResult` shape; `steer` / `cancel`
+- `collect` mirrors `submit`'s `AdapterResult` shape; the returned `TaskResult` may be assembled by shared result normalization using store-backed child-reported payloads plus adapter fallback data. `steer` / `cancel`
   return `Ack`.
 
 `capabilities()` is the source of truth for `list_adapters` output and for control-surface-level pre-flight validation (e.g. checking `TaskSpec.model` against `available_models` before calling `submit`).
@@ -484,7 +486,7 @@ Each adapter must:
 - maintain mapping between `task_id` and native session/task identifiers
 - translate native runtime state into `TaskStatus`
 - expose steering honestly
-- normalize terminal output into `TaskResult`
+- provide terminal output or runtime fallback data to the shared result-normalization path; in v0 this may effectively normalize into `TaskResult`, while post-v0 child-reported payloads should be assembled by the shared collect/control-surface layer
 - persist or expose raw artifacts where possible
 
 ### 14.3 Non-requirements
@@ -598,7 +600,7 @@ Output:
   "artifacts": [
     {
       "kind": "transcript",
-      "ref": ".cuekit/tasks/task_123/transcript.md"
+      "ref": ".cuekit/tasks/task_123/transcript.txt"
     }
   ]
 }
@@ -696,17 +698,22 @@ cuekit should persist task state independently of any one control surface.
 - artifact references
 - last error if any
 
-### Suggested storage model for v0
-A local file-backed store is sufficient.
+### Storage model for v0
 
-Suggested directory shape:
+cuekit uses a hybrid model:
+
+- global SQLite index at `~/.cuekit/state.db` for sessions, tasks, status, timestamps, refs, and small structured payloads
+- worktree-local files under `<worktree>/.cuekit/tasks/<task_id>/` for transcripts and large artifacts
+
+Suggested directory shape for local artifacts:
 
 ```text
 .cuekit/
   tasks/
-    task_123.json
-    task_123.result.json
-    task_123.transcript.md
+    <task_id>/
+      transcript.txt
+      result.json       # optional runtime/export artifact, not canonical state
+      exit-code
 ```
 
 ---
@@ -790,6 +797,30 @@ Example response:
 
 ---
 
+## 19.1 Child Reporting Extension
+
+The base v0 protocol is parent-facing: a controller submits, observes, steers, cancels, and collects tasks. A near-term extension adds child-facing reporting operations so the delegated child can publish structured state while it remains in an interactive pane.
+
+These operations are intentionally a protocol extension, not a workflow engine:
+
+- `report_task_event(task_id, type, message?, payload?, severity?) -> Ack`
+
+Initial event types should include `progress`, `completed`, `failed`, `blocked`, `help_requested`, and `log`. Convenience operations such as `complete_task` or `request_parent_help` are not planned initially; add them only if real model behavior shows the single report operation is insufficient.
+
+The same operation semantics should be exposed through child-facing CLI commands and MCP tools. CLI callers may omit `task_id` when the adapter injected `CUEKIT_TASK_ID`; both CLI and MCP calls should authenticate with a child-scoped token rather than trusting task IDs alone.
+
+### Event persistence and completion semantics
+
+A child report appends a durable row to `task_events`. Terminal event types (`completed`, `failed`, `blocked`) may also update the task row through normal store status transitions. This event persistence is independent from whether the interactive pane/process has exited.
+
+Graceful shutdown is a separate adapter/shared-pane concern and is not part of the child-reporting protocol. Shutdown confirmation must not be required before the report is stored. A later clean exit must not rewrite a child-reported `failed` or `blocked` event into `completed`.
+
+### Fallback semantics
+
+If structured reporting is unavailable, adapters may still rely on transcript capture and exit-code sentinels for adapter fallback. Transcript markers such as `CUEKIT_COMPLETE` or `CUEKIT_ERROR` are not part of the child-facing contract and are not planned while MCP/CLI reporting exists. Reconsider them only for a concrete recovery importer, and never treat them as canonical until imported into SQLite.
+
+---
+
 ## 20. Versioning
 
 This document defines **v0** of the cuekit protocol.
@@ -799,11 +830,12 @@ Versioning principles:
 - adapters may ignore unknown optional fields
 - MCP tool names should remain stable where possible
 - future protocol versions may formalize:
+  - child-facing progress and completion reporting via `report_task_event`
   - partial structured results
   - resume semantics
   - dependency graphs
-  - event subscriptions
   - richer steering guarantees
+- event subscriptions are not planned unless `task_events` listing/polling proves insufficient
 
 ---
 
@@ -816,7 +848,8 @@ Explicitly deferred from v0:
 - cost accounting
 - retry policies in protocol
 - remote authentication standardization
-- event subscription protocol beyond MCP polling
+- event subscription protocol beyond MCP polling is not planned without concrete demand
+- mandatory child-facing reporting tools for every adapter
 
 ---
 

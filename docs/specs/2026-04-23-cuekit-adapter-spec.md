@@ -75,12 +75,13 @@ On `status(task_id)` the adapter must:
 
 ### 3.3 Result Collection
 
-On `collect(task_id)` the adapter must:
+On `collect(task_id)` the adapter-facing contract must return a `TaskResult` for terminal tasks. In v0, concrete adapters may gather terminal output, transcripts, and artifacts and normalize them directly. In the post-v0 child-reporting path, shared result normalization owns the final `TaskResult`; concrete adapters supply only runtime fallback data and artifact refs. The collect path must:
 
 1. verify the task is terminal
-2. gather terminal output, transcript, and relevant artifacts
-3. normalize the outcome into `TaskResult`
-4. preserve raw output via `ArtifactRef` when possible
+2. prefer canonical store-backed child-reported payloads when present
+3. gather terminal output, transcript, and relevant artifacts as fallback data
+4. assemble or validate the final `TaskResult` through the shared result normalizer
+5. preserve raw output via `ArtifactRef` when possible
 
 ### 3.4 Cancellation
 
@@ -126,7 +127,7 @@ This layout is the flat one proven by isuner (1 issue = 1 tmux session). Claude 
 
 - one tmux session per cuekit task
   - name: `cuekit-task-{task_id}` (stable for the life of the task)
-  - created at `submit` time, killed at terminal state
+  - created at `submit` time; v0 cleanup kills it when the runtime reaches an observed terminal state or the task is cancelled
   - holds exactly one pane running the child runtime
 - the cuekit orchestration session is **not** represented in tmux; it only lives as a `session_id` foreign key on the task row
 - the pane id is captured at submit time and stored as the task's `native_task_ref`
@@ -137,7 +138,7 @@ This layout is the flat one proven by isuner (1 issue = 1 tmux session). Claude 
 |---|---|
 | `submit` | `tmux new-session -d -s cuekit-task-{id} -c <cwd> "<runtime launch command>"`; capture `pane_id` |
 | `status` | `tmux has-session -t cuekit-task-{id}` for liveness; tail transcript file for `progress_text` |
-| `collect` | parse `<worktree>/.cuekit/tasks/<id>/result.json`; attach transcript ref |
+| `collect` | return a normalized `TaskResult`; v0 may use adapter fallback extraction from task refs / optional runtime `result.json`; post-v0 shared result normalization should prefer store-backed child-reported payloads before adapter fallback data |
 | `cancel` | `tmux kill-session -t cuekit-task-{id}` |
 | `steer` | `tmux send-keys -t cuekit-task-{id} -l "<message>"` → short delay → `tmux send-keys -t cuekit-task-{id} Enter` |
 | transcript capture | `tmux pipe-pane -t {pane_id} 'cat > <worktree>/.cuekit/tasks/<id>/transcript.txt'` on submit |
@@ -146,9 +147,9 @@ The two-step `send-keys` pattern (`-l` for literal text, then a separate `Enter`
 
 #### 3.7.3 Cleanup
 
-- on terminal state the adapter is responsible for killing the task's tmux session (`tmux kill-session -t cuekit-task-{id}`)
+- on v0 observed terminal state, cancel, or timeout, the shared pane backend is responsible for killing the task's tmux session (`tmux kill-session -t cuekit-task-{id}`); a post-v0 child-reported terminal event may update task status before any optional pane shutdown policy runs
 - transcript and result files persist under `<worktree>/.cuekit/tasks/` even after tmux cleanup
-- adapter must not leak tmux sessions across parent restarts; on startup the adapter should reconcile persisted task state against live tmux sessions
+- the pane-backed adapter wrapper must not leak tmux sessions across parent restarts; on startup it should reconcile persisted task state against live tmux sessions
 
 #### 3.7.4 Environment Requirements
 
@@ -161,7 +162,7 @@ The two-step `send-keys` pattern (`-l` for literal text, then a separate `Enter`
 With the pane backend shared across adapters, each concrete adapter only provides:
 
 - the **launch command** to run inside the new pane (runtime-specific)
-- a **result/transcript extractor** that converts the child's output into a normalized `TaskResult`
+- a **result/transcript extractor** for runtime fallback data; shared result normalization should prefer store-backed child-reported payloads when present
 - runtime-specific **status heuristics** (e.g. recognizing `input_required` by pattern-matching tail output)
 
 Spawning, pane lifecycle, cancellation, attach-hint production, and basic transcript capture are shared infrastructure, not per-adapter work.
@@ -270,7 +271,7 @@ If the runtime exposes a state that does not map cleanly:
 
 ## 6. Result Normalization Rules
 
-All adapters must normalize runtime-native output into:
+In v0/direct adapter fallback paths, adapters normalize runtime-native output into `TaskResult`. In the post-v0 child-reporting path, child-facing handlers validate store-backed result payloads and the shared result normalizer assembles the canonical `TaskResult`; concrete adapters only contribute runtime fallback data and artifact refs. The normalized shape remains:
 
 ```ts
 interface TaskResult {
@@ -308,12 +309,14 @@ Adapters should infer `files_changed` from the best available source in this ord
 **v0 limitation**: the shipped pane adapters (`pi`, `claude-code`,
 `opencode`) all return `files_changed: []` regardless of whether the
 child actually touched files. None of the runtimes currently emit
-machine-readable file-change metadata, and transcript parsing is
-deferred to v0.2. Callers that need file enumeration should either
-diff the worktree themselves (`git status` against the
-session's `worktree_path`) or wait for adapter-specific transcript
-parsers. The `artifacts` array is correctly populated in v0
-(transcript ref + result.json ref when present).
+machine-readable file-change metadata, and transcript parsing is not
+planned without a concrete metadata/recovery need. Callers that need file
+enumeration should diff the worktree themselves (`git status` against the
+session's `worktree_path`). This generic transcript parsing note is about
+best-effort file-change extraction, not child-report transcript markers;
+marker parsing is not part of the child-reporting contract. The
+`artifacts` array is correctly populated in v0 (transcript ref +
+result.json ref when present).
 
 ### 6.3 artifacts
 
@@ -585,15 +588,40 @@ Minimum persisted data:
 - final result path if collected
 - last known error
 
-Suggested path shape:
+Suggested path shape for local artifacts:
 
 ```text
 .cuekit/
   tasks/
-    task_123.json
-    task_123.result.json
-    task_123.transcript.md
+    task_123/
+      transcript.txt
+      result.json   # optional runtime/export artifact, not canonical state
+      exit-code
 ```
+
+
+---
+
+## 13.1 Child Reporting and Graceful Shutdown (post-v0 extension)
+
+This section describes a post-v0 / v2 extension, not a requirement for the current v0 adapter contract. Pane-backed adapters should eventually support a child reporting contract in addition to transcript capture. On submit, the adapter should inject enough context for the child-facing CLI/MCP surface to authenticate and target the current task, for example:
+
+```sh
+CUEKIT_TASK_ID=t_abc
+CUEKIT_CHILD_TOKEN=ck_child_...
+CUEKIT_PARENT_SESSION_ID=s_abc
+```
+
+Adapters should also inject or reference the cuekit child-task skill when the runtime supports skills or prompt augmentation. That skill tells the child to prefer the MCP `report_task_event` tool and fall back to `cuekit tool report ...`. Transcript markers are not part of the child-facing contract while MCP or CLI reporting is available, and are not planned without a concrete recovery need.
+
+When cuekit receives a child report, responsibilities should stay layered:
+
+1. The child-facing control-surface handler validates authorization and appends a row to `task_events`.
+2. For terminal event types (`completed`, `failed`, `blocked`), the store may update the task row through normal status transitions.
+3. Runtime shutdown, if handled at all, remains a separate adapter/shared-pane lifecycle concern.
+4. The concrete adapter supplies runtime-specific shutdown input (`/exit`, `ctx.shutdown()`, equivalent command, or API call) only for that separate lifecycle feature, not for child reporting.
+
+A child report is durable task state even before the runtime exits. A later clean shutdown exit code must not automatically override a child-reported `failed` or `blocked` event into `completed`. Shutdown failure handling belongs to the separate runtime lifecycle layer, not the child-reporting contract.
 
 ---
 
@@ -630,6 +658,7 @@ In non-recoverable cases, adapters should surface `status_unavailable` or `colle
 - support recovery
 - support artifact-rich results
 - expose progress text usefully
+- post-v0: inject child reporting context when running interactive children
 - avoid transcript parsing when runtime-native metadata is available
 - reuse the shared pane backend (Section 3.7) instead of re-implementing process/session management
 

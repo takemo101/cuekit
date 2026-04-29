@@ -161,7 +161,7 @@ cuekit のアーキテクチャは、Clean Architecture の依存方向を維持
 
 - richer adapter capabilities
 - optional steering
-- event subscriptions
+- parent-facing event listing/polling over `task_events` if needed
 - A2A-like interoperability
 
 へ拡張しやすい基盤になる。

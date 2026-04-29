@@ -22,8 +22,8 @@ Before expanding scope, we need proof that at least one adapter can complete the
   - [ ] `get_task_result`
 - [ ] Add/verify cancel-path coverage if the first adapter supports it
 - [ ] Verify local refs are created consistently
-  - [ ] `<worktree>/.cuekit/tasks/<task-id>.result.json`
-  - [ ] `<worktree>/.cuekit/tasks/<task-id>.transcript.md`
+  - [ ] required transcript ref: `<worktree>/.cuekit/tasks/<task-id>/transcript.txt`
+  - [ ] optional runtime/export result ref when produced: `<worktree>/.cuekit/tasks/<task-id>/result.json`
 - [ ] Validate the same flow through the CLI surface
 - [ ] Validate that CLI and MCP payload semantics do not drift
 - [ ] Update root `README.md`

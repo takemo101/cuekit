@@ -604,12 +604,12 @@ Include cancel path if possible.
 
 Also validate the same flow through the CLI command surface.
 
-- [ ] **Step 2: Verify local result file refs are created where expected**
+- [ ] **Step 2: Verify local artifact refs are created where expected**
 
 Expected pattern:
 ```text
-<worktree>/.cuekit/tasks/<task-id>.result.json
-<worktree>/.cuekit/tasks/<task-id>.transcript.md
+<worktree>/.cuekit/tasks/<task-id>/transcript.txt                  # required when transcript capture succeeds
+<worktree>/.cuekit/tasks/<task-id>/result.json                     # optional runtime/export artifact
 ```
 
 - [ ] **Step 3: Update root README with actual package usage**

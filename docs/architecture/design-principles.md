@@ -90,7 +90,7 @@ v0 では state を正規化しすぎない。
 
 の最小構成で始める。
 
-`projects`, `worktrees`, `artifacts`, `task_events`, `claims` は concrete need が出るまで追加しない。
+`projects`, `worktrees`, `artifacts`, `claims` は concrete need が出るまで追加しない。`task_events` は最小 v0 には入れないが、child reporting を実装する場合の最初の追加テーブルとする。別の notification / subscription 用テーブルは concrete need が出るまで追加しない。
 
 ## 8. Local First
 

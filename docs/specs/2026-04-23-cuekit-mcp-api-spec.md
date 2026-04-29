@@ -72,11 +72,11 @@ These grouped CLI commands replace the older flat command spelling. The CLI does
 
 ## 3. Tool Set
 
-The v0 MCP API surface is organized into three groups. The **protocol
-operations** (§5–§11) are the thin projection of cuekit's protocol
-spec — adapters must support them. The **management tools** and
-**helper tools** (§11.5 / §11.6) were added post-v0 and are not part
-of the protocol itself; they exist so an operator can run cuekit
+The MCP API surface is organized into groups. The v0-required **protocol
+operations** (§5–§11, excluding the management/helper subsections §11.5+ where noted) are the thin projection of cuekit's protocol
+spec. The control surface exposes them; adapter-backed operations route to the relevant adapter, while store/registry operations such as listing tasks or adapters are handled by cuekit itself. The **management tools** and
+**helper tools** (§11.5 / §11.6) are v0 reference-control-surface tools but are not part
+of the core delegation protocol itself; they exist so an operator can run cuekit
 without standing up a separate admin CLI.
 
 Protocol operations:
@@ -98,8 +98,13 @@ Helper tools (§11.6):
 
 10. `show_mcp_config`
 
+Future child-facing reporting tool (§11.7, experimental / post-v0):
+
+11. `report_task_event`
+
 MCP callers that want to implement a pure "cuekit protocol client"
-can ignore groups 8–10.
+can ignore groups 8–11. Child runtimes that can access MCP should prefer
+11 over CLI fallback commands.
 
 ---
 
@@ -145,7 +150,7 @@ or
 ```json
 {
   "kind": "transcript",
-  "ref": ".cuekit/tasks/task_123/transcript.md",
+  "ref": ".cuekit/tasks/task_123/transcript.txt",
   "title": "Full transcript"
 }
 ```
@@ -273,7 +278,7 @@ Retrieve the current normalized state of a task.
   "artifacts": [
     {
       "kind": "transcript",
-      "ref": ".cuekit/tasks/task_123/transcript.md"
+      "ref": ".cuekit/tasks/task_123/transcript.txt"
     }
   ],
   "metadata": {
@@ -401,11 +406,12 @@ Successful completion:
   "artifacts": [
     {
       "kind": "transcript",
-      "ref": ".cuekit/tasks/task_123/transcript.md"
+      "ref": ".cuekit/tasks/task_123/transcript.txt"
     },
     {
       "kind": "json",
-      "ref": ".cuekit/tasks/task_123/result.json"
+      "ref": ".cuekit/tasks/task_123/result.json",
+      "title": "Optional runtime/export result artifact; canonical state is in cuekit store"
     }
   ]
 }
@@ -644,7 +650,7 @@ project only cuekit's protocol may omit them.
 ### 11.5.1 delete_task
 
 Remove a terminal task row. Tasks in non-terminal states
-(`queued`, `running`, `input_required`, `blocked`) are refused with
+(`queued`, `running`, `input_required`) are refused with
 `invalid_state` — the caller cancels first.
 
 **Input**
@@ -767,6 +773,23 @@ without further editing.
 
 ---
 
+
+### 11.7 Child-facing reporting tools (experimental)
+
+These tools are for the delegated child agent, not primarily for the parent orchestrator. They let an interactive child report structured state while it continues to run in its native pane. The same operation handlers should also be available as grouped CLI commands under `cuekit tool ...` for children without MCP access.
+
+Recommended tools:
+
+- `report_task_event` — append one structured child event to SQLite. Event types include `progress`, `completed`, `failed`, `blocked`, `help_requested`, and `log`.
+
+Convenience tools such as `complete_task`, `block_task`, or `request_parent_help` are not planned initially; add them only if real model behavior shows `report_task_event` is insufficient. Artifact registration is also out of scope until an artifacts table or artifact-list field exists; child reporting may only set existing refs such as `result_ref` / `transcript_ref` or include small JSON payloads.
+
+Child-facing calls should authenticate with a child-scoped token. CLI fallback may read `CUEKIT_TASK_ID` and `CUEKIT_CHILD_TOKEN` from the environment injected by the adapter; MCP calls should pass equivalent credentials through the tool arguments or MCP client context.
+
+`report_task_event(type=completed)` records the child-declared terminal event and may update the task row to `completed` through the store. Runtime shutdown is separate and not part of child reporting; the event is durable without shutdown confirmation. For `failed` and `blocked`, a later clean pane/process exit must not convert the requested terminal kind into success.
+
+See [ADR 001: Child Reporting Surface](../decisions/001-child-reporting-surface.md).
+
 ## 12. MCP Error Semantics
 
 ### 12.1 Tool-Level Errors vs Structured Errors
@@ -820,6 +843,7 @@ Recommended cuekit error codes:
 - `submit_task` must never block until completion
 - `get_task_status` must reflect persisted or observed truth as best as possible
 - `get_task_result` must not fabricate success when terminal evidence is missing
+- child-facing `report_task_event` must append durable SQLite state; parent push and runtime shutdown behavior are outside the child-reporting contract
 - `steer_task` must not claim success if the runtime rejected the message
 
 ### 13.3 Truthfulness Principle
@@ -880,7 +904,7 @@ get_task_result(task_123)
 
 Deferred from v0 but compatible with this API shape:
 
-- `subscribe_task_events`
+- parent-facing `list_task_events` if `get_task_status` / existing task inspection are not enough; `ack_task_event`, push helpers, and `subscribe_task_events` are not planned without concrete demand
 - `resume_task`
 - `retry_task`
 - `fork_task`
@@ -888,6 +912,7 @@ Deferred from v0 but compatible with this API shape:
 - `get_task_transcript`
 - `wait_for_task`
 - dependency-aware batch submission
+- required child-facing reporting for all autonomous adapters
 
 These should be added only when the core lifecycle proves stable.
 
