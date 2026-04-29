@@ -12,7 +12,7 @@ Protocol and adapter foundation for orchestrating coding agents. A single schema
 ## Requirements
 
 - [Bun](https://bun.sh) 1.2 or newer
-- `tmux` on `PATH` (children run in tmux sessions so you can `tmux attach` to debug them live)
+- `tmux` on `PATH` with `new-session -e` support (children run in tmux sessions so you can `tmux attach` to debug them live)
 
 ## v0 scope
 

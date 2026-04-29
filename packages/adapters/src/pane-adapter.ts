@@ -1,4 +1,5 @@
 import type { Database } from "bun:sqlite";
+import { createHash, randomBytes } from "node:crypto";
 import { mkdirSync, readFileSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
@@ -27,6 +28,7 @@ import {
 	getTaskById,
 	listTasks,
 	type Task,
+	updateTaskChildTokenHash,
 	updateTaskNativeRef,
 	updateTaskRefs,
 	updateTaskStatus,
@@ -130,6 +132,14 @@ function hasTimedOut(task: Task, nowMs = Date.now()): boolean {
 	const anchor = Date.parse(task.started_at ?? task.created_at);
 	if (!Number.isFinite(anchor)) return false;
 	return nowMs - anchor >= timeoutMs;
+}
+
+function generateChildToken(): string {
+	return randomBytes(32).toString("base64url");
+}
+
+function hashChildToken(rawToken: string): string {
+	return `sha256:${createHash("sha256").update(rawToken).digest("hex")}`;
 }
 
 const defaultOnPaneDisappeared = (ctx: PaneDisappearedContext): PaneDisappearedDecision => {
@@ -238,6 +248,7 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 			}
 
 			const task_id = generateTaskId();
+			const childToken = generateChildToken();
 			createTask(db, {
 				id: task_id,
 				session_id: input.session_id,
@@ -247,6 +258,7 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 				status: "queued",
 				spec: input.spec,
 			});
+			updateTaskChildTokenHash(db, task_id, hashChildToken(childToken));
 
 			const rawLaunchCommand = config.buildLaunchCommand(input.spec);
 			const cwd = input.spec.cwd ?? session.worktree_path;
@@ -308,6 +320,10 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 					launchCommand,
 					cwd,
 					transcriptPath,
+					env: {
+						CUEKIT_TASK_ID: task_id,
+						CUEKIT_CHILD_TOKEN: childToken,
+					},
 				});
 				updateTaskNativeRef(db, task_id, handle.pane_id);
 				if (transcriptPath) {
