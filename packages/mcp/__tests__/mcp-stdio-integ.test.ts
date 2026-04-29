@@ -1,7 +1,9 @@
+import { Database } from "bun:sqlite";
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { createSession, createTask, runMigrations, updateTaskChildTokenHash } from "@cuekit/store";
 
 // Full stack test: spawn `bun packages/mcp/src/bin.ts --mcp` as a real child
 // process and speak the MCP JSON-RPC protocol to it over stdin/stdout. This
@@ -19,6 +21,7 @@ const WORKSPACE_ROOT = resolve(import.meta.dir, "..", "..", "..");
 
 const READ_TIMEOUT_MS = 10_000;
 const SIGKILL_GRACE_MS = 500;
+const DATA_TOKEN_HASH = "sha256:3a6eb0790f39ac87c94f3856b2dd2c5d110e6811602261a9a923d3bb23adc8b7";
 
 type JsonRpcMessage = Record<string, unknown>;
 
@@ -169,6 +172,27 @@ function toolCallData(result: ToolCallResult): Record<string, unknown> {
 	return JSON.parse(text) as Record<string, unknown>;
 }
 
+function seedReportableTask(path: string): void {
+	const db = new Database(path);
+	db.exec("pragma foreign_keys = ON;");
+	runMigrations(db);
+	createSession(db, {
+		id: "s_mcp",
+		project_root: tmpRoot,
+		worktree_path: tmpRoot,
+		parent_agent_kind: "cuekit-cli",
+	});
+	createTask(db, {
+		id: "t_mcp",
+		session_id: "s_mcp",
+		agent_kind: "claude-code",
+		objective: "report through mcp",
+		status: "running",
+	});
+	updateTaskChildTokenHash(db, "t_mcp", DATA_TOKEN_HASH);
+	db.close();
+}
+
 let tmpRoot: string;
 let dbPath: string;
 let server: SpawnedServer;
@@ -194,7 +218,7 @@ describe("cuekit --mcp (stdio integration)", () => {
 		expect(result?.serverInfo).toBeDefined();
 	});
 
-	it("tools/list returns the 7 cuekit commands as MCP tools", async () => {
+	it("tools/list returns cuekit commands as MCP tools", async () => {
 		await initialize(server);
 		await server.send({ jsonrpc: "2.0", id: 2, method: "tools/list" });
 		const reply = await server.readNext("tools/list reply");
@@ -205,6 +229,8 @@ describe("cuekit --mcp (stdio integration)", () => {
 		expect(names).toContain("get_task_result");
 		expect(names).toContain("cancel_task");
 		expect(names).toContain("list_tasks");
+		expect(names).toContain("report_task_event");
+		expect(names).toContain("list_task_events");
 		expect(names).toContain("list_adapters");
 		expect(names).toContain("steer_task");
 	});
@@ -256,6 +282,80 @@ describe("cuekit --mcp (stdio integration)", () => {
 		} else {
 			expect(data.task_id).toMatch(/^t_/);
 		}
+	});
+
+	it("tools/call report_task_event and list_task_events persist child reports", async () => {
+		await server.shutdown();
+		seedReportableTask(dbPath);
+		server = await spawnServer(dbPath);
+		await initialize(server);
+
+		await server.send({
+			jsonrpc: "2.0",
+			id: 5,
+			method: "tools/call",
+			params: {
+				name: "report_task_event",
+				arguments: {
+					task_id: "t_mcp",
+					child_token: "data",
+					type: "progress",
+					message: "Working over MCP",
+				},
+			},
+		});
+		const progressReply = await server.readNext("report_task_event progress reply");
+		const progressData = toolCallData(progressReply.result as ToolCallResult) as { ok?: boolean };
+		expect(progressData.ok).toBe(true);
+
+		await server.send({
+			jsonrpc: "2.0",
+			id: 6,
+			method: "tools/call",
+			params: {
+				name: "report_task_event",
+				arguments: {
+					task_id: "t_mcp",
+					child_token: "data",
+					type: "completed",
+					message: "Done over MCP",
+				},
+			},
+		});
+		const reportReply = await server.readNext("report_task_event reply");
+		const reportData = toolCallData(reportReply.result as ToolCallResult) as { ok?: boolean };
+		expect(reportData.ok).toBe(true);
+
+		await server.send({
+			jsonrpc: "2.0",
+			id: 7,
+			method: "tools/call",
+			params: {
+				name: "get_task_status",
+				arguments: { task_id: "t_mcp" },
+			},
+		});
+		const statusReply = await server.readNext("get_task_status reply");
+		const statusData = toolCallData(statusReply.result as ToolCallResult) as { status?: string };
+		expect(statusData.status).toBe("completed");
+
+		await server.send({
+			jsonrpc: "2.0",
+			id: 8,
+			method: "tools/call",
+			params: {
+				name: "list_task_events",
+				arguments: { task_id: "t_mcp" },
+			},
+		});
+		const listReply = await server.readNext("list_task_events reply");
+		const listData = toolCallData(listReply.result as ToolCallResult) as {
+			events?: Array<{ type: string; message: string | null }>;
+		};
+		expect(listData.events).toEqual([
+			expect.objectContaining({ type: "progress", message: "Working over MCP" }),
+			expect.objectContaining({ type: "completed", message: "Done over MCP" }),
+		]);
 	});
 
 	it("tools/call with an unknown tool name surfaces an error", async () => {
