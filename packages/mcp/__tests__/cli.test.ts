@@ -1,5 +1,7 @@
 import { Database } from "bun:sqlite";
 import { describe, expect, it } from "bun:test";
+import { chmodSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { AdapterRegistry, createClaudeCodeAdapter, PaneBackend } from "@cuekit/adapters";
 import { FakeTmuxRunner } from "@cuekit/adapters/testing";
@@ -97,6 +99,76 @@ describe("createCli", () => {
 		const body = JSON.parse(stdout) as { name: string; args: string[] };
 		expect(body.name).toBe("cuekit");
 		expect(body.args).toEqual(["--mcp"]);
+	});
+
+	it("registers MCP using the local cuekit command instead of npx cuekit", async () => {
+		const tmpRoot = mkdtempSync(`${tmpdir()}/cuekit-mcp-add-`);
+		try {
+			const capturePath = `${tmpRoot}/npx-args.txt`;
+			for (const runner of ["npx", "bunx", "pnpx"]) {
+				const fakeRunner = `${tmpRoot}/${runner}`;
+				writeFileSync(
+					fakeRunner,
+					[
+						"#!/usr/bin/env sh",
+						'printf "%s\\n" "$@" > "$CUEKIT_CAPTURE_NPX_ARGS"',
+						'printf "│ ✓ Claude Code: ~/.claude.json │\\n"',
+					].join("\n"),
+				);
+				chmodSync(fakeRunner, 0o755);
+			}
+
+			const proc = Bun.spawn(
+				["bun", "packages/mcp/src/bin.ts", "mcp", "add", "--agent", "claude-code"],
+				{
+					cwd: WORKSPACE_ROOT,
+					env: {
+						...process.env,
+						CUEKIT_CAPTURE_NPX_ARGS: capturePath,
+						CUEKIT_DB_PATH: ":memory:",
+						HOME: tmpRoot,
+						PATH: `${tmpRoot}:${process.env.PATH ?? ""}`,
+					},
+					stderr: "pipe",
+					stdout: "pipe",
+				},
+			);
+			const [exitCode, stderr] = await Promise.all([proc.exited, new Response(proc.stderr).text()]);
+
+			expect(exitCode).toBe(0);
+			expect(stderr).toBe("");
+			const capturedArgs = readFileSync(capturePath, "utf8").trim().split("\n");
+			expect(capturedArgs).toContain("add-mcp");
+			expect(capturedArgs).toContain("cuekit --mcp");
+			expect(capturedArgs).not.toContain("npx cuekit --mcp");
+		} finally {
+			rmSync(tmpRoot, { recursive: true, force: true });
+		}
+	});
+
+	it("just install creates a wrapper without making the tracked bin executable", async () => {
+		const tmpRoot = mkdtempSync(`${tmpdir()}/cuekit-just-install-`);
+		try {
+			const binPath = `${WORKSPACE_ROOT}/packages/mcp/src/bin.ts`;
+			const beforeMode = statSync(binPath).mode & 0o777;
+			const proc = Bun.spawn(["just", "install"], {
+				cwd: WORKSPACE_ROOT,
+				env: {
+					...process.env,
+					HOME: tmpRoot,
+					PATH: `${tmpRoot}/.bun/bin:${process.env.PATH ?? ""}`,
+				},
+				stderr: "pipe",
+				stdout: "pipe",
+			});
+			const exitCode = await proc.exited;
+
+			expect(exitCode).toBe(0);
+			expect(statSync(`${tmpRoot}/.bun/bin/cuekit`).mode & 0o111).not.toBe(0);
+			expect(statSync(binPath).mode & 0o777).toBe(beforeMode);
+		} finally {
+			rmSync(tmpRoot, { recursive: true, force: true });
+		}
 	});
 
 	it("serves task commands through grouped cli.fetch paths", async () => {
