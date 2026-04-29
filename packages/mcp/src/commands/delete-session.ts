@@ -47,6 +47,12 @@ export async function runDeleteSession(
 			},
 		};
 	}
+	// Best-effort tmux cleanup for every task before wiping DB rows.  Once
+	// the rows are gone we lose the task_ids, so cleanup must happen first.
+	for (const task of tasks) {
+		const adapter = ctx.registry.get(task.agent_kind);
+		await adapter?.cleanup?.(task.id).catch(() => {});
+	}
 	deleteSession(ctx.db, input.session_id);
 	return {
 		ok: true,

@@ -31,6 +31,10 @@ export interface AgentAdapter {
 	collect(task_id: string): Promise<AdapterResult<TaskResult>>;
 	cancel(task_id: string): Promise<Ack>;
 	list(filter?: TaskListFilter): Promise<TaskSummary[]>;
+	// Optional: release runtime resources (e.g., tmux session) without changing
+	// the task's DB status. Called by delete_task / delete_session before removing
+	// DB records so that orphaned panes don't accumulate after cleanup.
+	cleanup?(task_id: string): Promise<void>;
 }
 
 // Generates a short, unique task_id used as both the primary key and the

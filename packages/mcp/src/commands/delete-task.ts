@@ -46,6 +46,10 @@ export async function runDeleteTask(
 			},
 		};
 	}
+	// Best-effort tmux cleanup before wiping the DB row so that the task's
+	// tmux session (cuekit-task-<id>) doesn't linger after deletion.
+	const adapter = ctx.registry.get(task.agent_kind);
+	await adapter?.cleanup?.(input.task_id).catch(() => {});
 	deleteTask(ctx.db, input.task_id);
 	return { ok: true, message: `deleted task '${input.task_id}'` };
 }
