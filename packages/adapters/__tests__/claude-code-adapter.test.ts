@@ -1,5 +1,6 @@
 import { Database } from "bun:sqlite";
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { createHash } from "node:crypto";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -70,6 +71,28 @@ describe("submit", () => {
 		expect(task?.model).toBe("sonnet");
 		expect(task?.native_task_ref).toMatch(/^%\d+$/);
 		expect(runner.calls[0]?.[0]).toBe("new-session");
+	});
+
+	it("generates a child reporting token, stores only its hash, and injects raw env", async () => {
+		const result = await adapter.submit({
+			spec: { agent_kind: "claude-code", objective: "Add reporting" },
+			session_id: "s1",
+		});
+		expect(result.ok).toBe(true);
+		if (!result.ok) return;
+		const task = getTaskById(db, result.value.task_id);
+		const newSession = runner.calls.find((c) => c[0] === "new-session") ?? [];
+		const taskEnv = newSession.find((arg) => arg === `CUEKIT_TASK_ID=${result.value.task_id}`);
+		const tokenEnv = newSession.find((arg) => arg.startsWith("CUEKIT_CHILD_TOKEN="));
+		const rawToken = tokenEnv?.slice("CUEKIT_CHILD_TOKEN=".length) ?? "";
+
+		expect(taskEnv).toBeDefined();
+		expect(newSession[newSession.length - 1]).not.toContain("CUEKIT_CHILD_TOKEN");
+		expect(rawToken).not.toBe("");
+		expect(task?.child_token_hash).toBe(
+			`sha256:${createHash("sha256").update(rawToken).digest("hex")}`,
+		);
+		expect(task?.child_token_hash).not.toContain(rawToken);
 	});
 
 	it("rejects when spec.agent_kind does not match adapter kind", async () => {

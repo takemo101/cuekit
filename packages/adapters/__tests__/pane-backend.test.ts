@@ -44,6 +44,38 @@ describe("spawnTask", () => {
 		expect(call[call.length - 1]).toBe("sleep 60");
 	});
 
+	it("passes child reporting environment to tmux without embedding it in the launch command", async () => {
+		await panes.spawnTask({
+			task_id: "t_abc",
+			launchCommand: "sleep 60",
+			cwd: "/tmp",
+			env: {
+				CUEKIT_TASK_ID: "t_abc",
+				CUEKIT_CHILD_TOKEN: "raw-token",
+			},
+		});
+		const call = runner.calls[0] ?? [];
+		expect(call).toContain("-e");
+		expect(call.slice(call.indexOf("-e"), call.indexOf("-c"))).toEqual([
+			"-e",
+			"CUEKIT_TASK_ID=t_abc",
+			"-e",
+			"CUEKIT_CHILD_TOKEN=raw-token",
+		]);
+		expect(call[call.length - 1]).toBe("sleep 60");
+	});
+
+	it("rejects invalid environment variable names", async () => {
+		await expect(
+			panes.spawnTask({
+				task_id: "t_abc",
+				launchCommand: "sleep 60",
+				cwd: "/tmp",
+				env: { "BAD-NAME": "x" },
+			}),
+		).rejects.toThrow(/invalid tmux environment key/);
+	});
+
 	it("sets up pipe-pane with a shell-quoted transcript path", async () => {
 		await panes.spawnTask({
 			task_id: "t_abc",

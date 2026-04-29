@@ -13,6 +13,7 @@ export interface SpawnTaskParams {
 	launchCommand: string;
 	cwd: string;
 	transcriptPath?: string;
+	env?: Record<string, string>;
 }
 
 export interface PaneHandle {
@@ -41,11 +42,18 @@ export class PaneBackend {
 
 	async spawnTask(params: SpawnTaskParams): Promise<PaneHandle> {
 		const sessionName = this.sessionNameFor(params.task_id);
+		const envArgs = Object.entries(params.env ?? {}).flatMap(([key, value]) => {
+			if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) {
+				throw new Error(`invalid tmux environment key '${key}'`);
+			}
+			return ["-e", `${key}=${value}`];
+		});
 		const result = await this.runner.run([
 			"new-session",
 			"-d",
 			"-s",
 			sessionName,
+			...envArgs,
 			"-c",
 			params.cwd,
 			"-P",
