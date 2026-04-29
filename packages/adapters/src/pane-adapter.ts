@@ -555,6 +555,14 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 			return { ok: true, message: "cancellation requested" };
 		},
 
+		async cleanup(task_id: string) {
+			try {
+				await panes.killTask(task_id);
+			} catch {
+				// best-effort — a missing tmux session is not an error here
+			}
+		},
+
 		async list(filter?: TaskListFilter): Promise<TaskSummary[]> {
 			// Adapters only return their own tasks. If the caller passed a
 			// conflicting `agent_kind` explicitly, fail loud rather than

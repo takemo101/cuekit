@@ -763,6 +763,37 @@ describe("delete-task", () => {
 		expect(getTaskById(db, submit.task_id)).not.toBeNull();
 	});
 
+	it("kills the orphaned tmux session when a child-reported terminal task is deleted", async () => {
+		// Regression for cuekit-delete-session-tmux-leak: report_task_event(completed)
+		// updates DB status but does NOT kill the tmux session. delete_task must
+		// clean up the orphaned pane so operators don't have to do it manually.
+		const submit = await runSubmitTask(ctx, {
+			objective: "x",
+			agent_kind: "claude-code",
+			cwd: "/tmp",
+		});
+		if (!submit.accepted) throw new Error("setup failed");
+		updateTaskChildTokenHash(
+			db,
+			submit.task_id,
+			"sha256:3a6eb0790f39ac87c94f3856b2dd2c5d110e6811602261a9a923d3bb23adc8b7",
+		);
+		// report_task_event transitions task to terminal but leaves tmux session alive
+		await runReportTaskEvent(ctx, {
+			task_id: submit.task_id,
+			child_token: "data",
+			type: "completed",
+			message: "Done",
+		});
+
+		const sessionName = `cuekit-task-${submit.task_id}`;
+		expect(runner.knownSessions()).toContain(sessionName);
+
+		const ack = await runDeleteTask(ctx, { task_id: submit.task_id });
+		expect(ack.ok).toBe(true);
+		expect(runner.knownSessions()).not.toContain(sessionName);
+	});
+
 	it("returns task_not_found for unknown id", async () => {
 		const ack = await runDeleteTask(ctx, { task_id: "t_nope" });
 		expect(ack.ok).toBe(false);
@@ -841,6 +872,75 @@ describe("delete-session", () => {
 		// Both rows still present — block is complete, not partial.
 		expect(getSessionById(db, submit.session_id)).not.toBeNull();
 		expect(getTaskById(db, submit.task_id)).not.toBeNull();
+	});
+
+	it("kills orphaned tmux sessions for all child-reported terminal tasks on session deletion", async () => {
+		// Regression for cuekit-delete-session-tmux-leak: when multiple tasks
+		// transition to terminal via report_task_event, none of their tmux sessions
+		// are killed. delete_session must clean them all up.
+		const a = await runSubmitTask(ctx, {
+			objective: "a",
+			agent_kind: "claude-code",
+			cwd: "/tmp",
+		});
+		const b = await runSubmitTask(ctx, {
+			objective: "b",
+			agent_kind: "claude-code",
+			cwd: "/tmp",
+		});
+		if (!a.accepted || !b.accepted) throw new Error("setup failed");
+		expect(a.session_id).toBe(b.session_id);
+
+		for (const task_id of [a.task_id, b.task_id]) {
+			updateTaskChildTokenHash(
+				db,
+				task_id,
+				"sha256:3a6eb0790f39ac87c94f3856b2dd2c5d110e6811602261a9a923d3bb23adc8b7",
+			);
+			await runReportTaskEvent(ctx, {
+				task_id,
+				child_token: "data",
+				type: "completed",
+				message: "Done",
+			});
+		}
+
+		const sessionA = `cuekit-task-${a.task_id}`;
+		const sessionB = `cuekit-task-${b.task_id}`;
+		expect(runner.knownSessions()).toContain(sessionA);
+		expect(runner.knownSessions()).toContain(sessionB);
+
+		const ack = await runDeleteSession(ctx, { session_id: a.session_id });
+		expect(ack.ok).toBe(true);
+		expect(runner.knownSessions()).not.toContain(sessionA);
+		expect(runner.knownSessions()).not.toContain(sessionB);
+	});
+
+	it("kills tmux sessions for child-reported completed tasks on session deletion", async () => {
+		const submit = await runSubmitTask(ctx, {
+			objective: "x",
+			agent_kind: "claude-code",
+			cwd: "/tmp",
+		});
+		if (!submit.accepted) throw new Error("setup failed");
+		updateTaskChildTokenHash(
+			db,
+			submit.task_id,
+			"sha256:3a6eb0790f39ac87c94f3856b2dd2c5d110e6811602261a9a923d3bb23adc8b7",
+		);
+		await runReportTaskEvent(ctx, {
+			task_id: submit.task_id,
+			child_token: "data",
+			type: "completed",
+			message: "Done",
+		});
+
+		const sessionName = `cuekit-task-${submit.task_id}`;
+		expect(runner.knownSessions()).toContain(sessionName);
+
+		const ack = await runDeleteSession(ctx, { session_id: submit.session_id });
+		expect(ack.ok).toBe(true);
+		expect(runner.knownSessions()).not.toContain(sessionName);
 	});
 
 	it("returns session_not_found for unknown id", async () => {
