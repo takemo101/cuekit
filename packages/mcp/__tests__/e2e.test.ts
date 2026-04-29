@@ -17,6 +17,8 @@ import type { CommandContext } from "../src/command-context.ts";
 import { runCancelTask } from "../src/commands/cancel-task.ts";
 import { runGetTaskResult } from "../src/commands/get-task-result.ts";
 import { runGetTaskStatus } from "../src/commands/get-task-status.ts";
+import { runListTaskEvents } from "../src/commands/list-task-events.ts";
+import { runReportTaskEvent } from "../src/commands/report-task-event.ts";
 import { runSubmitTask } from "../src/commands/submit-task.ts";
 
 // Full delegation flow: submit → status → cancel → get-task-result.
@@ -25,6 +27,7 @@ import { runSubmitTask } from "../src/commands/submit-task.ts";
 
 let tmpRoot: string;
 let db: Database;
+let runner: FakeTmuxRunner;
 let ctx: CommandContext;
 
 beforeEach(() => {
@@ -32,8 +35,9 @@ beforeEach(() => {
 	db = new Database(":memory:");
 	db.exec("pragma foreign_keys = ON;");
 	runMigrations(db);
+	runner = new FakeTmuxRunner();
 	const panes = new PaneBackend({
-		runner: new FakeTmuxRunner(),
+		runner,
 		sendKeysDelayMs: 0,
 	});
 	const registry = new AdapterRegistry();
@@ -50,6 +54,16 @@ afterEach(() => {
 });
 
 describe("e2e: submit → status → cancel → result", () => {
+	function childTokenFor(task_id: string): string {
+		const newSession = runner.calls.find(
+			(call) => call[0] === "new-session" && call.includes(`CUEKIT_TASK_ID=${task_id}`),
+		);
+		const tokenArg = newSession?.find((arg) => arg.startsWith("CUEKIT_CHILD_TOKEN="));
+		const token = tokenArg?.slice("CUEKIT_CHILD_TOKEN=".length);
+		if (!token) throw new Error(`missing child token for ${task_id}`);
+		return token;
+	}
+
 	it("completes the minimal delegation flow end-to-end", async () => {
 		// 1. submit
 		const submit = await runSubmitTask(ctx, {
@@ -99,6 +113,50 @@ describe("e2e: submit → status → cancel → result", () => {
 		}
 	});
 
+	it("covers simplified child reporting: submit env → report progress/completed → list events", async () => {
+		const submit = await runSubmitTask(ctx, {
+			objective: "report progress",
+			agent_kind: "claude-code",
+			cwd: tmpRoot,
+		});
+		expect(submit.accepted).toBe(true);
+		if (!submit.accepted) throw new Error("submit failed");
+		const task_id = submit.task_id;
+		const child_token = childTokenFor(task_id);
+		expect(child_token).not.toBe("");
+
+		const progress = await runReportTaskEvent(ctx, {
+			task_id,
+			child_token,
+			type: "progress",
+			message: "Running tests",
+		});
+		expect(progress.ok).toBe(true);
+		expect(getTaskById(db, task_id)?.status).toBe("running");
+
+		const completed = await runReportTaskEvent(ctx, {
+			task_id,
+			child_token,
+			type: "completed",
+			message: "Implemented feature",
+		});
+		expect(completed.ok).toBe(true);
+		// Completion is child-declared through the report API; it does not wait
+		// for pane/process exit. Fake tmux still knows the session is alive here.
+		const adapter = ctx.registry.require("claude-code");
+		if (!adapter.ok) throw new Error("missing claude-code adapter");
+		expect(await adapter.value.status(task_id)).toMatchObject({
+			status: "completed",
+		});
+		expect(runner.knownSessions()).toContain(`cuekit-task-${task_id}`);
+
+		const listed = await runListTaskEvents(ctx, { task_id });
+		expect("events" in listed).toBe(true);
+		if ("events" in listed) {
+			expect(listed.events.map((event) => event.type)).toEqual(["progress", "completed"]);
+		}
+	});
+
 	it("delivers the same flow through cli.fetch", async () => {
 		const cli = createCli(ctx);
 
@@ -137,6 +195,59 @@ describe("e2e: submit → status → cancel → result", () => {
 			data: { tasks: Array<{ task_id: string }> };
 		};
 		expect(listBody.data.tasks.some((t) => t.task_id === task_id)).toBe(true);
+	});
+
+	it("reports and lists child events through cli.fetch", async () => {
+		const cli = createCli(ctx);
+		const submit = await runSubmitTask(ctx, {
+			objective: "report through cli",
+			agent_kind: "claude-code",
+			cwd: tmpRoot,
+		});
+		if (!submit.accepted) throw new Error("submit failed");
+		const task_id = submit.task_id;
+		const previousTaskId = process.env.CUEKIT_TASK_ID;
+		const previousToken = process.env.CUEKIT_CHILD_TOKEN;
+		process.env.CUEKIT_TASK_ID = task_id;
+		process.env.CUEKIT_CHILD_TOKEN = childTokenFor(task_id);
+		try {
+			const progressRes = await cli.fetch(
+				new Request("http://localhost/tool/report?type=progress&message=Working"),
+			);
+			expect(progressRes.ok).toBe(true);
+			const progressBody = (await progressRes.json()) as { data: { ok: boolean } };
+			expect(progressBody.data.ok).toBe(true);
+
+			const completedRes = await cli.fetch(
+				new Request("http://localhost/tool/report?type=completed&message=Done"),
+			);
+			expect(completedRes.ok).toBe(true);
+			const completedBody = (await completedRes.json()) as { data: { ok: boolean } };
+			expect(completedBody.data.ok).toBe(true);
+
+			const statusRes = await cli.fetch(
+				new Request(`http://localhost/task/status?task_id=${task_id}`),
+			);
+			const statusBody = (await statusRes.json()) as { data: { status: string } };
+			expect(statusBody.data.status).toBe("completed");
+
+			const eventsRes = await cli.fetch(
+				new Request(`http://localhost/task/events?task_id=${task_id}`),
+			);
+			expect(eventsRes.ok).toBe(true);
+			const eventsBody = (await eventsRes.json()) as {
+				data: { events: Array<{ type: string; message: string | null }> };
+			};
+			expect(eventsBody.data.events).toEqual([
+				expect.objectContaining({ type: "progress", message: "Working" }),
+				expect.objectContaining({ type: "completed", message: "Done" }),
+			]);
+		} finally {
+			if (previousTaskId === undefined) delete process.env.CUEKIT_TASK_ID;
+			else process.env.CUEKIT_TASK_ID = previousTaskId;
+			if (previousToken === undefined) delete process.env.CUEKIT_CHILD_TOKEN;
+			else process.env.CUEKIT_CHILD_TOKEN = previousToken;
+		}
 	});
 
 	it("adapter list surfaces all three MVP adapters with correct model capabilities", async () => {
