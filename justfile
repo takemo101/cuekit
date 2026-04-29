@@ -3,11 +3,15 @@ set dotenv-load := false
 default:
     @just --list
 
-# Install the local cuekit CLI into Bun's global link store.
+# Install a local cuekit CLI wrapper without changing the tracked bin file mode.
 install:
-    cd packages/mcp && bun link
-    cuekit --help
+    mkdir -p "$HOME/.bun/bin"
+    rm -f "$HOME/.bun/bin/cuekit"
+    printf '%s\n' '#!/usr/bin/env sh' 'exec bun "{{ justfile_directory() }}/packages/mcp/src/bin.ts" "$@"' > "$HOME/.bun/bin/cuekit"
+    chmod 755 "$HOME/.bun/bin/cuekit"
+    "$HOME/.bun/bin/cuekit" --help
 
-# Remove the local cuekit CLI link from Bun's global link store.
+# Remove the local cuekit CLI wrapper.
 uninstall:
-    bun unlink @cuekit/mcp
+    rm -f "$HOME/.bun/bin/cuekit"
+    bun unlink @cuekit/mcp || true

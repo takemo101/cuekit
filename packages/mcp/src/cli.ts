@@ -26,6 +26,7 @@ export function createCli(ctx: CommandContext) {
 	const cli = Cli.create("cuekit", {
 		version: pkg.version,
 		description: "cuekit — delegation substrate for coding agents.",
+		mcp: { command: "cuekit --mcp" },
 	});
 	const groups = new Map<string, ReturnType<typeof Cli.create>>();
 
