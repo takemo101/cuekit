@@ -31,6 +31,11 @@ import {
 	runListAdapters,
 } from "./commands/list-adapters.ts";
 import {
+	ListTaskEventsInputSchema,
+	ListTaskEventsOutputSchema,
+	runListTaskEvents,
+} from "./commands/list-task-events.ts";
+import {
 	ListTasksInputSchema,
 	ListTasksOutputSchema,
 	runListTasks,
@@ -129,6 +134,14 @@ export const CUEKIT_OPERATIONS = [
 		options: ReportTaskEventInputSchema,
 		output: ReportTaskEventOutputSchema,
 		run: runReportTaskEvent,
+	}),
+	defineOperation({
+		mcpName: "list_task_events",
+		cliPath: ["task", "events"],
+		description: "List durable child-reported events for a task.",
+		options: ListTaskEventsInputSchema,
+		output: ListTaskEventsOutputSchema,
+		run: runListTaskEvents,
 	}),
 	defineOperation({
 		mcpName: "list_adapters",
