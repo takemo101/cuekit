@@ -148,6 +148,7 @@ Represents a delegated child task created by an orchestration session.
 type TaskStatus =
   | "queued"
   | "running"
+  | "input_required"
   | "completed"
   | "failed"
   | "cancelled"
@@ -159,6 +160,7 @@ type TaskStatus =
 
 - `queued` — accepted but not yet executing
 - `running` — actively executing
+- `input_required` — paused until steering or external input is provided
 - `completed` — finished successfully enough to collect result
 - `failed` — terminal error
 - `cancelled` — cancelled by parent/controller
@@ -198,7 +200,31 @@ If cuekit later needs:
 - patch + transcript + report + screenshots
 - richer artifact metadata
 
-then a dedicated `artifacts` table should be introduced.
+then a dedicated `artifacts` table should be introduced. Child reports should not introduce general 1:N artifact storage until that table or an explicit artifact-list field exists; initial reports may only reference existing `result_ref` / `transcript_ref` or include small JSON payloads.
+
+
+## 7.1 Child-reported results and artifacts
+
+Once the post-v0 child reporting migration exists, canonical child-reported state should be written through cuekit operations, not by asking a child to write a `result.json` file directly. Small normalized payloads should live in `task_events.payload_json` and/or `tasks.summary`; large reports, patches, screenshots, transcripts, and logs should remain files referenced through `result_ref`, `transcript_ref`, or a future `artifacts` table.
+
+This preserves the v0 storage rule: SQLite stores indexed state and small structured payloads, while worktree-local files store large or human-readable artifacts.
+
+
+## 7.2 Post-v0 child reporting table
+
+Child reporting is a post-v0 extension. When implemented, prefer one append-only event table over multiple task-level reporting columns or a separate `parent_notifications` table:
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | text | Primary key for the event |
+| `task_id` | text | Task this child report belongs to |
+| `type` | text | `progress`, `completed`, `failed`, `blocked`, `help_requested`, or `log` |
+| `severity` | text | Optional display/routing hint, for example `info`, `warning`, or `error` |
+| `message` | text | Short human-readable summary |
+| `payload_json` | text | Small structured payload; large data remains in artifact refs |
+| `created_at` | text | Append timestamp |
+
+The task row can continue to hold the latest summary/status for efficient listing, while `task_events` preserves the durable child-report inbox. Parent acknowledgement (`acked_at`) and delivery tracking are not planned unless concrete parent UX needs prove simple event listing insufficient. Terminal event types (`completed`, `failed`, `blocked`) may update `tasks.status` immediately through normal store transitions. Runtime shutdown evidence, if implemented as a separate lifecycle feature, should be stored separately from the report event and must not rewrite an explicit `failed` or `blocked` report into success.
 
 ---
 
@@ -244,6 +270,23 @@ create table tasks (
 );
 ```
 
+### 8.3 task_events (post-v0 child reporting)
+
+This table is deferred from the minimal v0 schema, but it is the preferred first schema addition for child reporting:
+
+```sql
+create table task_events (
+  id text primary key,
+  task_id text not null,
+  type text not null,
+  severity text,
+  message text,
+  payload_json text,
+  created_at text not null,
+  foreign key(task_id) references tasks(id)
+);
+```
+
 ---
 
 ## 9. Recommended Indexes
@@ -259,6 +302,10 @@ create index idx_tasks_session_id on tasks(session_id);
 create index idx_tasks_parent_task_id on tasks(parent_task_id);
 create index idx_tasks_status on tasks(status);
 create index idx_tasks_agent_kind on tasks(agent_kind);
+
+-- post-v0 child reporting
+create index idx_task_events_task_id on task_events(task_id);
+create index idx_task_events_created_at on task_events(created_at);
 ```
 
 These are enough for:
@@ -266,6 +313,7 @@ These are enough for:
 - finding active sessions for a worktree
 - listing tasks for a session
 - querying running or blocked tasks
+- listing child report events once child reporting is enabled
 - grouping delegated work by target agent kind
 
 ---
@@ -330,16 +378,23 @@ The **exit-code sentinel** is what lets cuekit distinguish a clean
 child exit (`completed`) from a runtime crash (`failed`). The pane
 backend wraps the adapter's launch command with a POSIX-sh trailer
 `( <cmd> ) ; printf 'cuekit_exit=%d\n' "$?" > exit-code`, so the
-child's real exit code lands on disk after the host shell exits. Pane
-adapters read this on pane-death detection and map exit 0 to
-`completed`, non-zero to `failed`. A missing sentinel (the host shell
-was SIGKILL'd before it could write) is treated as `failed` with a
-"without writing exit code" summary.
+child's real exit code lands on disk after the host shell exits. The shared pane-backed adapter wrapper reads this on pane-death detection. When no child-reported
+terminal event exists, they map exit 0 to `completed` and non-zero to
+`failed`. When a post-v0 child terminal event already updated task status,
+the exit code is runtime-shutdown evidence rather than the canonical child
+result. Exit code 0 should not rewrite an explicit `failed` / `blocked`
+report into `completed`; non-zero or missing evidence after a prior
+`completed` report may be surfaced as a separate runtime/shutdown warning or
+transport error according to adapter policy. When no child-reported terminal
+event exists, a missing sentinel (the host shell was SIGKILL'd before it
+could write) is treated as `failed` with a "without writing exit code"
+summary.
 
 This keeps the persistent index global while storing large outputs
 close to the actual worktree. Operators can delete `<worktree>/.cuekit/`
-to fully reset a workspace's task history without touching the global
-DB.
+to remove local task artifacts for a workspace. This does not delete
+task/session history from the global DB; DB cleanup must use cuekit
+management operations.
 
 ---
 
@@ -373,7 +428,7 @@ The following are intentionally deferred:
 - `projects` table
 - `worktrees` table
 - `artifacts` table
-- `task_events` table
+- `task_events` table until the child-reporting extension is implemented
 - `claims` or file-lock tables
 - capability registry tables
 - retry history tables

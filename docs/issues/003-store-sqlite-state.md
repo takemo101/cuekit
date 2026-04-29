@@ -23,7 +23,7 @@ cuekit の最小 state model を永続化する。
 ## 受け入れ条件
 - schema は `docs/specs/2026-04-23-cuekit-state-model.md` に一致する
 - sessions の active/completed/cancelled/failed を扱える
-- tasks の queued/running/completed/failed/cancelled/timed_out/blocked を扱える
+- tasks の queued/running/input_required/completed/failed/cancelled/timed_out/blocked を扱える
 - `listSessionsByWorktree` 相当の query がある
 - `listTasksBySession` 相当の query がある
 

@@ -64,7 +64,8 @@ cuekit is currently defined as:
 
 ### Optional / deferred
 - steering during execution
-- richer event subscriptions
+- child-facing reporting tools (`cuekit tool report` / MCP `report_task_event`) for structured progress and completion
+- event subscriptions are not planned unless `task_events` listing/polling proves insufficient
 - workflow engine behavior
 - kanban / swarm / memory platform concerns
 
@@ -88,3 +89,7 @@ The next practical document to add is an **implementation plan** describing:
 4. MCP server surface
 5. first adapter spike
 6. remaining adapters
+
+## Decisions
+
+- [ADR 001: Child Reporting Surface](../decisions/001-child-reporting-surface.md) — child agents report progress/completion through a single MCP/CLI report operation, with SQLite `task_events` as canonical state; transcript markers/push/ack are not planned without concrete need.

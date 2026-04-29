@@ -186,7 +186,7 @@ All v0 adapters launch their child runtime inside a **tmux pane** owned by cueki
 
 - programmatic submit/cancel/steer (tmux commands)
 - a real TTY the user can `tmux attach-session` to for live debugging
-- a natural per-task lifecycle (one window per cuekit task, killed on terminal state)
+- a natural per-task lifecycle (one window per cuekit task, cleaned up on observed runtime terminal state/cancel; post-v0 child-reported terminal events can be recorded before optional pane shutdown)
 
 Rationale and the exact protocol → tmux mapping live in `2026-04-23-cuekit-adapter-spec.md` Section 3.7. Claude Code's Agent Teams pane backend is the direct reference.
 
@@ -271,7 +271,7 @@ Needs:
 
 Parents should consume normalized child outputs instead of parsing raw transcripts.
 
-Normalization should be validated with Zod at the adapter boundary so malformed runtime output is detected explicitly rather than leaking inward as loosely typed data.
+Runtime-native normalization should be validated with Zod at the adapter boundary so malformed runtime output is detected explicitly rather than leaking inward as loosely typed data. For the post-v0 child-reporting path, child-facing handlers validate and persist reported result payloads at the control-surface/store boundary; the shared collect/result-normalization path assembles the final `TaskResult`, while adapters provide only runtime fallback extraction and artifact refs during collect.
 
 ### MVP result shape
 
@@ -286,7 +286,7 @@ Normalization should be validated with Zod at the adapter boundary so malformed 
   "artifacts": [
     {
       "kind": "transcript",
-      "ref": ".cuekit/tasks/task-123/transcript.md"
+      "ref": ".cuekit/tasks/task-123/transcript.txt"
     }
   ]
 }
@@ -341,6 +341,21 @@ In v0, the MCP server and CLI should be projected from one schema-backed operati
 
 The orchestrator skill is therefore an optional reference layer that explains how a parent agent should use adapters and protocol operations. It should be explicit-invocation only, never auto-activated during ordinary coding work.
 
+## 14.1 Child Reporting Surface
+
+Interactive pane execution should remain useful: a child agent may stay in its native TTY so humans can attach and parents can steer it. To avoid treating "assistant returned to its prompt" as an ambiguous running state forever, cuekit should provide a child-facing reporting surface.
+
+Child agents should report structured progress and outcomes through cuekit rather than writing canonical state directly. The preferred order is:
+
+1. MCP reporting tools, when available to the child runtime.
+2. `cuekit tool ...` CLI commands as the portable fallback.
+
+Transcript markers are not part of the reporting contract while MCP or CLI reporting is available. They are not planned unless a concrete recovery need appears.
+
+The canonical state remains in SQLite. The durable inbox should be a single `task_events` stream rather than a separate `parent_notifications` table; push delivery tracking and subscription APIs are not planned unless `task_events` polling/listing proves insufficient. Large outputs remain artifacts referenced by the store. The child-facing surface should be explained through a cuekit-provided child skill so runtime-specific adapters do not hard-code long reporting instructions. See [ADR 001: Child Reporting Surface](../decisions/001-child-reporting-surface.md).
+
+The child operation should be one generic report operation (`report_task_event` / `cuekit tool report`) with event types such as `progress`, `completed`, `failed`, `blocked`, and `help_requested`. Convenience tools are not planned initially; add them only if real model behavior shows the generic report operation is insufficient. General artifact registration is out of scope until cuekit has an artifacts table or artifact-list field; child reporting may only update existing refs such as `result_ref` / `transcript_ref` or attach small JSON payloads to events. Completion reporting and graceful shutdown are separate: a `completed` report records the child-declared terminal event and may update task status immediately. Adapter-specific `/exit` or pane shutdown orchestration is not part of child reporting.
+
 ## 15. MVP Scope
 
 ### In scope
@@ -352,6 +367,10 @@ The orchestrator skill is therefore an optional reference layer that explains ho
 - failure model
 - MVP adapters for pi / Claude Code / OpenCode
 - at least one reference control surface
+
+### Near-term extension after MVP
+
+- child-facing reporting contract for structured progress and completion
 
 ### Out of scope for MVP
 
@@ -377,6 +396,7 @@ The orchestrator skill is therefore an optional reference layer that explains ho
 - How much transcript content should be preserved by default?
 - What is the canonical artifact model for patches vs files vs external URLs?
 - Which adapter capabilities are truly necessary in v0 versus later revisions?
+- Which child reporting operations should graduate from experimental to required protocol surface?
 
 ## 18. Related Work
 
