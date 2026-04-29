@@ -11,6 +11,7 @@ const MIGRATIONS = [
 	"004-tasks-rename-target-agent-kind.sql",
 	"005-tasks-spec-json.sql",
 	"006-child-reporting.sql",
+	"007-task-events-delete-cascade.sql",
 ] as const;
 
 // Bootstrap table created outside the migration files so it can be relied on

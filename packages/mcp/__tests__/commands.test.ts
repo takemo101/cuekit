@@ -720,6 +720,32 @@ describe("delete-task", () => {
 		expect(getTaskById(db, submit.task_id)).toBeNull();
 	});
 
+	it("deletes a terminal task that has child report events", async () => {
+		const submit = await runSubmitTask(ctx, {
+			objective: "x",
+			agent_kind: "claude-code",
+			cwd: "/tmp",
+		});
+		if (!submit.accepted) throw new Error("setup failed");
+		updateTaskChildTokenHash(
+			db,
+			submit.task_id,
+			"sha256:3a6eb0790f39ac87c94f3856b2dd2c5d110e6811602261a9a923d3bb23adc8b7",
+		);
+		await runReportTaskEvent(ctx, {
+			task_id: submit.task_id,
+			child_token: "data",
+			type: "completed",
+			message: "Done",
+		});
+
+		const ack = await runDeleteTask(ctx, { task_id: submit.task_id });
+
+		expect(ack.ok).toBe(true);
+		expect(getTaskById(db, submit.task_id)).toBeNull();
+		expect(listTaskEvents(db, submit.task_id)).toEqual([]);
+	});
+
 	it("refuses to delete a running task (caller must cancel first)", async () => {
 		const submit = await runSubmitTask(ctx, {
 			objective: "x",
@@ -757,6 +783,33 @@ describe("delete-session", () => {
 		expect(ack.ok).toBe(true);
 		expect(getSessionById(db, submit.session_id)).toBeNull();
 		expect(getTaskById(db, submit.task_id)).toBeNull();
+	});
+
+	it("deletes a session whose terminal tasks have child report events", async () => {
+		const submit = await runSubmitTask(ctx, {
+			objective: "x",
+			agent_kind: "claude-code",
+			cwd: "/tmp",
+		});
+		if (!submit.accepted) throw new Error("setup failed");
+		updateTaskChildTokenHash(
+			db,
+			submit.task_id,
+			"sha256:3a6eb0790f39ac87c94f3856b2dd2c5d110e6811602261a9a923d3bb23adc8b7",
+		);
+		await runReportTaskEvent(ctx, {
+			task_id: submit.task_id,
+			child_token: "data",
+			type: "completed",
+			message: "Done",
+		});
+
+		const ack = await runDeleteSession(ctx, { session_id: submit.session_id });
+
+		expect(ack.ok).toBe(true);
+		expect(getSessionById(db, submit.session_id)).toBeNull();
+		expect(getTaskById(db, submit.task_id)).toBeNull();
+		expect(listTaskEvents(db, submit.task_id)).toEqual([]);
 	});
 
 	it("deletes an empty session (no tasks) — valid terminal state", async () => {
