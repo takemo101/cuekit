@@ -13,6 +13,7 @@ function makeTask(overrides: Partial<Task> = {}): Task {
 		objective: "x",
 		status: "completed",
 		native_task_ref: null,
+		child_token_hash: null,
 		summary: null,
 		result_ref: null,
 		transcript_ref: null,

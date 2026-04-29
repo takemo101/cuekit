@@ -7,7 +7,9 @@ import {
 	type TaskStatus,
 	validateTaskTransition,
 } from "@cuekit/core";
-import { type Task, TaskSchema } from "./task.ts";
+import { type Task, type TaskEvent, TaskEventSchema, TaskSchema } from "./task.ts";
+
+const CHILD_TOKEN_HASH_PATTERN = /^sha256:[a-f0-9]{64}$/;
 
 export interface CreateTaskInput {
 	id: string;
@@ -226,6 +228,79 @@ export function updateTaskNativeRef(
 		id,
 	);
 	return getTaskById(db, id);
+}
+
+export function updateTaskChildTokenHash(
+	db: Database,
+	id: string,
+	child_token_hash: string | null,
+): Task | null {
+	if (child_token_hash !== null && !CHILD_TOKEN_HASH_PATTERN.test(child_token_hash)) {
+		throw new Error("child_token_hash must be a sha256:<64 lowercase hex chars> digest");
+	}
+	const now = new Date().toISOString();
+	db.prepare("update tasks set child_token_hash = ?, updated_at = ? where id = ?").run(
+		child_token_hash,
+		now,
+		id,
+	);
+	return getTaskById(db, id);
+}
+
+export interface AppendTaskEventInput {
+	id: string;
+	task_id: string;
+	type: string;
+	message?: string | null;
+	payload?: unknown;
+}
+
+function parseTaskEventRow(row: unknown): TaskEvent {
+	const raw = row as {
+		sequence: number;
+		id: string;
+		task_id: string;
+		type: string;
+		message: string | null;
+		payload_json: string | null;
+		created_at: string;
+	};
+	return TaskEventSchema.parse({
+		sequence: raw.sequence,
+		id: raw.id,
+		task_id: raw.task_id,
+		type: raw.type,
+		message: raw.message,
+		payload: raw.payload_json === null ? null : JSON.parse(raw.payload_json),
+		created_at: raw.created_at,
+	});
+}
+
+export function appendTaskEvent(db: Database, input: AppendTaskEventInput): TaskEvent {
+	const now = new Date().toISOString();
+	db.prepare(
+		`insert into task_events (id, task_id, type, message, payload_json, created_at)
+		values (?, ?, ?, ?, ?, ?)`,
+	).run(
+		input.id,
+		input.task_id,
+		input.type,
+		input.message ?? null,
+		input.payload === undefined ? null : JSON.stringify(input.payload),
+		now,
+	);
+	const row = db.prepare("select * from task_events where id = ?").get(input.id);
+	if (!row) {
+		throw new Error(`defect: inserted task event '${input.id}' but row could not be read back`);
+	}
+	return parseTaskEventRow(row);
+}
+
+export function listTaskEvents(db: Database, task_id: string): TaskEvent[] {
+	const rows = db
+		.prepare("select * from task_events where task_id = ? order by sequence asc")
+		.all(task_id);
+	return rows.map((row) => parseTaskEventRow(row));
 }
 
 // Sets `summary` for progress reporting during execution. Pass null to clear.
