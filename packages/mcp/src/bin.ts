@@ -10,6 +10,7 @@ import {
 import { createStderrLogger, parseLogLevel } from "@cuekit/core";
 import { openDatabase, runMigrations } from "@cuekit/store";
 import { createCli, createMcpCli, createMcpConfigCli } from "./cli.ts";
+import { registerPiMcpServer } from "./pi-mcp-config.ts";
 
 // Default cuekit entry point: opens ~/.cuekit/state.db, migrates, wires the
 // tmux pane backend + all three adapters, and hands argv to incur.
@@ -33,6 +34,33 @@ function installSignalHandlers(db: Database): void {
 	process.on("SIGTERM", () => shutdown(143));
 }
 
+function splitPiAgentArgs(argv: string[]): { hasPi: boolean; rest: string[] } {
+	const rest: string[] = [];
+	let hasPi = false;
+	for (let i = 0; i < argv.length; i++) {
+		const arg = argv[i];
+		if (arg === undefined) continue;
+		if ((arg === "--agent" || arg === "-a") && argv[i + 1] === "pi") {
+			hasPi = true;
+			i++;
+			continue;
+		}
+		if (arg === "--agent=pi" || arg === "-a=pi") {
+			hasPi = true;
+			continue;
+		}
+		rest.push(arg);
+	}
+	return { hasPi, rest };
+}
+
+function hasExplicitAgent(argv: string[]): boolean {
+	return argv.some(
+		(arg) =>
+			arg === "--agent" || arg === "-a" || arg.startsWith("--agent=") || arg.startsWith("-a="),
+	);
+}
+
 async function main(): Promise<void> {
 	// Construct the logger before any fallible startup work so the catch
 	// block can use it uniformly. parseLogLevel guards against typos in
@@ -43,6 +71,17 @@ async function main(): Promise<void> {
 
 	let db: Database | undefined;
 	try {
+		const isMcpAdd = process.argv[2] === "mcp" && process.argv[3] === "add";
+		const mcpAddArgs = process.argv.slice(4);
+		const piAgents = splitPiAgentArgs(mcpAddArgs);
+		if (isMcpAdd && piAgents.hasPi) {
+			const result = registerPiMcpServer({
+				global: !piAgents.rest.includes("--no-global"),
+			});
+			process.stdout.write(`Registered MCP server '${result.serverName}' for Pi: ${result.path}\n`);
+			if (!hasExplicitAgent(piAgents.rest)) return;
+		}
+
 		// Allow integration tests and operators to point at an alternate DB
 		// path via CUEKIT_DB_PATH. Unset or empty string → `~/.cuekit/state.db`
 		// (production default). Accepts `:memory:` too if someone really
@@ -72,7 +111,12 @@ async function main(): Promise<void> {
 		// the background. Closing the DB here would break subsequent tool
 		// calls with 'Cannot use a closed database'. Defer cleanup to the
 		// signal handlers instead; the OS reclaims everything on exit.
-		await cli.serve(isMcpConfig ? ["config", ...process.argv.slice(4)] : undefined);
+		const argv = isMcpConfig
+			? ["config", ...process.argv.slice(4)]
+			: isMcpAdd && piAgents.hasPi
+				? ["mcp", "add", ...piAgents.rest]
+				: undefined;
+		await cli.serve(argv);
 	} catch (err) {
 		if (db) closeQuietly(db);
 		logger.error("startup failed", {
