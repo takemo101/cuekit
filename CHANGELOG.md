@@ -14,10 +14,9 @@ building against `main` can still be affected.
 #### Control surface (`@cuekit/mcp`)
 
 - `cuekit` CLI + MCP stdio server, backed by [incur](https://www.npmjs.com/package/incur).
-  Same command tree serves both the CLI (`cuekit submit_task ...`) and the
-  `--mcp` stdio transport, so MCP clients and shell users call into identical
-  Zod-validated schemas.
-- Commands (snake_case per spec):
+  Grouped CLI commands (`cuekit task submit`, `cuekit adapter list`, ...)
+  and flat MCP tools share the same operation handlers and Zod-validated schemas.
+- MCP tools (snake_case per spec):
   - `submit_task` — spawn a task on the target adapter; auto-creates a session
     from `cwd` when `session_id` is omitted.
   - `get_task_status`, `get_task_result` — snapshot and terminal-state fetch.
@@ -81,6 +80,10 @@ building against `main` can still be affected.
 
 - **MCP tool names**: kebab → snake_case across the board
   (`submit-task` → `submit_task`, etc.) to match the cuekit spec.
+- **CLI command names**: flat snake_case commands were replaced with grouped
+  resource commands (`cuekit submit_task` → `cuekit task submit`,
+  `cuekit list_adapters` → `cuekit adapter list`, etc.). Flat CLI aliases are
+  not provided. MCP tool names remain flat snake_case.
 - **`listTasks` pagination**: OFFSET → keyset on `(updated_at desc, id asc)`.
   Concurrent inserts mid-walk can no longer shift the window, eliminating
   the skip/duplicate class of bugs. Breaking for `list_tasks` callers:

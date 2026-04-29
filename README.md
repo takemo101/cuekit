@@ -1,6 +1,6 @@
 # cuekit
 
-Protocol and adapter foundation for orchestrating coding agents. A single [incur](https://github.com/wevm/incur)-based command tree is surfaced as both a CLI and an MCP server, so the same command definitions back `cuekit submit_task ...` from a shell and `submit_task` as an MCP tool call.
+Protocol and adapter foundation for orchestrating coding agents. A single schema-backed control surface powers grouped human CLI commands such as `cuekit task submit ...` and flat MCP tools such as `submit_task`.
 
 ## Shape
 
@@ -49,32 +49,32 @@ bun packages/mcp/src/bin.ts <command> ...
 
 ## CLI
 
-Command and option names are both snake_case. This is the same identifier the MCP tool surface exposes, so the two surfaces share one vocabulary.
+CLI commands are grouped by resource for humans. Option names remain snake_case. MCP tool names stay flat snake_case for tool-using agents; flat CLI aliases such as `cuekit submit_task` are not supported.
 
 ```sh
-cuekit list_adapters
+cuekit adapter list
 # → { adapters: [ { agent_kind: "claude-code", supports_attach: true, ... } ] }
 
-cuekit submit_task --objective "add retry logic to src/api/client.ts" \
-                   --agent_kind claude-code \
-                   --model sonnet \
-                   --cwd /path/to/repo
+cuekit task submit --objective "add retry logic to src/api/client.ts" \
+                  --agent_kind claude-code \
+                  --model sonnet \
+                  --cwd /path/to/repo
 # → { accepted: true, task_id: "t_abc...", agent_kind: "claude-code", session_id: "s_..." }
 
-cuekit get_task_status --task_id t_abc...
+cuekit task status --task_id t_abc...
 # → { task_id, status: "running", attach_hint: "tmux attach-session -t cuekit-task-t_abc...", ... }
 
 # The attach_hint is a real command you can run in another terminal:
 tmux attach-session -t cuekit-task-t_abc...
 
-cuekit steer_task --task_id t_abc... --message "also cover exponential backoff"
+cuekit task steer --task_id t_abc... --message "also cover exponential backoff"
 
-cuekit cancel_task --task_id t_abc...
+cuekit task cancel --task_id t_abc...
 
-cuekit get_task_result --task_id t_abc...
+cuekit task result --task_id t_abc...
 # → { task_id: "t_abc...", status: "cancelled", summary: "...", files_changed: [], artifacts: [...] }
 
-cuekit list_tasks --status running
+cuekit task list --status running
 ```
 
 Every command accepts `--help`, `--llms` / `--llms-full` (machine-readable manifest for LLM-friendly CLIs), `--schema` (JSON Schema for the command input), and `--format` (toon / json / yaml / md / jsonl) via incur.
@@ -87,7 +87,7 @@ Start the stdio MCP server:
 cuekit --mcp
 ```
 
-Agents that speak MCP can list the `submit_task` / `get_task_status` / `get_task_result` / `cancel_task` / `list_tasks` / `list_adapters` / `steer_task` / `delete_task` / `delete_session` / `show_mcp_config` tools and call them over stdio. Use `cuekit show_mcp_config` to print a client configuration snippet.
+Agents that speak MCP can list the `submit_task` / `get_task_status` / `get_task_result` / `cancel_task` / `list_tasks` / `list_adapters` / `steer_task` / `delete_task` / `delete_session` / `show_mcp_config` tools and call them over stdio. Use `cuekit mcp config` to print a client configuration snippet.
 
 ## State
 
@@ -131,16 +131,16 @@ The automated suite stubs the child runtime with `sleep` so it never calls Anthr
 just install      # registers `cuekit` globally
 
 # In a real repo where you want the child to work:
-cuekit submit_task --objective "explain this repo in one paragraph" \
-                   --agent_kind claude-code \
-                   --model sonnet
+cuekit task submit --objective "explain this repo in one paragraph" \
+                  --agent_kind claude-code \
+                  --model sonnet
 
 # Returns a task_id. Attach to the live child:
 tmux attach-session -t cuekit-task-<task_id>
 # Ctrl-b d detaches; the task keeps running.
 
-cuekit get_task_status --task_id <task_id>
-cuekit cancel_task     --task_id <task_id>
+cuekit task status --task_id <task_id>
+cuekit task cancel --task_id <task_id>
 ```
 
 The transcript is piped to `<cwd>/.cuekit/tasks/<task_id>/transcript.txt` and stays after the session is killed.
