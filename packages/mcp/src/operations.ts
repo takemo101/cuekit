@@ -36,6 +36,11 @@ import {
 	runListTasks,
 } from "./commands/list-tasks.ts";
 import {
+	ReportTaskEventInputSchema,
+	ReportTaskEventOutputSchema,
+	runReportTaskEvent,
+} from "./commands/report-task-event.ts";
+import {
 	runShowMcpConfig,
 	ShowMcpConfigInputSchema,
 	ShowMcpConfigOutputSchema,
@@ -116,6 +121,14 @@ export const CUEKIT_OPERATIONS = [
 		options: ListTasksInputSchema,
 		output: ListTasksOutputSchema,
 		run: runListTasks,
+	}),
+	defineOperation({
+		mcpName: "report_task_event",
+		cliPath: ["tool", "report"],
+		description: "Append a child-reported task event and apply terminal status reports.",
+		options: ReportTaskEventInputSchema,
+		output: ReportTaskEventOutputSchema,
+		run: runReportTaskEvent,
 	}),
 	defineOperation({
 		mcpName: "list_adapters",
