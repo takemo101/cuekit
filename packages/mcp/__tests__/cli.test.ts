@@ -1,6 +1,14 @@
 import { Database } from "bun:sqlite";
 import { describe, expect, it } from "bun:test";
-import { chmodSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import {
+	chmodSync,
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	rmSync,
+	statSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { AdapterRegistry, createClaudeCodeAdapter, PaneBackend } from "@cuekit/adapters";
@@ -141,6 +149,100 @@ describe("createCli", () => {
 			expect(capturedArgs).toContain("add-mcp");
 			expect(capturedArgs).toContain("cuekit --mcp");
 			expect(capturedArgs).not.toContain("npx cuekit --mcp");
+		} finally {
+			rmSync(tmpRoot, { recursive: true, force: true });
+		}
+	});
+
+	it("registers MCP for pi in the shared global MCP config", async () => {
+		const tmpRoot = mkdtempSync(`${tmpdir()}/cuekit-pi-mcp-add-`);
+		try {
+			const proc = Bun.spawn(["bun", "packages/mcp/src/bin.ts", "mcp", "add", "--agent", "pi"], {
+				cwd: WORKSPACE_ROOT,
+				env: {
+					...process.env,
+					CUEKIT_DB_PATH: ":memory:",
+					HOME: tmpRoot,
+				},
+				stderr: "pipe",
+				stdout: "pipe",
+			});
+			const [exitCode, stderr] = await Promise.all([proc.exited, new Response(proc.stderr).text()]);
+
+			expect(exitCode).toBe(0);
+			expect(stderr).toBe("");
+			const config = JSON.parse(readFileSync(`${tmpRoot}/.config/mcp/mcp.json`, "utf8")) as {
+				mcpServers: { cuekit: { command: string; args: string[] } };
+			};
+			expect(config.mcpServers.cuekit).toEqual({ command: "cuekit", args: ["--mcp"] });
+		} finally {
+			rmSync(tmpRoot, { recursive: true, force: true });
+		}
+	});
+
+	it("registers MCP for pi in the shared project MCP config with --no-global", async () => {
+		const tmpRoot = mkdtempSync(`${tmpdir()}/cuekit-pi-mcp-add-project-`);
+		try {
+			writeFileSync(
+				`${tmpRoot}/.mcp.json`,
+				JSON.stringify({ mcpServers: { existing: { command: "echo", args: ["ok"] } } }),
+			);
+			const proc = Bun.spawn(
+				[
+					"bun",
+					`${WORKSPACE_ROOT}/packages/mcp/src/bin.ts`,
+					"mcp",
+					"add",
+					"--agent",
+					"pi",
+					"--no-global",
+				],
+				{
+					cwd: tmpRoot,
+					env: {
+						...process.env,
+						CUEKIT_DB_PATH: ":memory:",
+						HOME: tmpRoot,
+					},
+					stderr: "pipe",
+					stdout: "pipe",
+				},
+			);
+			const [exitCode, stderr] = await Promise.all([proc.exited, new Response(proc.stderr).text()]);
+
+			expect(exitCode).toBe(0);
+			expect(stderr).toBe("");
+			const config = JSON.parse(readFileSync(`${tmpRoot}/.mcp.json`, "utf8")) as {
+				mcpServers: Record<string, { command: string; args: string[] }>;
+			};
+			expect(config.mcpServers.existing).toEqual({ command: "echo", args: ["ok"] });
+			expect(config.mcpServers.cuekit).toEqual({ command: "cuekit", args: ["--mcp"] });
+		} finally {
+			rmSync(tmpRoot, { recursive: true, force: true });
+		}
+	});
+
+	it("preserves existing pi MCP config file permissions", async () => {
+		const tmpRoot = mkdtempSync(`${tmpdir()}/cuekit-pi-mcp-add-mode-`);
+		try {
+			const configPath = `${tmpRoot}/.config/mcp/mcp.json`;
+			mkdirSync(`${tmpRoot}/.config/mcp`, { recursive: true });
+			writeFileSync(configPath, JSON.stringify({ mcpServers: {} }));
+			chmodSync(configPath, 0o600);
+			const proc = Bun.spawn(["bun", "packages/mcp/src/bin.ts", "mcp", "add", "--agent", "pi"], {
+				cwd: WORKSPACE_ROOT,
+				env: {
+					...process.env,
+					CUEKIT_DB_PATH: ":memory:",
+					HOME: tmpRoot,
+				},
+				stderr: "pipe",
+				stdout: "pipe",
+			});
+			const exitCode = await proc.exited;
+
+			expect(exitCode).toBe(0);
+			expect(statSync(configPath).mode & 0o777).toBe(0o600);
 		} finally {
 			rmSync(tmpRoot, { recursive: true, force: true });
 		}
