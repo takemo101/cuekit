@@ -12,6 +12,7 @@ export const TaskSchema = z.object({
 	objective: z.string().min(1),
 	status: TaskStatusSchema,
 	native_task_ref: z.string().min(1).nullable(),
+	child_token_hash: z.string().min(1).nullable(),
 	summary: z.string().nullable(),
 	result_ref: z.string().min(1).nullable(),
 	transcript_ref: z.string().min(1).nullable(),
@@ -23,3 +24,15 @@ export const TaskSchema = z.object({
 });
 
 export type Task = z.infer<typeof TaskSchema>;
+
+export const TaskEventSchema = z.object({
+	sequence: z.number().int().positive(),
+	id: z.string().min(1),
+	task_id: z.string().min(1),
+	type: z.string().min(1),
+	message: z.string().nullable(),
+	payload: z.unknown().nullable(),
+	created_at: z.string().datetime({ offset: true }),
+});
+
+export type TaskEvent = z.infer<typeof TaskEventSchema>;

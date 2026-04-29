@@ -5,13 +5,16 @@ import { runMigrations } from "../src/migrate.ts";
 import { createSession } from "../src/session-store.ts";
 import type { Task } from "../src/task.ts";
 import {
+	appendTaskEvent,
 	completeTask,
 	createTask,
 	DEFAULT_LIST_TASKS_LIMIT,
 	deleteTask,
 	getTaskById,
+	listTaskEvents,
 	listTasks,
 	listTasksBySession,
+	updateTaskChildTokenHash,
 	updateTaskNativeRef,
 	updateTaskRefs,
 	updateTaskStatus,
@@ -43,6 +46,7 @@ describe("createTask", () => {
 		expect(t.completed_at).toBeNull();
 		expect(t.model).toBeNull();
 		expect(t.summary).toBeNull();
+		expect(t.child_token_hash).toBeNull();
 	});
 
 	it("returns the row as it lives in the DB (re-read after insert)", () => {
@@ -104,6 +108,73 @@ describe("createTask", () => {
 				session_id: "missing",
 				agent_kind: "pi",
 				objective: "x",
+			}),
+		).toThrow();
+	});
+});
+
+describe("updateTaskChildTokenHash", () => {
+	beforeEach(() => {
+		createTask(db, { id: "t1", session_id: "s1", agent_kind: "pi", objective: "x" });
+	});
+
+	it("stores only a hash for child reporting token validation", () => {
+		const hash = `sha256:${"a".repeat(64)}`;
+		const t = updateTaskChildTokenHash(db, "t1", hash);
+		expect(t?.child_token_hash).toBe(hash);
+	});
+
+	it("can clear the child token hash", () => {
+		updateTaskChildTokenHash(db, "t1", `sha256:${"a".repeat(64)}`);
+		const t = updateTaskChildTokenHash(db, "t1", null);
+		expect(t?.child_token_hash).toBeNull();
+	});
+
+	it("rejects values that are not sha256 token hashes", () => {
+		expect(() => updateTaskChildTokenHash(db, "t1", "raw-token")).toThrow(/sha256/);
+	});
+
+	it("returns null for unknown task", () => {
+		expect(updateTaskChildTokenHash(db, "missing", `sha256:${"a".repeat(64)}`)).toBeNull();
+	});
+});
+
+describe("task events", () => {
+	beforeEach(() => {
+		createTask(db, { id: "t1", session_id: "s1", agent_kind: "pi", objective: "x" });
+	});
+
+	it("appends child-reported events in insertion order", async () => {
+		const first = appendTaskEvent(db, {
+			id: "z-later-sort-id",
+			task_id: "t1",
+			type: "progress",
+			message: "Running tests",
+			payload: { command: "bun test" },
+		});
+		const second = appendTaskEvent(db, {
+			id: "a-earlier-sort-id",
+			task_id: "t1",
+			type: "completed",
+			message: "Done",
+		});
+
+		expect(first.payload).toEqual({ command: "bun test" });
+		expect(second.payload).toBeNull();
+		expect(first.sequence).toBeLessThan(second.sequence);
+		expect(listTaskEvents(db, "t1").map((event) => event.id)).toEqual([
+			"z-later-sort-id",
+			"a-earlier-sort-id",
+		]);
+	});
+
+	it("enforces task foreign key for events", () => {
+		expect(() =>
+			appendTaskEvent(db, {
+				id: "e1",
+				task_id: "missing",
+				type: "progress",
+				message: "wip",
 			}),
 		).toThrow();
 	});
