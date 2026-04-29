@@ -139,9 +139,9 @@ describe("e2e: submit → status → cancel → result", () => {
 		expect(listBody.data.tasks.some((t) => t.task_id === task_id)).toBe(true);
 	});
 
-	it("list_adapters surfaces all three MVP adapters with correct model capabilities", async () => {
+	it("adapter list surfaces all three MVP adapters with correct model capabilities", async () => {
 		const cli = createCli(ctx);
-		const res = await cli.fetch(new Request("http://localhost/list_adapters"));
+		const res = await cli.fetch(new Request("http://localhost/adapter/list"));
 		const body = (await res.json()) as {
 			data: {
 				adapters: Array<{

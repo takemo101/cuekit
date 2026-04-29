@@ -9,7 +9,7 @@ import {
 } from "@cuekit/adapters";
 import { createStderrLogger, parseLogLevel } from "@cuekit/core";
 import { openDatabase, runMigrations } from "@cuekit/store";
-import { createCli, createMcpCli } from "./cli.ts";
+import { createCli, createMcpCli, createMcpConfigCli } from "./cli.ts";
 
 // Default cuekit entry point: opens ~/.cuekit/state.db, migrates, wires the
 // tmux pane backend + all three adapters, and hands argv to incur.
@@ -59,16 +59,20 @@ async function main(): Promise<void> {
 		registry.register(createPiAdapter(db, panes, { logger }));
 		registry.register(createOpenCodeAdapter(db, panes, { logger }));
 
-		const cli = process.argv.includes("--mcp")
+		const isMcpServer = process.argv.includes("--mcp");
+		const isMcpConfig = process.argv[2] === "mcp" && process.argv[3] === "config";
+		const cli = isMcpServer
 			? createMcpCli({ db, registry })
-			: createCli({ db, registry });
+			: isMcpConfig
+				? createMcpConfigCli({ db, registry })
+				: createCli({ db, registry });
 		// Note: `cli.serve()` may return before the process should exit —
 		// in `--mcp` mode incur resolves this promise as soon as the stdio
 		// transport is wired, and the server keeps handling requests in
 		// the background. Closing the DB here would break subsequent tool
 		// calls with 'Cannot use a closed database'. Defer cleanup to the
 		// signal handlers instead; the OS reclaims everything on exit.
-		await cli.serve();
+		await cli.serve(isMcpConfig ? ["config", ...process.argv.slice(4)] : undefined);
 	} catch (err) {
 		if (db) closeQuietly(db);
 		logger.error("startup failed", {
