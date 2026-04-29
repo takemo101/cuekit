@@ -103,7 +103,7 @@ describe("e2e: submit → status → cancel → result", () => {
 		const cli = createCli(ctx);
 
 		const submitRes = await cli.fetch(
-			new Request("http://localhost/submit_task", {
+			new Request("http://localhost/task/submit", {
 				method: "POST",
 				headers: { "content-type": "application/json" },
 				body: JSON.stringify({
@@ -124,7 +124,7 @@ describe("e2e: submit → status → cancel → result", () => {
 		if (!task_id) throw new Error("no task_id");
 
 		const statusRes = await cli.fetch(
-			new Request(`http://localhost/get_task_status?task_id=${task_id}`),
+			new Request(`http://localhost/task/status?task_id=${task_id}`),
 		);
 		const statusBody = (await statusRes.json()) as {
 			data: { status: string; attach_hint?: string };
@@ -132,7 +132,7 @@ describe("e2e: submit → status → cancel → result", () => {
 		expect(statusBody.data.status).toBe("running");
 		expect(statusBody.data.attach_hint).toContain(task_id);
 
-		const listRes = await cli.fetch(new Request("http://localhost/list_tasks"));
+		const listRes = await cli.fetch(new Request("http://localhost/task/list"));
 		const listBody = (await listRes.json()) as {
 			data: { tasks: Array<{ task_id: string }> };
 		};

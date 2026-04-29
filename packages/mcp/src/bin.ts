@@ -9,7 +9,7 @@ import {
 } from "@cuekit/adapters";
 import { createStderrLogger, parseLogLevel } from "@cuekit/core";
 import { openDatabase, runMigrations } from "@cuekit/store";
-import { createCli } from "./cli.ts";
+import { createCli, createMcpCli } from "./cli.ts";
 
 // Default cuekit entry point: opens ~/.cuekit/state.db, migrates, wires the
 // tmux pane backend + all three adapters, and hands argv to incur.
@@ -59,7 +59,9 @@ async function main(): Promise<void> {
 		registry.register(createPiAdapter(db, panes, { logger }));
 		registry.register(createOpenCodeAdapter(db, panes, { logger }));
 
-		const cli = createCli({ db, registry });
+		const cli = process.argv.includes("--mcp")
+			? createMcpCli({ db, registry })
+			: createCli({ db, registry });
 		// Note: `cli.serve()` may return before the process should exit —
 		// in `--mcp` mode incur resolves this promise as soon as the stdio
 		// transport is wired, and the server keeps handling requests in
