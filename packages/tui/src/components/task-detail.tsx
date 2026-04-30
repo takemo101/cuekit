@@ -79,7 +79,7 @@ function formatUpdatedAt(value: string): string {
 }
 
 function headerLine(task: TaskSummary, status: TaskStatus): string {
-	return `Detail: ${task.task_id} · ${task.agent_kind} · ${status}`;
+	return `${task.task_id} · ${status} · ${task.agent_kind}`;
 }
 
 function metadataBlock(task: TaskSummary, detail: TuiTaskDetail | undefined): string {
@@ -118,7 +118,7 @@ export function TaskDetail(props: { task?: TaskSummary; detail?: TuiTaskDetail }
 	const { task, detail } = props;
 	if (!task) {
 		return (
-			<box borderStyle="rounded" flexGrow={2} padding={1}>
+			<box title="Detail" borderStyle="rounded" flexGrow={2} padding={1}>
 				<EmptyText>Select a task.</EmptyText>
 			</box>
 		);
@@ -130,7 +130,7 @@ export function TaskDetail(props: { task?: TaskSummary; detail?: TuiTaskDetail }
 	const isTerminal = ["completed", "failed", "cancelled", "timed_out", "blocked"].includes(status);
 
 	return (
-		<box borderStyle="rounded" flexGrow={2} padding={1} flexDirection="column">
+		<box title="Detail" borderStyle="rounded" flexGrow={2} padding={1} flexDirection="column">
 			<text fg={statusColor(status)}>{headerLine(task, status)}</text>
 			<text fg={MUTED}>{metadataBlock(task, detail)}</text>
 			<text> </text>
@@ -140,7 +140,15 @@ export function TaskDetail(props: { task?: TaskSummary; detail?: TuiTaskDetail }
 				<>
 					<text fg={BLUE}>RESULT</text>
 					<text>{resultBlock(detail, status)}</text>
-					<text fg={MUTED}>Transcript tail hidden for completed tasks; attach/open transcript for raw logs.</text>
+					<text> </text>
+					<text fg={BLUE}>{`TRANSCRIPT TAIL (${lines.length} line${lines.length === 1 ? "" : "s"})`}</text>
+					<scrollbox flexGrow={1} stickyScroll stickyStart="bottom" viewportCulling>
+						<text>{
+							lines.length > 0
+								? lines.map((line) => truncateEnd(line, 150)).join("\n")
+								: "No transcript output available."
+						}</text>
+					</scrollbox>
 				</>
 			) : (
 				<>
