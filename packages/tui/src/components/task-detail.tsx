@@ -82,19 +82,19 @@ function detailTitle(task: TaskSummary, status: TaskStatus): string {
 	return `Detail: ${task.task_id} / ${status} / ${task.agent_kind}`;
 }
 
-function metadataBlock(task: TaskSummary, detail: TuiTaskDetail | undefined): string {
+function metadataLines(task: TaskSummary, detail: TuiTaskDetail | undefined): string[] {
 	const lines = [
 		`updated     ${formatUpdatedAt(task.updated_at)}`,
 		`transcript  ${pathLabel(detail?.transcriptPath)}`,
 	];
 	if (detail?.status.attach_hint) lines.push(`attach      ${truncateMiddle(detail.status.attach_hint, 96)}`);
 	if (detail?.status.summary) lines.push(`summary     ${truncateEnd(detail.status.summary, 110)}`);
-	return lines.join("\n");
+	return lines;
 }
 
-function eventsBlock(events: TuiTaskEvent[]): string {
-	if (events.length === 0) return "EVENTS\n  No events yet.";
-	return [`EVENTS (${events.length} shown)`, ...events.map((event) => `  ${eventLine(event)}`)].join("\n");
+function eventsLines(events: TuiTaskEvent[]): string[] {
+	if (events.length === 0) return ["EVENTS", "  No events yet."];
+	return [`EVENTS (${events.length} shown)`, ...events.map((event) => `  ${eventLine(event)}`)];
 }
 
 function terminalEvent(detail: TuiTaskDetail | undefined): TuiTaskEvent | undefined {
@@ -128,20 +128,26 @@ export function TaskDetail(props: { task?: TaskSummary; detail?: TuiTaskDetail }
 	const events = detail?.events.slice(-7) ?? [];
 	const lines = liveOutputLines(detail);
 	const isTerminal = ["completed", "failed", "cancelled", "timed_out", "blocked"].includes(status);
+	const metadata = metadataLines(task, detail);
+	const eventRows = eventsLines(events);
 
 	return (
 		<box title={detailTitle(task, status)} borderStyle="rounded" flexGrow={2} padding={1} flexDirection="column">
-			<text fg={MUTED}>{metadataBlock(task, detail)}</text>
-			<text> </text>
-			<text fg={PURPLE}>{eventsBlock(events)}</text>
-			<text> </text>
+			{metadata.map((line) => (
+				<text key={line} fg={MUTED} flexShrink={0}>{line}</text>
+			))}
+			<text flexShrink={0}> </text>
+			{eventRows.map((line, index) => (
+				<text key={`${index}:${line}`} fg={PURPLE} flexShrink={0}>{line}</text>
+			))}
+			<text flexShrink={0}> </text>
 			{isTerminal ? (
 				<>
-					<text fg={BLUE}>RESULT</text>
-					<text>{resultBlock(detail, status)}</text>
-					<text> </text>
-					<text fg={BLUE}>{`TRANSCRIPT TAIL (${lines.length} line${lines.length === 1 ? "" : "s"})`}</text>
-					<scrollbox flexGrow={1} stickyScroll stickyStart="bottom" viewportCulling>
+					<text fg={BLUE} flexShrink={0}>RESULT</text>
+					<text flexShrink={0}>{resultBlock(detail, status)}</text>
+					<text flexShrink={0}> </text>
+					<text fg={BLUE} flexShrink={0}>{`TRANSCRIPT TAIL (${lines.length} line${lines.length === 1 ? "" : "s"})`}</text>
+					<scrollbox flexGrow={1} flexShrink={1} stickyScroll stickyStart="bottom" viewportCulling>
 						<text>{
 							lines.length > 0
 								? lines.map((line) => truncateEnd(line, 150)).join("\n")
@@ -151,8 +157,8 @@ export function TaskDetail(props: { task?: TaskSummary; detail?: TuiTaskDetail }
 				</>
 			) : (
 				<>
-					<text fg={BLUE}>{`LIVE OUTPUT (${lines.length} line${lines.length === 1 ? "" : "s"})`}</text>
-					<scrollbox flexGrow={1} stickyScroll stickyStart="bottom" viewportCulling>
+					<text fg={BLUE} flexShrink={0}>{`LIVE OUTPUT (${lines.length} line${lines.length === 1 ? "" : "s"})`}</text>
+					<scrollbox flexGrow={1} flexShrink={1} stickyScroll stickyStart="bottom" viewportCulling>
 						<text>{
 							lines.length > 0
 								? lines.map((line) => truncateEnd(line, 150)).join("\n")
