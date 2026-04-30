@@ -55,26 +55,32 @@ function pathLabel(path: string | undefined): string {
 	return truncateMiddle(cuekitIndex >= 0 ? path.slice(cuekitIndex) : path, 96);
 }
 
+function isReportBoilerplate(line: string): boolean {
+	return (
+		line.startsWith("ok:") ||
+		line.startsWith("task_id:") ||
+		line.startsWith("event_id:") ||
+		line.startsWith("type:") ||
+		line.startsWith("status:")
+	);
+}
+
 function outputLines(detail: TuiTaskDetail | undefined, status: TaskStatus): string[] {
 	const lines = detail?.transcriptTail ?? [];
 	if (status === "completed") {
 		const reportIndex = lines.findLastIndex((line) => line.includes("cuekit tool report"));
 		if (reportIndex >= 0 && reportIndex < lines.length - 1) {
-			return lines.slice(reportIndex + 1).filter((line) => !line.startsWith("ok:")).slice(-12);
+			return lines.slice(reportIndex + 1).filter((line) => !isReportBoilerplate(line)).slice(-12);
 		}
 	}
-	return lines.slice(-16);
+	return lines.filter((line) => !isReportBoilerplate(line)).slice(-16);
 }
 
-function EventRow(props: { event: TuiTaskEvent }): ReactNode {
-	const event = props.event;
-	return (
-		<box flexDirection="row">
-			<text fg={MUTED}>{`#${String(event.sequence).padEnd(4)}`}</text>
-			<text fg={eventColor(event.type)}>{event.type.padEnd(11)}</text>
-			<text>{truncateEnd(event.message ?? "", 110)}</text>
-		</box>
-	);
+function eventLine(event: TuiTaskEvent): string {
+	const sequence = `#${event.sequence}`.padEnd(6);
+	const type = event.type.padEnd(12);
+	const message = event.message ?? "";
+	return truncateEnd(`${sequence}${type}${message}`, 128);
 }
 
 function EmptyText(props: { children: string }): ReactNode {
@@ -122,10 +128,15 @@ export function TaskDetail(props: { task?: TaskSummary; detail?: TuiTaskDetail }
 				) : null}
 			</box>
 
-			<box borderStyle="single" paddingX={1} paddingY={0} flexDirection="column">
-				<text fg={BLUE}>Events</text>
+			<box borderStyle="single" padding={1} flexDirection="column" gap={1}>
+				<box flexDirection="row" justifyContent="space-between">
+					<text fg={BLUE}>Events</text>
+					<text fg={MUTED}>{`${events.length} shown`}</text>
+				</box>
 				{events.length > 0 ? (
-					events.map((event) => <EventRow key={event.id} event={event} />)
+					events.map((event) => (
+						<text key={event.id} fg={eventColor(event.type)}>{eventLine(event)}</text>
+					))
 				) : (
 					<EmptyText>No events yet.</EmptyText>
 				)}
