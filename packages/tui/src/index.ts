@@ -9,7 +9,7 @@ export function printTuiHelp(): void {
 
 Usage: cuekit tui
 
-Keys: ↑/↓ select, r refresh, a attach, s steer, c cancel, d delete, q quit
+Keys: ↑/↓ select, r refresh, a attach (mouse scroll), s steer, c cancel, d delete, q quit
 `);
 }
 

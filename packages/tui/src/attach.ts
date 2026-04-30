@@ -11,7 +11,18 @@ export function getTmuxSessionName(view: TaskStatusView): string | null {
 }
 
 export function buildTmuxAttachArgs(sessionName: string): string[] {
-	return ["tmux", "attach-session", "-t", sessionName];
+	return [
+		"tmux",
+		"set-option",
+		"-t",
+		sessionName,
+		"mouse",
+		"on",
+		";",
+		"attach-session",
+		"-t",
+		sessionName,
+	];
 }
 
 export async function runTmuxAttach(sessionName: string): Promise<number> {
