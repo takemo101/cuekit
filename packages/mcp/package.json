@@ -17,6 +17,12 @@
 		"@cuekit/adapters": "workspace:*",
 		"@cuekit/core": "workspace:*",
 		"@cuekit/store": "workspace:*",
-		"incur": "0.4.3"
+		"@opentui/core": "0.2.1",
+		"@opentui/react": "0.2.1",
+		"incur": "0.4.3",
+		"react": "19.2.5"
+	},
+	"devDependencies": {
+		"@types/react": "19.2.14"
 	}
 }

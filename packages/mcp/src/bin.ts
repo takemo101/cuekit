@@ -11,6 +11,7 @@ import { createStderrLogger, parseLogLevel } from "@cuekit/core";
 import { openDatabase, runMigrations } from "@cuekit/store";
 import { createCli, createMcpCli, createMcpConfigCli } from "./cli.ts";
 import { registerPiMcpServer } from "./pi-mcp-config.ts";
+import { printTuiHelp, runTui } from "./tui/index.tsx";
 
 // Default cuekit entry point: opens ~/.cuekit/state.db, migrates, wires the
 // tmux pane backend + all three adapters, and hands argv to incur.
@@ -71,6 +72,12 @@ async function main(): Promise<void> {
 
 	let db: Database | undefined;
 	try {
+		const isTui = process.argv[2] === "tui";
+		if (isTui && (process.argv.includes("--help") || process.argv.includes("-h"))) {
+			printTuiHelp();
+			return;
+		}
+
 		const isMcpAdd = process.argv[2] === "mcp" && process.argv[3] === "add";
 		const mcpAddArgs = process.argv.slice(4);
 		const piAgents = splitPiAgentArgs(mcpAddArgs);
@@ -97,6 +104,11 @@ async function main(): Promise<void> {
 		registry.register(createClaudeCodeAdapter(db, panes, { logger }));
 		registry.register(createPiAdapter(db, panes, { logger }));
 		registry.register(createOpenCodeAdapter(db, panes, { logger }));
+
+		if (isTui) {
+			await runTui({ db, registry });
+			return;
+		}
 
 		const isMcpServer = process.argv.includes("--mcp");
 		const isMcpConfig = process.argv[2] === "mcp" && process.argv[3] === "config";
