@@ -32,8 +32,8 @@ export interface BuildClaudeCodeLaunchCommandOptions {
 // tmux or claude itself. The output is a single shell-command string (tmux
 // new-session receives it as its final positional argument).
 //
-// Shape:    <claudeBin> [--model <model>] '<shell-quoted objective>'
-// Example:  claude --model sonnet 'Implement retry logic'
+// Shape:    <claudeBin> [--dangerously-skip-permissions] [--model <model>] '<shell-quoted objective>'
+// Example:  claude --dangerously-skip-permissions --model sonnet 'Implement retry logic'
 //
 // Interactive mode (no -p / --print) — the pane stays attached to a TTY so
 // `tmux attach-session` can foreground the live child.

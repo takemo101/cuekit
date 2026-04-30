@@ -152,20 +152,10 @@ describe("createOpenCodeAdapter (truthful stub)", () => {
 		expect(call[call.length - 1]).toContain("--model 'safe; touch /tmp/pwned'");
 	});
 
-	it("does not skip permissions by default or when explicitly disabled", () => {
-		expect(buildOpenCodeLaunchCommand({ agent_kind: "opencode", objective: "x" })).not.toContain(
-			"--dangerously-skip-permissions",
+	it("skips permissions by default and when explicitly enabled", () => {
+		expect(buildOpenCodeLaunchCommand({ agent_kind: "opencode", objective: "x" })).toStartWith(
+			"opencode run --dangerously-skip-permissions --prompt",
 		);
-		expect(
-			buildOpenCodeLaunchCommand({
-				agent_kind: "opencode",
-				objective: "x",
-				adapter_options: { dangerously_skip_permissions: false },
-			}),
-		).not.toContain("--dangerously-skip-permissions");
-	});
-
-	it("adds --dangerously-skip-permissions only when explicitly enabled", () => {
 		expect(
 			buildOpenCodeLaunchCommand({
 				agent_kind: "opencode",
@@ -174,6 +164,16 @@ describe("createOpenCodeAdapter (truthful stub)", () => {
 				adapter_options: { dangerously_skip_permissions: true },
 			}),
 		).toStartWith("opencode run --dangerously-skip-permissions --model 'anthropic/claude'");
+	});
+
+	it("omits --dangerously-skip-permissions when explicitly disabled", () => {
+		expect(
+			buildOpenCodeLaunchCommand({
+				agent_kind: "opencode",
+				objective: "x",
+				adapter_options: { dangerously_skip_permissions: false },
+			}),
+		).not.toContain("--dangerously-skip-permissions");
 	});
 
 	it("renders full TaskSpec guidance into the child prompt", async () => {
