@@ -2,13 +2,14 @@ import { useKeyboard, useRenderer } from "@opentui/react";
 import type { TaskSummary } from "@cuekit/core";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { CommandContext } from "../command-context.ts";
+import { buildTmuxAttachArgs, getTmuxSessionName } from "./attach.ts";
 import { loadTaskDetail, loadTaskList, type TuiTaskDetail } from "./data.ts";
-import { moveSelection } from "./task-actions.ts";
+import { canAttach, moveSelection } from "./task-actions.ts";
 import { Footer } from "./components/footer.tsx";
 import { TaskDetail } from "./components/task-detail.tsx";
 import { TaskList } from "./components/task-list.tsx";
 
-export function App(props: { ctx: CommandContext }): ReactNode {
+export function App(props: { ctx: CommandContext; onAttach?: (args: string[]) => void }): ReactNode {
 	const renderer = useRenderer();
 	const [tasks, setTasks] = useState<TaskSummary[]>([]);
 	const [selectedIndex, setSelectedIndex] = useState(0);
@@ -80,7 +81,21 @@ export function App(props: { ctx: CommandContext }): ReactNode {
 			void refresh();
 			return;
 		}
-		if (["a", "s", "c", "d"].includes(key.name)) {
+		if (key.name === "a") {
+			if (!detail || !canAttach(detail.status)) {
+				setError("Selected task is not attachable.");
+				return;
+			}
+			const sessionName = getTmuxSessionName(detail.status);
+			if (!sessionName) {
+				setError("Selected task does not expose a tmux session name.");
+				return;
+			}
+			props.onAttach?.(buildTmuxAttachArgs(sessionName));
+			renderer.destroy();
+			return;
+		}
+		if (["s", "c", "d"].includes(key.name)) {
 			setMessage(`Action '${key.name}' will be implemented in a follow-up issue.`);
 		}
 	});

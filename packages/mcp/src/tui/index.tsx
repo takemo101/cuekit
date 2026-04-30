@@ -16,6 +16,7 @@ export async function runTui(ctx: CommandContext): Promise<void> {
 	const renderer = await createCliRenderer({ exitOnCtrlC: true });
 	const root = createRoot(renderer);
 	let destroyed = false;
+	let attachArgs: string[] | undefined;
 	const destroyedPromise = new Promise<void>((resolve) => {
 		renderer.on("destroy", () => {
 			destroyed = true;
@@ -25,8 +26,24 @@ export async function runTui(ctx: CommandContext): Promise<void> {
 	});
 
 	try {
-		root.render(<App ctx={ctx} />);
+		root.render(
+			<App
+				ctx={ctx}
+				onAttach={(args) => {
+					attachArgs = args;
+				}}
+			/>,
+		);
 		await destroyedPromise;
+		if (attachArgs) {
+			const proc = Bun.spawn(attachArgs, {
+				stdin: "inherit",
+				stdout: "inherit",
+				stderr: "inherit",
+			});
+			const exitCode = await proc.exited;
+			if (exitCode !== 0) process.exitCode = exitCode;
+		}
 	} catch (err) {
 		if (!destroyed && !renderer.isDestroyed) renderer.destroy();
 		throw err;
