@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import type { TaskStatusView } from "@cuekit/core";
-import { buildTmuxAttachArgs, getTmuxSessionName } from "../src/tui/attach.ts";
+import { buildTmuxAttachArgs, getTmuxSessionName } from "../src/attach.ts";
 
 const baseView: TaskStatusView = {
 	task_id: "t_abc",

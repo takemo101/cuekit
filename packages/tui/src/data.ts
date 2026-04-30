@@ -1,50 +1,36 @@
 import { closeSync, existsSync, openSync, readSync, statSync } from "node:fs";
-import { getTaskById } from "@cuekit/store";
-import type { CommandContext } from "../command-context.ts";
-import { type GetTaskStatusOutput, runGetTaskStatus } from "../commands/get-task-status.ts";
-import { runListTaskEvents } from "../commands/list-task-events.ts";
-import { type ListTasksInput, type ListTasksOutput, runListTasks } from "../commands/list-tasks.ts";
+import type { TaskListFilter, TaskStatusView } from "@cuekit/core";
+import type { TuiContext, TuiTaskEvent, TuiTaskListOutput } from "./context.ts";
 
 type LoadTaskListOptions = Pick<
-	ListTasksInput,
+	TaskListFilter,
 	"cwd" | "limit" | "status" | "agent_kind" | "session_id" | "cursor"
 >;
 
-export type TuiTaskEvent = {
-	sequence: number;
-	id: string;
-	task_id: string;
-	type: string;
-	message: string | null;
-	payload: unknown | null;
-	created_at: string;
-};
-
 export type TuiTaskDetail = {
-	status: GetTaskStatusOutput;
+	status: TaskStatusView;
 	events: TuiTaskEvent[];
 	transcriptPath?: string;
 	transcriptTail: string[];
 };
 
 export async function loadTaskList(
-	ctx: CommandContext,
+	ctx: TuiContext,
 	options: LoadTaskListOptions = {},
-): Promise<ListTasksOutput> {
-	return runListTasks(ctx, { ...options, limit: options.limit ?? 100 });
+): Promise<TuiTaskListOutput> {
+	return ctx.listTasks({ ...options, limit: options.limit ?? 100 });
 }
 
 export async function loadTaskDetail(
-	ctx: CommandContext,
+	ctx: TuiContext,
 	taskId: string,
 	options: { transcriptLines?: number } = {},
 ): Promise<TuiTaskDetail> {
 	const [status, eventsResult] = await Promise.all([
-		runGetTaskStatus(ctx, { task_id: taskId }),
-		runListTaskEvents(ctx, { task_id: taskId }),
+		ctx.getTaskStatus(taskId),
+		ctx.listTaskEvents(taskId),
 	]);
-	const task = getTaskById(ctx.db, taskId);
-	const transcriptPath = task?.transcript_ref ?? undefined;
+	const transcriptPath = ctx.getTranscriptPath?.(taskId);
 	return {
 		status,
 		events: "events" in eventsResult ? eventsResult.events : [],

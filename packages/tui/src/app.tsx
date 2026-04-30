@@ -1,10 +1,7 @@
 import { useKeyboard, useRenderer } from "@opentui/react";
 import type { TaskSummary } from "@cuekit/core";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import type { CommandContext } from "../command-context.ts";
-import { runCancelTask } from "../commands/cancel-task.ts";
-import { runDeleteTask } from "../commands/delete-task.ts";
-import { runSteerTask } from "../commands/steer-task.ts";
+import type { TuiContext } from "./context.ts";
 import { buildTmuxAttachArgs, getTmuxSessionName } from "./attach.ts";
 import { ConfirmDialog } from "./components/confirm-dialog.tsx";
 import { Footer } from "./components/footer.tsx";
@@ -17,7 +14,7 @@ import { canAttach, canCancel, canDelete, moveSelection } from "./task-actions.t
 type PendingConfirm = { kind: "cancel" | "delete"; taskId: string } | null;
 type SteerInputState = { taskId: string; value: string } | null;
 
-export function App(props: { ctx: CommandContext; onAttach?: (args: string[]) => void }): ReactNode {
+export function App(props: { ctx: TuiContext; onAttach?: (args: string[]) => void }): ReactNode {
 	const renderer = useRenderer();
 	const [tasks, setTasks] = useState<TaskSummary[]>([]);
 	const [selectedIndex, setSelectedIndex] = useState(0);
@@ -83,8 +80,8 @@ export function App(props: { ctx: CommandContext; onAttach?: (args: string[]) =>
 		try {
 			const result =
 				action.kind === "cancel"
-					? await runCancelTask(props.ctx, { task_id: action.taskId })
-					: await runDeleteTask(props.ctx, { task_id: action.taskId });
+					? await props.ctx.cancelTask(action.taskId)
+					: await props.ctx.deleteTask(action.taskId);
 			if (!result.ok) {
 				setError(result.error.message);
 				return;
@@ -111,7 +108,7 @@ export function App(props: { ctx: CommandContext; onAttach?: (args: string[]) =>
 			setLoading(true);
 			setError(undefined);
 			try {
-				const result = await runSteerTask(props.ctx, { task_id: taskId, message: text });
+				const result = await props.ctx.steerTask(taskId, text);
 				if (!result.ok) {
 					setError(result.error.message);
 					return;

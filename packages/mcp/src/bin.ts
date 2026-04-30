@@ -8,10 +8,16 @@ import {
 	PaneBackend,
 } from "@cuekit/adapters";
 import { createStderrLogger, parseLogLevel } from "@cuekit/core";
-import { openDatabase, runMigrations } from "@cuekit/store";
+import { getTaskById, openDatabase, runMigrations } from "@cuekit/store";
 import { createCli, createMcpCli, createMcpConfigCli } from "./cli.ts";
+import type { CommandContext } from "./command-context.ts";
+import { runCancelTask } from "./commands/cancel-task.ts";
+import { runDeleteTask } from "./commands/delete-task.ts";
+import { runGetTaskStatus } from "./commands/get-task-status.ts";
+import { runListTaskEvents } from "./commands/list-task-events.ts";
+import { runListTasks } from "./commands/list-tasks.ts";
+import { runSteerTask } from "./commands/steer-task.ts";
 import { registerPiMcpServer } from "./pi-mcp-config.ts";
-import { printTuiHelp, runTui } from "./tui/index.tsx";
 
 // Default cuekit entry point: opens ~/.cuekit/state.db, migrates, wires the
 // tmux pane backend + all three adapters, and hands argv to incur.
@@ -24,6 +30,29 @@ function closeQuietly(db: Database): void {
 	} catch {
 		// ignore close errors on shutdown
 	}
+}
+
+const TUI_PACKAGE_NAME = "@cuekit/tui";
+
+function printTuiHelp(): void {
+	process.stdout.write(`cuekit tui — interactive task cockpit
+
+Usage: cuekit tui
+
+Keys: ↑/↓ select, r refresh, a attach, s steer, c cancel, d delete, q quit
+`);
+}
+
+function createTuiContext(ctx: CommandContext) {
+	return {
+		listTasks: (input: Parameters<typeof runListTasks>[1]) => runListTasks(ctx, input),
+		getTaskStatus: (taskId: string) => runGetTaskStatus(ctx, { task_id: taskId }),
+		listTaskEvents: (taskId: string) => runListTaskEvents(ctx, { task_id: taskId }),
+		cancelTask: (taskId: string) => runCancelTask(ctx, { task_id: taskId }),
+		deleteTask: (taskId: string) => runDeleteTask(ctx, { task_id: taskId }),
+		steerTask: (taskId: string, message: string) => runSteerTask(ctx, { task_id: taskId, message }),
+		getTranscriptPath: (taskId: string) => getTaskById(ctx.db, taskId)?.transcript_ref ?? undefined,
+	};
 }
 
 function installSignalHandlers(db: Database): void {
@@ -105,7 +134,8 @@ async function main(): Promise<void> {
 		registry.register(createOpenCodeAdapter(db, panes, { logger }));
 
 		if (isTui) {
-			await runTui({ db, registry });
+			const { runTui } = await import(TUI_PACKAGE_NAME);
+			await runTui(createTuiContext({ db, registry }));
 			closeQuietly(db);
 			return;
 		}

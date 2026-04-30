@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import type { TaskStatus, TaskStatusView } from "@cuekit/core";
-import { canAttach, canCancel, canDelete, moveSelection } from "../src/tui/task-actions.ts";
+import { canAttach, canCancel, canDelete, moveSelection } from "../src/task-actions.ts";
 
 describe("tui task action helpers", () => {
 	it("clamps selection movement to task list bounds", () => {
