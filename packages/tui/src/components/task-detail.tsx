@@ -37,32 +37,22 @@ function pathLabel(path: string | undefined): string {
 	return truncateMiddle(cuekitIndex >= 0 ? path.slice(cuekitIndex) : path, 96);
 }
 
-function isReportBoilerplate(line: string): boolean {
-	return (
-		line.startsWith("ok:") ||
-		line.startsWith("task_id:") ||
-		line.startsWith("event_id:") ||
-		line.startsWith("type:") ||
-		line.startsWith("status:")
-	);
-}
-
 function isOutputNoise(line: string): boolean {
-	const normalized = line.toLowerCase().replaceAll(" ", "");
+	const trimmed = line.trim();
+	const normalized = trimmed.toLowerCase().replaceAll(" ", "");
 	return (
-		isReportBoilerplate(line) ||
-		/^[-─━]{8,}$/.test(line.trim()) ||
-		/^\d+$/.test(line.trim()) ||
-		normalized.includes("bypasspermissions") ||
-		normalized.includes("stophook") ||
-		normalized.includes("tokens") ||
-		normalized.includes("shift+tabtocycle") ||
-		normalized.includes("ctrl+toexpand")
+		/^[-─━]{8,}$/.test(trimmed) ||
+		/^\?\s*for\s+shortcuts/i.test(trimmed) ||
+		/^shift\+tab\s+to\s+cycle/i.test(trimmed) ||
+		/^ctrl\+[^\s]+\s+to\s+expand/i.test(trimmed) ||
+		normalized === "bypasspermissions" ||
+		normalized === "stophook" ||
+		/^tokens:\s*\d+/i.test(trimmed)
 	);
 }
 
-function liveOutputLines(detail: TuiTaskDetail | undefined): string[] {
-	return (detail?.transcriptTail ?? []).filter((line) => !isOutputNoise(line)).slice(-16);
+function outputLines(detail: TuiTaskDetail | undefined): string[] {
+	return (detail?.transcriptTail ?? []).filter((line) => !isOutputNoise(line));
 }
 
 function eventLine(event: TuiTaskEvent): string {
@@ -92,9 +82,12 @@ function metadataLines(task: TaskSummary, detail: TuiTaskDetail | undefined): st
 	return lines;
 }
 
-function eventsLines(events: TuiTaskEvent[]): string[] {
-	if (events.length === 0) return ["EVENTS", "  No events yet."];
-	return [`EVENTS (${events.length} shown)`, ...events.map((event) => `  ${eventLine(event)}`)];
+function eventsLines(events: TuiTaskEvent[], error: string | undefined): string[] {
+	const suffix = error ? " — load error" : "";
+	if (events.length === 0) {
+		return ["EVENTS" + suffix, error ? `  ${truncateEnd(error, 128)}` : "  No events yet."];
+	}
+	return [`EVENTS (${events.length} shown)${suffix}`, ...events.map((event) => `  ${eventLine(event)}`)];
 }
 
 function terminalEvent(detail: TuiTaskDetail | undefined): TuiTaskEvent | undefined {
@@ -125,11 +118,11 @@ export function TaskDetail(props: { task?: TaskSummary; detail?: TuiTaskDetail }
 	}
 
 	const status = detail?.status.status ?? task.status;
-	const events = detail?.events.slice(-7) ?? [];
-	const lines = liveOutputLines(detail);
+	const events = detail?.events.slice(-3) ?? [];
+	const lines = outputLines(detail);
 	const isTerminal = ["completed", "failed", "cancelled", "timed_out", "blocked"].includes(status);
 	const metadata = metadataLines(task, detail);
-	const eventRows = eventsLines(events);
+	const eventRows = eventsLines(events, detail?.eventsError);
 
 	return (
 		<box title={detailTitle(task, status)} borderStyle="rounded" flexGrow={2} padding={1} flexDirection="column">

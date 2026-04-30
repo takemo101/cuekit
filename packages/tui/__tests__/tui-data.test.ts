@@ -152,19 +152,51 @@ describe("tui data helpers", () => {
 		expect(detail.events[0]?.message).toBe("halfway");
 	});
 
+	it("keeps status and transcript data when task event loading fails", async () => {
+		const { db, tui } = makeCtx();
+		const task = createTestTask(db);
+		const failingCtx: TuiContext = {
+			...tui,
+			async listTaskEvents() {
+				return {
+					error: {
+						code: "task_not_found",
+						message: "event load failed",
+						retryable: false,
+					},
+				};
+			},
+		};
+
+		const detail = await loadTaskDetail(failingCtx, task.id);
+
+		expect(detail.status.task_id).toBe(task.id);
+		expect(detail.events).toEqual([]);
+		expect(detail.eventsError).toBe("event load failed");
+	});
+
 	it("strips terminal control sequences from transcript text", () => {
 		expect(sanitizeTerminalText("\u001b[31mred\u001b[0m\r\u001b]0;title\u0007 text")).toBe(
 			"red text",
 		);
 	});
 
-	it("filters low-value terminal spinner fragments from transcript tails", () => {
+	it("strips DEL and C1 terminal control bytes from transcript text", () => {
+		expect(sanitizeTerminalText("\u009b31mred\u009dtitle\u007f text")).toBe("31mredtitle text");
+	});
+
+	it("filters punctuation-only terminal spinner fragments from transcript tails", () => {
 		const dir = mkdtempSync(`${tmpdir()}/cuekit-tui-transcript-noise-`);
 		try {
 			const path = join(dir, "transcript.txt");
 			writeFileSync(path, "+\n*\nn\n'g\nalmost done thinking\n✓ completed\n");
 
-			expect(readTranscriptTail(path, 10)).toEqual(["almost done thinking", "✓ completed"]);
+			expect(readTranscriptTail(path, 10)).toEqual([
+				"n",
+				"'g",
+				"almost done thinking",
+				"✓ completed",
+			]);
 		} finally {
 			rmSync(dir, { recursive: true, force: true });
 		}

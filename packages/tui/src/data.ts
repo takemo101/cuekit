@@ -10,6 +10,7 @@ type LoadTaskListOptions = Pick<
 export type TuiTaskDetail = {
 	status: TaskStatusView;
 	events: TuiTaskEvent[];
+	eventsError?: string;
 	transcriptPath?: string;
 	transcriptTail: string[];
 };
@@ -31,9 +32,11 @@ export async function loadTaskDetail(
 		ctx.listTaskEvents(taskId),
 	]);
 	const transcriptPath = ctx.getTranscriptPath?.(taskId);
+	const eventsError = "events" in eventsResult ? undefined : eventsResult.error.message;
 	return {
 		status,
 		events: "events" in eventsResult ? eventsResult.events : [],
+		...(eventsError ? { eventsError } : {}),
 		...(transcriptPath ? { transcriptPath } : {}),
 		transcriptTail: readTranscriptTail(transcriptPath, options.transcriptLines ?? 80),
 	};
@@ -48,7 +51,7 @@ function stripControlCharacters(value: string): string {
 	return Array.from(value)
 		.filter((char) => {
 			const code = char.charCodeAt(0);
-			return code === 10 || code >= 32;
+			return code === 10 || (code >= 32 && code !== 127 && !(code >= 0x80 && code <= 0x9f));
 		})
 		.join("");
 }
@@ -60,10 +63,7 @@ export function sanitizeTerminalText(value: string): string {
 function isLowValueTranscriptLine(line: string): boolean {
 	const trimmed = line.trim();
 	if (trimmed.length === 0) return true;
-	if (trimmed.length <= 2 && !/[\p{L}\p{N}]/u.test(trimmed)) return true;
-	if (trimmed.length <= 2 && /^[a-z]$/i.test(trimmed)) return true;
-	if (trimmed.length <= 3 && /^['"`´]?[a-z]$/i.test(trimmed)) return true;
-	return false;
+	return trimmed.length <= 2 && !/[\p{L}\p{N}]/u.test(trimmed);
 }
 
 export function readTranscriptTail(
