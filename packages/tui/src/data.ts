@@ -39,6 +39,24 @@ export async function loadTaskDetail(
 	};
 }
 
+const ESC = String.fromCharCode(27);
+const BEL = String.fromCharCode(7);
+const ANSI_CSI_RE = new RegExp(`${ESC}\\[[0-?]*[ -/]*[@-~]`, "g");
+const ANSI_OSC_RE = new RegExp(`${ESC}\\][^${BEL}]*(?:${BEL}|${ESC}\\\\)`, "g");
+
+function stripControlCharacters(value: string): string {
+	return Array.from(value)
+		.filter((char) => {
+			const code = char.charCodeAt(0);
+			return code === 10 || code >= 32;
+		})
+		.join("");
+}
+
+export function sanitizeTerminalText(value: string): string {
+	return stripControlCharacters(value.replace(ANSI_OSC_RE, "").replace(ANSI_CSI_RE, "")).trimEnd();
+}
+
 export function readTranscriptTail(
 	path: string | undefined,
 	maxLines = 80,
@@ -53,7 +71,12 @@ export function readTranscriptTail(
 		const buffer = Buffer.alloc(bytesToRead);
 		fd = openSync(path, "r");
 		readSync(fd, buffer, 0, bytesToRead, start);
-		return buffer.toString("utf8").split(/\r?\n/).filter(Boolean).slice(-maxLines);
+		return buffer
+			.toString("utf8")
+			.split(/\r?\n/)
+			.map(sanitizeTerminalText)
+			.filter(Boolean)
+			.slice(-maxLines);
 	} catch {
 		return [];
 	} finally {

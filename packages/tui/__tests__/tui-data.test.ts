@@ -16,7 +16,12 @@ import {
 	updateTaskRefs,
 } from "@cuekit/store";
 import type { TuiContext } from "../src/context.ts";
-import { loadTaskDetail, loadTaskList, readTranscriptTail } from "../src/data.ts";
+import {
+	loadTaskDetail,
+	loadTaskList,
+	readTranscriptTail,
+	sanitizeTerminalText,
+} from "../src/data.ts";
 
 function makeCtx(): { db: Database; tui: TuiContext } {
 	const db = new Database(":memory:");
@@ -145,6 +150,12 @@ describe("tui data helpers", () => {
 		expect(detail.status.task_id).toBe(task.id);
 		expect(detail.events).toHaveLength(1);
 		expect(detail.events[0]?.message).toBe("halfway");
+	});
+
+	it("strips terminal control sequences from transcript text", () => {
+		expect(sanitizeTerminalText("\u001b[31mred\u001b[0m\r\u001b]0;title\u0007 text")).toBe(
+			"red text",
+		);
 	});
 
 	it("reads the last N transcript lines", () => {

@@ -8,6 +8,7 @@ const TUI_FILES = [
 	"../src/components/footer.tsx",
 	"../src/components/confirm-dialog.tsx",
 	"../src/components/input-dialog.tsx",
+	"../src/components/modal-frame.tsx",
 ].map((path) => new URL(path, import.meta.url));
 
 describe("@cuekit/tui package smoke", () => {
