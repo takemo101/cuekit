@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import type { TaskStatusView } from "@cuekit/core";
-import { buildTmuxAttachArgs, getTmuxSessionName } from "../src/tui/attach.ts";
+import { buildTmuxAttachArgs, getTmuxSessionName } from "../src/attach.ts";
 
 const baseView: TaskStatusView = {
 	task_id: "t_abc",
@@ -37,9 +37,15 @@ describe("tui tmux attach helpers", () => {
 		expect(getTmuxSessionName({ ...baseView, attach_hint: "tmux attach-session" })).toBeNull();
 	});
 
-	it("builds shell-free tmux attach argv", () => {
+	it("builds shell-free tmux attach argv with mouse scrolling enabled", () => {
 		expect(buildTmuxAttachArgs("cuekit-task-t_abc")).toEqual([
 			"tmux",
+			"set-option",
+			"-t",
+			"cuekit-task-t_abc",
+			"mouse",
+			"on",
+			";",
 			"attach-session",
 			"-t",
 			"cuekit-task-t_abc",

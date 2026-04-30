@@ -227,7 +227,7 @@ describe("cuekit --mcp (stdio integration)", () => {
 		expect(names).toContain("submit_task");
 		expect(names).toContain("get_task_status");
 		expect(names).toContain("get_task_result");
-		expect(names).toContain("cancel_task");
+		expect(names).toContain("cancel_tasks");
 		expect(names).toContain("list_tasks");
 		expect(names).toContain("report_task_event");
 		expect(names).toContain("list_task_events");

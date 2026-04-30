@@ -18,9 +18,10 @@ import {
 	updateTaskChildTokenHash,
 } from "@cuekit/store";
 import type { CommandContext } from "../src/command-context.ts";
-import { runCancelTask } from "../src/commands/cancel-task.ts";
-import { runDeleteSession } from "../src/commands/delete-session.ts";
-import { runDeleteTask } from "../src/commands/delete-task.ts";
+import { runCancelTasks } from "../src/commands/cancel-task.ts";
+import { runCleanupTasks } from "../src/commands/cleanup-tasks.ts";
+import { runDeleteSessions } from "../src/commands/delete-session.ts";
+import { runDeleteTasks } from "../src/commands/delete-task.ts";
 import { runGetTaskResult } from "../src/commands/get-task-result.ts";
 import { runGetTaskStatus } from "../src/commands/get-task-status.ts";
 import { runListAdapters } from "../src/commands/list-adapters.ts";
@@ -204,7 +205,7 @@ describe("get-task-result", () => {
 			cwd: "/tmp",
 		});
 		if (!submit.accepted) throw new Error("setup failed");
-		await runCancelTask(ctx, { task_id: submit.task_id });
+		await runCancelTasks(ctx, { task_ids: [submit.task_id] });
 		const result = await runGetTaskResult(ctx, { task_id: submit.task_id });
 		expect("task_id" in result).toBe(true);
 		if ("task_id" in result) expect(result.status).toBe("cancelled");
@@ -233,13 +234,13 @@ describe("cancel-task", () => {
 			cwd: "/tmp",
 		});
 		if (!submit.accepted) throw new Error("setup failed");
-		const ack = await runCancelTask(ctx, { task_id: submit.task_id });
+		const ack = await runCancelTasks(ctx, { task_ids: [submit.task_id] });
 		expect(ack.ok).toBe(true);
 		expect(getTaskById(db, submit.task_id)?.status).toBe("cancelled");
 	});
 
 	it("returns task_not_found for unknown id", async () => {
-		const ack = await runCancelTask(ctx, { task_id: "t_nope" });
+		const ack = await runCancelTasks(ctx, { task_ids: ["t_nope"] });
 		expect(ack.ok).toBe(false);
 	});
 });
@@ -458,7 +459,7 @@ describe("wait-tasks", () => {
 			cwd: "/my/project",
 		});
 		if (!submitted.accepted) throw new Error("setup failed");
-		await runCancelTask(ctx, { task_id: submitted.task_id });
+		await runCancelTasks(ctx, { task_ids: [submitted.task_id] });
 
 		const waited = await runWaitTasks(ctx, {
 			task_ids: [submitted.task_id],
@@ -498,10 +499,10 @@ describe("wait-tasks", () => {
 			poll_interval_ms: 5,
 		});
 		setTimeout(() => {
-			void runCancelTask(ctx, { task_id: first.task_id });
+			void runCancelTasks(ctx, { task_ids: [first.task_id] });
 		}, 1);
 		setTimeout(() => {
-			void runCancelTask(ctx, { task_id: second.task_id });
+			void runCancelTasks(ctx, { task_ids: [second.task_id] });
 		}, 10);
 
 		const waited = await waitPromise;
@@ -648,7 +649,7 @@ describe("wait-tasks", () => {
 			cwd: "/my/project",
 		});
 		if (!submitted.accepted) throw new Error("setup failed");
-		await runCancelTask(ctx, { task_id: submitted.task_id });
+		await runCancelTasks(ctx, { task_ids: [submitted.task_id] });
 
 		const waited = await runWaitTasks(ctx, {
 			task_ids: [submitted.task_id],
@@ -736,7 +737,7 @@ describe("list-tasks", () => {
 			cwd: "/tmp/two",
 		});
 		if (!a.accepted) throw new Error("setup failed");
-		await runCancelTask(ctx, { task_id: a.task_id });
+		await runCancelTasks(ctx, { task_ids: [a.task_id] });
 		const running = await runListTasks(ctx, { status: "running" });
 		if ("error" in running) throw new Error(running.error.message);
 		expect(running.tasks).toHaveLength(1);
@@ -945,7 +946,7 @@ describe("show-mcp-config", () => {
 	});
 });
 
-describe("delete-task", () => {
+describe("delete-tasks", () => {
 	it("deletes a terminal task and returns ok", async () => {
 		const submit = await runSubmitTask(ctx, {
 			objective: "x",
@@ -953,8 +954,8 @@ describe("delete-task", () => {
 			cwd: "/tmp",
 		});
 		if (!submit.accepted) throw new Error("setup failed");
-		await runCancelTask(ctx, { task_id: submit.task_id });
-		const ack = await runDeleteTask(ctx, { task_id: submit.task_id });
+		await runCancelTasks(ctx, { task_ids: [submit.task_id] });
+		const ack = await runDeleteTasks(ctx, { task_ids: [submit.task_id] });
 		expect(ack.ok).toBe(true);
 		expect(getTaskById(db, submit.task_id)).toBeNull();
 	});
@@ -978,7 +979,7 @@ describe("delete-task", () => {
 			message: "Done",
 		});
 
-		const ack = await runDeleteTask(ctx, { task_id: submit.task_id });
+		const ack = await runDeleteTasks(ctx, { task_ids: [submit.task_id] });
 
 		expect(ack.ok).toBe(true);
 		expect(getTaskById(db, submit.task_id)).toBeNull();
@@ -992,7 +993,7 @@ describe("delete-task", () => {
 			cwd: "/tmp",
 		});
 		if (!submit.accepted) throw new Error("setup failed");
-		const ack = await runDeleteTask(ctx, { task_id: submit.task_id });
+		const ack = await runDeleteTasks(ctx, { task_ids: [submit.task_id] });
 		expect(ack.ok).toBe(false);
 		if (!ack.ok) {
 			expect(ack.error.code).toBe("invalid_state");
@@ -1028,19 +1029,85 @@ describe("delete-task", () => {
 		const sessionName = `cuekit-task-${submit.task_id}`;
 		expect(runner.knownSessions()).toContain(sessionName);
 
-		const ack = await runDeleteTask(ctx, { task_id: submit.task_id });
+		const ack = await runDeleteTasks(ctx, { task_ids: [submit.task_id] });
 		expect(ack.ok).toBe(true);
 		expect(runner.knownSessions()).not.toContain(sessionName);
 	});
 
 	it("returns task_not_found for unknown id", async () => {
-		const ack = await runDeleteTask(ctx, { task_id: "t_nope" });
+		const ack = await runDeleteTasks(ctx, { task_ids: ["t_nope"] });
 		expect(ack.ok).toBe(false);
 		if (!ack.ok) expect(ack.error.code).toBe("task_not_found");
 	});
+
+	it("deletes multiple terminal tasks in one call", async () => {
+		const a = await runSubmitTask(ctx, { objective: "a", agent_kind: "claude-code", cwd: "/tmp" });
+		const b = await runSubmitTask(ctx, { objective: "b", agent_kind: "claude-code", cwd: "/tmp" });
+		if (!a.accepted || !b.accepted) throw new Error("setup failed");
+		await runCancelTasks(ctx, { task_ids: [a.task_id, b.task_id] });
+
+		const ack = await runDeleteTasks(ctx, { task_ids: [a.task_id, b.task_id] });
+
+		expect(ack.ok).toBe(true);
+		expect(ack.tasks).toHaveLength(2);
+		expect(getTaskById(db, a.task_id)).toBeNull();
+		expect(getTaskById(db, b.task_id)).toBeNull();
+	});
+
+	it("rejects duplicate task ids", async () => {
+		const ack = await runDeleteTasks(ctx, { task_ids: ["t_same", "t_same"] });
+		expect(ack.ok).toBe(false);
+		if (!ack.ok) expect(ack.error.code).toBe("invalid_input");
+	});
 });
 
-describe("delete-session", () => {
+describe("cleanup-tasks", () => {
+	it("deletes terminal tasks in a session without deleting the session", async () => {
+		const a = await runSubmitTask(ctx, { objective: "a", agent_kind: "claude-code", cwd: "/tmp" });
+		const b = await runSubmitTask(ctx, { objective: "b", agent_kind: "claude-code", cwd: "/tmp" });
+		if (!a.accepted || !b.accepted) throw new Error("setup failed");
+		await runCancelTasks(ctx, { task_ids: [a.task_id, b.task_id] });
+
+		const ack = await runCleanupTasks(ctx, { session_id: a.session_id });
+
+		expect(ack.ok).toBe(true);
+		if (ack.ok) {
+			expect(ack.tasks.map((task) => task.task_id).sort()).toEqual([a.task_id, b.task_id].sort());
+			expect(ack.tasks.every((task) => task.deleted)).toBe(true);
+		}
+		expect(getSessionById(db, a.session_id)).not.toBeNull();
+		expect(getTaskById(db, a.task_id)).toBeNull();
+		expect(getTaskById(db, b.task_id)).toBeNull();
+	});
+
+	it("supports dry-run cleanup", async () => {
+		const submit = await runSubmitTask(ctx, {
+			objective: "x",
+			agent_kind: "claude-code",
+			cwd: "/tmp",
+		});
+		if (!submit.accepted) throw new Error("setup failed");
+		await runCancelTasks(ctx, { task_ids: [submit.task_id] });
+
+		const ack = await runCleanupTasks(ctx, { session_id: submit.session_id, dry_run: true });
+
+		expect(ack.ok).toBe(true);
+		if (ack.ok) expect(ack.tasks[0]?.deleted).toBe(false);
+		expect(getTaskById(db, submit.task_id)).not.toBeNull();
+	});
+
+	it("requires exactly one cleanup scope", async () => {
+		const noScope = await runCleanupTasks(ctx, {});
+		expect(noScope.ok).toBe(false);
+		if (!noScope.ok) expect(noScope.error.code).toBe("invalid_input");
+
+		const twoScopes = await runCleanupTasks(ctx, { session_id: "s", cwd: "/tmp" });
+		expect(twoScopes.ok).toBe(false);
+		if (!twoScopes.ok) expect(twoScopes.error.code).toBe("invalid_input");
+	});
+});
+
+describe("delete-sessions", () => {
 	it("deletes a session whose tasks are all terminal, cascading to children", async () => {
 		const submit = await runSubmitTask(ctx, {
 			objective: "x",
@@ -1048,8 +1115,8 @@ describe("delete-session", () => {
 			cwd: "/tmp",
 		});
 		if (!submit.accepted) throw new Error("setup failed");
-		await runCancelTask(ctx, { task_id: submit.task_id });
-		const ack = await runDeleteSession(ctx, { session_id: submit.session_id });
+		await runCancelTasks(ctx, { task_ids: [submit.task_id] });
+		const ack = await runDeleteSessions(ctx, { session_ids: [submit.session_id] });
 		expect(ack.ok).toBe(true);
 		expect(getSessionById(db, submit.session_id)).toBeNull();
 		expect(getTaskById(db, submit.task_id)).toBeNull();
@@ -1074,7 +1141,7 @@ describe("delete-session", () => {
 			message: "Done",
 		});
 
-		const ack = await runDeleteSession(ctx, { session_id: submit.session_id });
+		const ack = await runDeleteSessions(ctx, { session_ids: [submit.session_id] });
 
 		expect(ack.ok).toBe(true);
 		expect(getSessionById(db, submit.session_id)).toBeNull();
@@ -1089,7 +1156,7 @@ describe("delete-session", () => {
 			worktree_path: "/w",
 			parent_agent_kind: "pi",
 		});
-		const ack = await runDeleteSession(ctx, { session_id: "s_empty" });
+		const ack = await runDeleteSessions(ctx, { session_ids: ["s_empty"] });
 		expect(ack.ok).toBe(true);
 		expect(getSessionById(db, "s_empty")).toBeNull();
 	});
@@ -1102,7 +1169,7 @@ describe("delete-session", () => {
 		});
 		if (!submit.accepted) throw new Error("setup failed");
 		// Task is still running — deletion must be blocked.
-		const ack = await runDeleteSession(ctx, { session_id: submit.session_id });
+		const ack = await runDeleteSessions(ctx, { session_ids: [submit.session_id] });
 		expect(ack.ok).toBe(false);
 		if (!ack.ok) {
 			expect(ack.error.code).toBe("invalid_state");
@@ -1149,7 +1216,7 @@ describe("delete-session", () => {
 		expect(runner.knownSessions()).toContain(sessionA);
 		expect(runner.knownSessions()).toContain(sessionB);
 
-		const ack = await runDeleteSession(ctx, { session_id: a.session_id });
+		const ack = await runDeleteSessions(ctx, { session_ids: [a.session_id] });
 		expect(ack.ok).toBe(true);
 		expect(runner.knownSessions()).not.toContain(sessionA);
 		expect(runner.knownSessions()).not.toContain(sessionB);
@@ -1177,14 +1244,42 @@ describe("delete-session", () => {
 		const sessionName = `cuekit-task-${submit.task_id}`;
 		expect(runner.knownSessions()).toContain(sessionName);
 
-		const ack = await runDeleteSession(ctx, { session_id: submit.session_id });
+		const ack = await runDeleteSessions(ctx, { session_ids: [submit.session_id] });
 		expect(ack.ok).toBe(true);
 		expect(runner.knownSessions()).not.toContain(sessionName);
 	});
 
 	it("returns session_not_found for unknown id", async () => {
-		const ack = await runDeleteSession(ctx, { session_id: "s_nope" });
+		const ack = await runDeleteSessions(ctx, { session_ids: ["s_nope"] });
 		expect(ack.ok).toBe(false);
 		if (!ack.ok) expect(ack.error.code).toBe("session_not_found");
+	});
+
+	it("deletes multiple sessions in one call", async () => {
+		createSession(db, {
+			id: "s_empty_a",
+			project_root: "/p",
+			worktree_path: "/w/a",
+			parent_agent_kind: "pi",
+		});
+		createSession(db, {
+			id: "s_empty_b",
+			project_root: "/p",
+			worktree_path: "/w/b",
+			parent_agent_kind: "pi",
+		});
+
+		const ack = await runDeleteSessions(ctx, { session_ids: ["s_empty_a", "s_empty_b"] });
+
+		expect(ack.ok).toBe(true);
+		expect(ack.sessions).toHaveLength(2);
+		expect(getSessionById(db, "s_empty_a")).toBeNull();
+		expect(getSessionById(db, "s_empty_b")).toBeNull();
+	});
+
+	it("rejects duplicate session ids", async () => {
+		const ack = await runDeleteSessions(ctx, { session_ids: ["s_same", "s_same"] });
+		expect(ack.ok).toBe(false);
+		if (!ack.ok) expect(ack.error.code).toBe("invalid_input");
 	});
 });

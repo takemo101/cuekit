@@ -14,7 +14,7 @@ import { FakeTmuxRunner } from "@cuekit/adapters/testing";
 import { getTaskById, runMigrations } from "@cuekit/store";
 import { createCli } from "../src/cli.ts";
 import type { CommandContext } from "../src/command-context.ts";
-import { runCancelTask } from "../src/commands/cancel-task.ts";
+import { runCancelTasks } from "../src/commands/cancel-task.ts";
 import { runGetTaskResult } from "../src/commands/get-task-result.ts";
 import { runGetTaskStatus } from "../src/commands/get-task-status.ts";
 import { runListTaskEvents } from "../src/commands/list-task-events.ts";
@@ -98,7 +98,7 @@ describe("e2e: submit → status → cancel → result", () => {
 		}
 
 		// 6. cancel
-		const ack = await runCancelTask(ctx, { task_id });
+		const ack = await runCancelTasks(ctx, { task_ids: [task_id] });
 		expect(ack.ok).toBe(true);
 
 		// 7. collect after cancel → TaskResult with transcript artifact

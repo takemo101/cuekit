@@ -1,61 +1,112 @@
-import { AckSchema, isTerminalTaskStatus } from "@cuekit/core";
+import { isTerminalTaskStatus, JobErrorSchema } from "@cuekit/core";
 import { deleteSession, getSessionById, listTasksBySession } from "@cuekit/store";
 import { z } from "incur";
 import type { CommandContext } from "../command-context.ts";
 
-// Removes a session and all of its tasks in one transaction. Policy:
-// every child task must be terminal — any running / queued task
-// blocks the delete, so a caller can't accidentally drop live work.
-// The caller cancels those tasks explicitly before retrying.
-//
-// Does not touch on-disk artifact directories; operators that want
-// full cleanup remove those themselves.
-
-export const DeleteSessionInputSchema = z.object({
-	session_id: z.string().min(1).describe("cuekit session id."),
+export const DeleteSessionsInputSchema = z.object({
+	session_ids: z
+		.array(z.string().min(1))
+		.min(1)
+		.describe(
+			"cuekit session ids to delete. Repeat flag for multiple: --session_ids s_a --session_ids s_b.",
+		),
 });
 
-export type DeleteSessionInput = z.infer<typeof DeleteSessionInputSchema>;
+export type DeleteSessionsInput = z.infer<typeof DeleteSessionsInputSchema>;
 
-export const DeleteSessionOutputSchema = AckSchema;
-export type DeleteSessionOutput = z.infer<typeof DeleteSessionOutputSchema>;
+const DeleteSessionItemSchema = z.object({
+	session_id: z.string(),
+	ok: z.boolean(),
+	deleted_tasks: z.number().int().nonnegative().optional(),
+	message: z.string().optional(),
+	error: JobErrorSchema.optional(),
+});
 
-export async function runDeleteSession(
+export const DeleteSessionsOutputSchema = z.discriminatedUnion("ok", [
+	z.object({
+		ok: z.literal(true),
+		message: z.string().optional(),
+		sessions: z.array(DeleteSessionItemSchema),
+	}),
+	z.object({
+		ok: z.literal(false),
+		error: JobErrorSchema,
+		sessions: z.array(DeleteSessionItemSchema).optional(),
+	}),
+]);
+
+export type DeleteSessionsOutput = z.infer<typeof DeleteSessionsOutputSchema>;
+
+function duplicateSessionId(sessionIds: string[]): string | null {
+	const seen = new Set<string>();
+	for (const sessionId of sessionIds) {
+		if (seen.has(sessionId)) return sessionId;
+		seen.add(sessionId);
+	}
+	return null;
+}
+
+export async function runDeleteSessions(
 	ctx: CommandContext,
-	input: DeleteSessionInput,
-): Promise<DeleteSessionOutput> {
-	const session = getSessionById(ctx.db, input.session_id);
-	if (!session) {
+	input: DeleteSessionsInput,
+): Promise<DeleteSessionsOutput> {
+	const duplicate = duplicateSessionId(input.session_ids);
+	if (duplicate) {
 		return {
 			ok: false,
 			error: {
-				code: "session_not_found",
-				message: `session '${input.session_id}' not found`,
+				code: "invalid_input",
+				message: `duplicate session_id '${duplicate}'`,
 				retryable: false,
 			},
 		};
 	}
-	const tasks = listTasksBySession(ctx.db, input.session_id);
-	const active = tasks.filter((t) => !isTerminalTaskStatus(t.status));
-	if (active.length > 0) {
-		return {
-			ok: false,
-			error: {
-				code: "invalid_state",
-				message: `session '${input.session_id}' has ${active.length} active task(s); cancel them before deleting`,
-				retryable: false,
-			},
-		};
+
+	const results: z.infer<typeof DeleteSessionItemSchema>[] = [];
+	for (const sessionId of input.session_ids) {
+		const session = getSessionById(ctx.db, sessionId);
+		if (!session) {
+			results.push({
+				session_id: sessionId,
+				ok: false,
+				error: {
+					code: "session_not_found",
+					message: `session '${sessionId}' not found`,
+					retryable: false,
+				},
+			});
+			continue;
+		}
+
+		const tasks = listTasksBySession(ctx.db, sessionId);
+		const active = tasks.filter((task) => !isTerminalTaskStatus(task.status));
+		if (active.length > 0) {
+			results.push({
+				session_id: sessionId,
+				ok: false,
+				error: {
+					code: "invalid_state",
+					message: `session '${sessionId}' has ${active.length} active task(s); cancel them before deleting`,
+					retryable: false,
+				},
+			});
+			continue;
+		}
+
+		for (const task of tasks) {
+			const adapter = ctx.registry.get(task.agent_kind);
+			await adapter?.cleanup?.(task.id).catch(() => {});
+		}
+		deleteSession(ctx.db, sessionId);
+		results.push({
+			session_id: sessionId,
+			ok: true,
+			deleted_tasks: tasks.length,
+			message: `deleted session '${sessionId}' and ${tasks.length} task(s)`,
+		});
 	}
-	// Best-effort tmux cleanup for every task before wiping DB rows.  Once
-	// the rows are gone we lose the task_ids, so cleanup must happen first.
-	for (const task of tasks) {
-		const adapter = ctx.registry.get(task.agent_kind);
-		await adapter?.cleanup?.(task.id).catch(() => {});
-	}
-	deleteSession(ctx.db, input.session_id);
-	return {
-		ok: true,
-		message: `deleted session '${input.session_id}' and ${tasks.length} task(s)`,
-	};
+
+	const failed = results.find((result) => !result.ok);
+	if (failed?.error) return { ok: false, error: failed.error, sessions: results };
+	return { ok: true, message: `deleted ${results.length} session(s)`, sessions: results };
 }

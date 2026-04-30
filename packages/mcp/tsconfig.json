@@ -1,8 +1,4 @@
 {
 	"extends": "../../tsconfig.json",
-	"compilerOptions": {
-		"jsx": "react-jsx",
-		"jsxImportSource": "@opentui/react"
-	},
-	"include": ["src/**/*.ts", "src/**/*.tsx", "__tests__/**/*.ts", "__tests__/**/*.tsx"]
+	"include": ["src/**/*.ts", "__tests__/**/*.ts"]
 }

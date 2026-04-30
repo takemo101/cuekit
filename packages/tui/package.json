@@ -1,23 +1,23 @@
 {
-	"name": "@cuekit/mcp",
+	"name": "@cuekit/tui",
 	"version": "0.0.0",
 	"private": true,
 	"type": "module",
 	"exports": {
 		".": "./src/index.ts"
 	},
-	"bin": {
-		"cuekit": "./src/bin.ts"
-	},
 	"scripts": {
 		"typecheck": "tsc --noEmit",
 		"test": "bun test"
 	},
 	"dependencies": {
-		"@cuekit/adapters": "workspace:*",
 		"@cuekit/core": "workspace:*",
+		"@opentui/core": "0.2.1",
+		"@opentui/react": "0.2.1",
+		"react": "19.2.5"
+	},
+	"devDependencies": {
 		"@cuekit/store": "workspace:*",
-		"@cuekit/tui": "workspace:*",
-		"incur": "0.4.3"
+		"@types/react": "19.2.14"
 	}
 }

@@ -36,13 +36,8 @@
         "@cuekit/adapters": "workspace:*",
         "@cuekit/core": "workspace:*",
         "@cuekit/store": "workspace:*",
-        "@opentui/core": "0.2.1",
-        "@opentui/react": "0.2.1",
+        "@cuekit/tui": "workspace:*",
         "incur": "0.4.3",
-        "react": "19.2.5",
-      },
-      "devDependencies": {
-        "@types/react": "19.2.14",
       },
     },
     "packages/store": {
@@ -51,6 +46,20 @@
       "dependencies": {
         "@cuekit/core": "workspace:*",
         "zod": "^4.3.6",
+      },
+    },
+    "packages/tui": {
+      "name": "@cuekit/tui",
+      "version": "0.0.0",
+      "dependencies": {
+        "@cuekit/core": "workspace:*",
+        "@opentui/core": "0.2.1",
+        "@opentui/react": "0.2.1",
+        "react": "19.2.5",
+      },
+      "devDependencies": {
+        "@cuekit/store": "workspace:*",
+        "@types/react": "19.2.14",
       },
     },
   },
@@ -82,6 +91,8 @@
     "@cuekit/mcp": ["@cuekit/mcp@workspace:packages/mcp"],
 
     "@cuekit/store": ["@cuekit/store@workspace:packages/store"],
+
+    "@cuekit/tui": ["@cuekit/tui@workspace:packages/tui"],
 
     "@modelcontextprotocol/server": ["@modelcontextprotocol/server@2.0.0-alpha.2", "", { "dependencies": { "zod": "^4.0" }, "peerDependencies": { "@cfworker/json-schema": "^4.1.1" }, "optionalPeers": ["@cfworker/json-schema"] }, "sha512-gmLgdHzlYM8L7Aw/+VE0kxjT25WKamtUSLNhdOgrJq5CrESvqVSoAfWSJJeNPUXNTluQ+dYDGFbKVitdsJtbPA=="],
 

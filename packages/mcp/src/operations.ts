@@ -1,19 +1,24 @@
 import type { z } from "incur";
 import type { CommandContext } from "./command-context.ts";
 import {
-	CancelTaskInputSchema,
-	CancelTaskOutputSchema,
-	runCancelTask,
+	CancelTasksInputSchema,
+	CancelTasksOutputSchema,
+	runCancelTasks,
 } from "./commands/cancel-task.ts";
 import {
-	DeleteSessionInputSchema,
-	DeleteSessionOutputSchema,
-	runDeleteSession,
+	CleanupTasksInputSchema,
+	CleanupTasksOutputSchema,
+	runCleanupTasks,
+} from "./commands/cleanup-tasks.ts";
+import {
+	DeleteSessionsInputSchema,
+	DeleteSessionsOutputSchema,
+	runDeleteSessions,
 } from "./commands/delete-session.ts";
 import {
-	DeleteTaskInputSchema,
-	DeleteTaskOutputSchema,
-	runDeleteTask,
+	DeleteTasksInputSchema,
+	DeleteTasksOutputSchema,
+	runDeleteTasks,
 } from "./commands/delete-task.ts";
 import {
 	GetTaskResultInputSchema,
@@ -125,12 +130,12 @@ export const CUEKIT_OPERATIONS = [
 		run: runWaitTasks,
 	}),
 	defineOperation({
-		mcpName: "cancel_task",
+		mcpName: "cancel_tasks",
 		cliPath: ["task", "cancel"],
-		description: "Cancel an active task.",
-		options: CancelTaskInputSchema,
-		output: CancelTaskOutputSchema,
-		run: runCancelTask,
+		description: "Cancel one or more active tasks.",
+		options: CancelTasksInputSchema,
+		output: CancelTasksOutputSchema,
+		run: runCancelTasks,
 	}),
 	defineOperation({
 		mcpName: "list_tasks",
@@ -181,20 +186,29 @@ export const CUEKIT_OPERATIONS = [
 		run: runShowMcpConfig,
 	}),
 	defineOperation({
-		mcpName: "delete_task",
+		mcpName: "delete_tasks",
 		cliPath: ["task", "delete"],
-		description: "Delete a terminal task row. Non-terminal tasks must be cancelled first.",
-		options: DeleteTaskInputSchema,
-		output: DeleteTaskOutputSchema,
-		run: runDeleteTask,
+		description:
+			"Delete one or more terminal task rows. Non-terminal tasks must be cancelled first.",
+		options: DeleteTasksInputSchema,
+		output: DeleteTasksOutputSchema,
+		run: runDeleteTasks,
 	}),
 	defineOperation({
-		mcpName: "delete_session",
+		mcpName: "cleanup_tasks",
+		cliPath: ["task", "cleanup"],
+		description: "Delete terminal tasks within a session or cwd without deleting the session.",
+		options: CleanupTasksInputSchema,
+		output: CleanupTasksOutputSchema,
+		run: runCleanupTasks,
+	}),
+	defineOperation({
+		mcpName: "delete_sessions",
 		cliPath: ["session", "delete"],
 		description:
-			"Delete a session and its tasks. All child tasks must be terminal before deletion.",
-		options: DeleteSessionInputSchema,
-		output: DeleteSessionOutputSchema,
-		run: runDeleteSession,
+			"Delete one or more sessions and their tasks. All child tasks in each session must be terminal before deletion.",
+		options: DeleteSessionsInputSchema,
+		output: DeleteSessionsOutputSchema,
+		run: runDeleteSessions,
 	}),
 ] as const;
