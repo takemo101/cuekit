@@ -61,16 +61,8 @@ function isOutputNoise(line: string): boolean {
 	);
 }
 
-function outputLines(detail: TuiTaskDetail | undefined, status: TaskStatus): string[] {
-	const lines = detail?.transcriptTail ?? [];
-	const filtered = lines.filter((line) => !isOutputNoise(line));
-	if (status === "completed") {
-		const reportIndex = filtered.findLastIndex((line) => line.includes("cuekit tool report"));
-		if (reportIndex >= 0 && reportIndex < filtered.length - 1) {
-			return filtered.slice(reportIndex + 1).slice(-12);
-		}
-	}
-	return filtered.slice(-16);
+function liveOutputLines(detail: TuiTaskDetail | undefined): string[] {
+	return (detail?.transcriptTail ?? []).filter((line) => !isOutputNoise(line)).slice(-16);
 }
 
 function eventLine(event: TuiTaskEvent): string {
@@ -86,9 +78,11 @@ function formatUpdatedAt(value: string): string {
 	return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }
 
-function infoBlock(task: TaskSummary, detail: TuiTaskDetail | undefined, status: TaskStatus): string {
+function metadataBlock(task: TaskSummary, detail: TuiTaskDetail | undefined, status: TaskStatus): string {
 	const lines = [
-		`${task.task_id}  ${task.agent_kind}  ${status}  updated ${formatUpdatedAt(task.updated_at)}`,
+		`${task.task_id}  ${task.agent_kind}`,
+		`status      ${status}`,
+		`updated     ${formatUpdatedAt(task.updated_at)}`,
 		`transcript  ${pathLabel(detail?.transcriptPath)}`,
 	];
 	if (detail?.status.attach_hint) lines.push(`attach      ${truncateMiddle(detail.status.attach_hint, 96)}`);
@@ -99,6 +93,19 @@ function infoBlock(task: TaskSummary, detail: TuiTaskDetail | undefined, status:
 function eventsBlock(events: TuiTaskEvent[]): string {
 	if (events.length === 0) return "EVENTS\n  No events yet.";
 	return [`EVENTS (${events.length} shown)`, ...events.map((event) => `  ${eventLine(event)}`)].join("\n");
+}
+
+function terminalEvent(detail: TuiTaskDetail | undefined): TuiTaskEvent | undefined {
+	return detail?.events.findLast((event) =>
+		["completed", "failed", "cancelled", "timed_out", "blocked"].includes(event.type),
+	);
+}
+
+function resultBlock(detail: TuiTaskDetail | undefined, status: TaskStatus): string {
+	const event = terminalEvent(detail);
+	if (event?.message) return truncateEnd(event.message, 150);
+	if (status === "completed") return "Completed. No result message reported.";
+	return `${status}. No result message reported.`;
 }
 
 function EmptyText(props: { children: string }): ReactNode {
@@ -117,20 +124,33 @@ export function TaskDetail(props: { task?: TaskSummary; detail?: TuiTaskDetail }
 
 	const status = detail?.status.status ?? task.status;
 	const events = detail?.events.slice(-7) ?? [];
-	const lines = outputLines(detail, status);
-	const outputTitle = status === "completed" ? "OUTPUT" : "LIVE OUTPUT";
-	const output = lines.length > 0 ? lines.map((line) => truncateEnd(line, 150)).join("\n") : "No output available yet.";
+	const lines = liveOutputLines(detail);
+	const isTerminal = ["completed", "failed", "cancelled", "timed_out", "blocked"].includes(status);
 
 	return (
 		<box borderStyle="rounded" flexGrow={2} padding={1} flexDirection="column">
-			<text fg={statusColor(status)}>{infoBlock(task, detail, status)}</text>
+			<text fg={statusColor(status)}>{metadataBlock(task, detail, status)}</text>
 			<text> </text>
 			<text fg={PURPLE}>{eventsBlock(events)}</text>
 			<text> </text>
-			<text fg={BLUE}>{`${outputTitle} (${lines.length} line${lines.length === 1 ? "" : "s"})`}</text>
-			<scrollbox flexGrow={1} stickyScroll stickyStart="bottom" viewportCulling>
-				<text>{output}</text>
-			</scrollbox>
+			{isTerminal ? (
+				<>
+					<text fg={BLUE}>RESULT</text>
+					<text>{resultBlock(detail, status)}</text>
+					<text fg={MUTED}>Transcript tail hidden for completed tasks; attach/open transcript for raw logs.</text>
+				</>
+			) : (
+				<>
+					<text fg={BLUE}>{`LIVE OUTPUT (${lines.length} line${lines.length === 1 ? "" : "s"})`}</text>
+					<scrollbox flexGrow={1} stickyScroll stickyStart="bottom" viewportCulling>
+						<text>{
+							lines.length > 0
+								? lines.map((line) => truncateEnd(line, 150)).join("\n")
+								: "No output available yet."
+						}</text>
+					</scrollbox>
+				</>
+			)}
 		</box>
 	);
 }
