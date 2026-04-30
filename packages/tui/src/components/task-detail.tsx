@@ -79,7 +79,7 @@ function formatUpdatedAt(value: string): string {
 }
 
 function detailTitle(task: TaskSummary, status: TaskStatus): string {
-	return `Detail: ${task.task_id}  ${status}  ${task.agent_kind}`;
+	return `Detail: ${task.task_id} / ${status} / ${task.agent_kind}`;
 }
 
 function metadataBlock(task: TaskSummary, detail: TuiTaskDetail | undefined): string {
