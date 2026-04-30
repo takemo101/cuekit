@@ -1,6 +1,18 @@
 import type { TaskSummary } from "@cuekit/core";
 import type { ReactNode } from "react";
 
+function truncateEnd(value: string, maxLength: number): string {
+	if (value.length <= maxLength) return value;
+	return `${value.slice(0, Math.max(0, maxLength - 1))}…`;
+}
+
+function taskRow(task: TaskSummary, selected: boolean): string {
+	const prefix = selected ? "›" : " ";
+	const identity = `${task.task_id} / ${task.status} / ${task.agent_kind}`;
+	const summary = task.summary ? ` — ${truncateEnd(task.summary, 36)}` : "";
+	return `${prefix} ${identity}${summary}`;
+}
+
 export function TaskList(props: { tasks: TaskSummary[]; selectedIndex: number }): ReactNode {
 	const { tasks, selectedIndex } = props;
 	return (
@@ -10,11 +22,9 @@ export function TaskList(props: { tasks: TaskSummary[]; selectedIndex: number })
 			) : (
 				tasks.map((task, index) => {
 					const selected = index === selectedIndex;
-					const prefix = selected ? "›" : " ";
-					const summary = task.summary ? ` ${task.summary}` : "";
 					return (
 						<text key={task.task_id} fg={selected ? "#7aa2f7" : "#c0caf5"}>
-							{`${prefix} ${task.task_id}  ${task.status.padEnd(12)}  ${task.agent_kind}${summary}`}
+							{taskRow(task, selected)}
 						</text>
 					);
 				})
