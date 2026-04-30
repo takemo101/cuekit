@@ -6,7 +6,10 @@ export function moveSelection(index: number, delta: number, length: number): num
 }
 
 function hasTmuxSessionMetadata(view: TaskStatusView): boolean {
-	return typeof view.metadata?.tmux_session_name === "string" && view.metadata.tmux_session_name.length > 0;
+	return (
+		typeof view.metadata?.tmux_session_name === "string" &&
+		view.metadata.tmux_session_name.length > 0
+	);
 }
 
 export function canAttach(view: TaskStatusView): boolean {

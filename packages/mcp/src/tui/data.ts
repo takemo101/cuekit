@@ -1,9 +1,9 @@
 import { closeSync, existsSync, openSync, readSync, statSync } from "node:fs";
 import { getTaskById } from "@cuekit/store";
 import type { CommandContext } from "../command-context.ts";
-import { runGetTaskStatus, type GetTaskStatusOutput } from "../commands/get-task-status.ts";
+import { type GetTaskStatusOutput, runGetTaskStatus } from "../commands/get-task-status.ts";
 import { runListTaskEvents } from "../commands/list-task-events.ts";
-import { runListTasks, type ListTasksInput, type ListTasksOutput } from "../commands/list-tasks.ts";
+import { type ListTasksInput, type ListTasksOutput, runListTasks } from "../commands/list-tasks.ts";
 
 type LoadTaskListOptions = Pick<
 	ListTasksInput,
@@ -53,7 +53,11 @@ export async function loadTaskDetail(
 	};
 }
 
-export function readTranscriptTail(path: string | undefined, maxLines = 80, maxBytes = 64 * 1024): string[] {
+export function readTranscriptTail(
+	path: string | undefined,
+	maxLines = 80,
+	maxBytes = 64 * 1024,
+): string[] {
 	if (!path || maxLines <= 0 || maxBytes <= 0 || !existsSync(path)) return [];
 	let fd: number | undefined;
 	try {

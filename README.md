@@ -88,6 +88,28 @@ cuekit task list --status running
 
 Every command accepts `--help`, `--llms` / `--llms-full` (machine-readable manifest for LLM-friendly CLIs), `--schema` (JSON Schema for the command input), and `--format` (toon / json / yaml / md / jsonl) via incur.
 
+### Human TUI
+
+`cuekit tui` opens an interactive task cockpit for human operators. The normal CLI remains optimized for agents/scripts with TOON output; the TUI is a separate terminal UI for browsing and acting on tasks.
+
+```sh
+cuekit tui
+```
+
+Keys:
+
+```text
+↑/↓ or j/k  select task
+r           refresh
+a           attach to selected task's tmux session and exit TUI
+s           steer selected task
+c           cancel selected non-terminal task
+d           delete selected terminal task
+q or Esc    quit
+```
+
+Attach is one-way in the MVP: pressing `a` restores the terminal, runs `tmux attach-session -t <session>`, and does not return to the TUI after you detach.
+
 ## MCP
 
 Start the stdio MCP server:
