@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { createSession, runMigrations } from "@cuekit/store";
-import { createOpenCodeAdapter } from "../src/opencode-adapter.ts";
+import { buildOpenCodeLaunchCommand, createOpenCodeAdapter } from "../src/opencode-adapter.ts";
 import { PaneBackend } from "../src/pane-backend.ts";
 import { createPiAdapter } from "../src/pi-adapter.ts";
 import { FakeTmuxRunner } from "../src/testing.ts";
@@ -150,6 +150,30 @@ describe("createOpenCodeAdapter (truthful stub)", () => {
 		expect(result.ok).toBe(true);
 		const call = (runner.calls.find((c) => c[0] === "new-session") ?? []) as string[];
 		expect(call[call.length - 1]).toContain("--model 'safe; touch /tmp/pwned'");
+	});
+
+	it("does not skip permissions by default or when explicitly disabled", () => {
+		expect(buildOpenCodeLaunchCommand({ agent_kind: "opencode", objective: "x" })).not.toContain(
+			"--dangerously-skip-permissions",
+		);
+		expect(
+			buildOpenCodeLaunchCommand({
+				agent_kind: "opencode",
+				objective: "x",
+				adapter_options: { dangerously_skip_permissions: false },
+			}),
+		).not.toContain("--dangerously-skip-permissions");
+	});
+
+	it("adds --dangerously-skip-permissions only when explicitly enabled", () => {
+		expect(
+			buildOpenCodeLaunchCommand({
+				agent_kind: "opencode",
+				objective: "x",
+				model: "anthropic/claude",
+				adapter_options: { dangerously_skip_permissions: true },
+			}),
+		).toStartWith("opencode run --dangerously-skip-permissions --model 'anthropic/claude'");
 	});
 
 	it("renders full TaskSpec guidance into the child prompt", async () => {
