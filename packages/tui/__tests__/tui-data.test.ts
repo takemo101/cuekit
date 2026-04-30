@@ -158,6 +158,18 @@ describe("tui data helpers", () => {
 		);
 	});
 
+	it("filters low-value terminal spinner fragments from transcript tails", () => {
+		const dir = mkdtempSync(`${tmpdir()}/cuekit-tui-transcript-noise-`);
+		try {
+			const path = join(dir, "transcript.txt");
+			writeFileSync(path, "+\n*\nn\n'g\nalmost done thinking\n✓ completed\n");
+
+			expect(readTranscriptTail(path, 10)).toEqual(["almost done thinking", "✓ completed"]);
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
 	it("reads the last N transcript lines", () => {
 		const dir = mkdtempSync(`${tmpdir()}/cuekit-tui-transcript-`);
 		try {

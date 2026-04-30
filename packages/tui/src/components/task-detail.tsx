@@ -1,8 +1,10 @@
-import type { TaskSummary } from "@cuekit/core";
+import type { TaskStatus, TaskSummary } from "@cuekit/core";
 import type { ReactNode } from "react";
+import type { TuiTaskEvent } from "../context.ts";
 import type { TuiTaskDetail } from "../data.ts";
 
 const MUTED = "#565f89";
+const TEXT_MUTED = "#a9b1d6";
 const BLUE = "#7dcfff";
 const PURPLE = "#bb9af7";
 const GREEN = "#9ece6a";
@@ -23,11 +25,6 @@ function truncateEnd(value: string, maxLength: number): string {
 	return `${value.slice(0, Math.max(0, maxLength - 1))}…`;
 }
 
-function eventLine(event: TuiTaskDetail["events"][number]): string {
-	const message = event.message ? ` ${event.message}` : "";
-	return truncateEnd(`#${event.sequence} ${event.type}${message}`, 120);
-}
-
 function statusColor(status: string): string {
 	if (status === "completed") return GREEN;
 	if (status === "failed" || status === "timed_out" || status === "blocked") return RED;
@@ -35,13 +32,53 @@ function statusColor(status: string): string {
 	return BLUE;
 }
 
-function MetadataRow(props: { label: string; value: string; color?: string }): ReactNode {
+function eventColor(type: string): string {
+	if (type === "completed") return GREEN;
+	if (type === "failed" || type === "blocked" || type === "timed_out") return RED;
+	if (type === "cancelled") return YELLOW;
+	return BLUE;
+}
+
+function formatUpdatedAt(value: string): string {
+	const date = new Date(value);
+	if (Number.isNaN(date.getTime())) return value;
+	return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+}
+
+function taskTitle(task: TaskSummary, status: TaskStatus): string {
+	return `${task.task_id}   ${task.agent_kind}   ${status}`;
+}
+
+function pathLabel(path: string | undefined): string {
+	if (!path) return "No transcript yet";
+	const cuekitIndex = path.indexOf(".cuekit/tasks/");
+	return truncateMiddle(cuekitIndex >= 0 ? path.slice(cuekitIndex) : path, 96);
+}
+
+function outputLines(detail: TuiTaskDetail | undefined, status: TaskStatus): string[] {
+	const lines = detail?.transcriptTail ?? [];
+	if (status === "completed") {
+		const reportIndex = lines.findLastIndex((line) => line.includes("cuekit tool report"));
+		if (reportIndex >= 0 && reportIndex < lines.length - 1) {
+			return lines.slice(reportIndex + 1).filter((line) => !line.startsWith("ok:")).slice(-12);
+		}
+	}
+	return lines.slice(-16);
+}
+
+function EventRow(props: { event: TuiTaskEvent }): ReactNode {
+	const event = props.event;
 	return (
 		<box flexDirection="row">
-			<text fg={MUTED}>{`${props.label.padEnd(11)} `}</text>
-			<text fg={props.color}>{props.value}</text>
+			<text fg={MUTED}>{`#${String(event.sequence).padEnd(4)}`}</text>
+			<text fg={eventColor(event.type)}>{event.type.padEnd(11)}</text>
+			<text>{truncateEnd(event.message ?? "", 110)}</text>
 		</box>
 	);
+}
+
+function EmptyText(props: { children: string }): ReactNode {
+	return <text fg={MUTED}>{props.children}</text>;
 }
 
 export function TaskDetail(props: { task?: TaskSummary; detail?: TuiTaskDetail }): ReactNode {
@@ -49,59 +86,63 @@ export function TaskDetail(props: { task?: TaskSummary; detail?: TuiTaskDetail }
 	if (!task) {
 		return (
 			<box borderStyle="rounded" flexGrow={2} padding={1}>
-				<text fg={MUTED}>Select a task.</text>
+				<EmptyText>Select a task.</EmptyText>
 			</box>
 		);
 	}
 
-	const status = detail?.status;
-	const effectiveStatus = status?.status ?? task.status;
-	const transcriptPath = detail?.transcriptPath
-		? truncateMiddle(detail.transcriptPath, 88)
-		: "No transcript yet";
-	const events = detail?.events.slice(-6) ?? [];
-	const transcript = detail?.transcriptTail.slice(-18) ?? [];
+	const status = detail?.status.status ?? task.status;
+	const events = detail?.events.slice(-7) ?? [];
+	const lines = outputLines(detail, status);
+	const outputTitle = status === "completed" ? "Output" : "Live output";
 
 	return (
 		<box borderStyle="rounded" flexGrow={2} padding={1} flexDirection="column" gap={1}>
 			<box flexDirection="row" justifyContent="space-between">
-				<text fg={PURPLE}>{`Task detail: ${task.task_id}`}</text>
-				<text fg={statusColor(effectiveStatus)}>{effectiveStatus}</text>
+				<text fg={PURPLE}>{taskTitle(task, status)}</text>
+				<text fg={MUTED}>{`updated ${formatUpdatedAt(task.updated_at)}`}</text>
 			</box>
 
-			<box borderStyle="single" padding={1} flexDirection="column">
-				<MetadataRow label="agent" value={task.agent_kind} />
-				<MetadataRow label="updated" value={task.updated_at} color={MUTED} />
-				{status?.attach_hint ? (
-					<MetadataRow label="attach" value={truncateMiddle(status.attach_hint, 88)} />
-				) : null}
-				{status?.summary ? <MetadataRow label="summary" value={truncateEnd(status.summary, 100)} /> : null}
-				<MetadataRow label="transcript" value={transcriptPath} color={detail?.transcriptPath ? undefined : MUTED} />
-			</box>
-
-			<box flexDirection="row" gap={1}>
-				<box borderStyle="single" padding={1} flexDirection="column" flexGrow={1}>
-					<text fg={BLUE}>Events</text>
-					{events.length > 0 ? (
-						events.map((event) => <text key={event.id}>{eventLine(event)}</text>)
-					) : (
-						<text fg={MUTED}>No events.</text>
-					)}
+			<box flexDirection="column">
+				<box flexDirection="row">
+					<text fg={MUTED}>transcript  </text>
+					<text fg={detail?.transcriptPath ? TEXT_MUTED : MUTED}>{pathLabel(detail?.transcriptPath)}</text>
 				</box>
+				{detail?.status.attach_hint ? (
+					<box flexDirection="row">
+						<text fg={MUTED}>attach      </text>
+						<text fg={TEXT_MUTED}>{truncateMiddle(detail.status.attach_hint, 96)}</text>
+					</box>
+				) : null}
+				{detail?.status.summary ? (
+					<box flexDirection="row">
+						<text fg={MUTED}>summary     </text>
+						<text fg={TEXT_MUTED}>{truncateEnd(detail.status.summary, 110)}</text>
+					</box>
+				) : null}
 			</box>
 
-			<box borderStyle="single" padding={1} flexDirection="column" flexGrow={1}>
+			<box borderStyle="single" paddingX={1} paddingY={0} flexDirection="column">
+				<text fg={BLUE}>Events</text>
+				{events.length > 0 ? (
+					events.map((event) => <EventRow key={event.id} event={event} />)
+				) : (
+					<EmptyText>No events yet.</EmptyText>
+				)}
+			</box>
+
+			<box borderStyle="single" paddingX={1} paddingY={0} flexDirection="column" flexGrow={1}>
 				<box flexDirection="row" justifyContent="space-between">
-					<text fg={BLUE}>Transcript tail</text>
-					<text fg={MUTED}>{`${transcript.length} line(s)`}</text>
+					<text fg={BLUE}>{outputTitle}</text>
+					<text fg={MUTED}>{`${lines.length} line(s)`}</text>
 				</box>
 				<scrollbox flexGrow={1} stickyScroll stickyStart="bottom" viewportCulling>
-					{transcript.length > 0 ? (
-						transcript.map((line, index) => (
-							<text key={`${index}:${line}`}>{truncateEnd(line, 140)}</text>
+					{lines.length > 0 ? (
+						lines.map((line, index) => (
+							<text key={`${index}:${line}`}>{truncateEnd(line, 150)}</text>
 						))
 					) : (
-						<text fg={MUTED}>No transcript available yet.</text>
+						<EmptyText>No output available yet.</EmptyText>
 					)}
 				</scrollbox>
 			</box>

@@ -57,6 +57,15 @@ export function sanitizeTerminalText(value: string): string {
 	return stripControlCharacters(value.replace(ANSI_OSC_RE, "").replace(ANSI_CSI_RE, "")).trimEnd();
 }
 
+function isLowValueTranscriptLine(line: string): boolean {
+	const trimmed = line.trim();
+	if (trimmed.length === 0) return true;
+	if (trimmed.length <= 2 && !/[\p{L}\p{N}]/u.test(trimmed)) return true;
+	if (trimmed.length <= 2 && /^[a-z]$/i.test(trimmed)) return true;
+	if (trimmed.length <= 3 && /^['"`´]?[a-z]$/i.test(trimmed)) return true;
+	return false;
+}
+
 export function readTranscriptTail(
 	path: string | undefined,
 	maxLines = 80,
@@ -75,7 +84,7 @@ export function readTranscriptTail(
 			.toString("utf8")
 			.split(/\r?\n/)
 			.map(sanitizeTerminalText)
-			.filter(Boolean)
+			.filter((line) => !isLowValueTranscriptLine(line))
 			.slice(-maxLines);
 	} catch {
 		return [];
