@@ -64,7 +64,8 @@ This command is not an MCP tool. It should be registered only in the human CLI p
 Implementation entry points:
 
 - `packages/mcp/src/bin.ts` detects `process.argv[2] === "tui"` before `cli.serve()` and launches the TUI.
-- `packages/mcp/src/tui/index.tsx` exports `runTui(ctx)`.
+- `packages/tui/src/index.tsx` exports `runTui(ctx)`.
+- `packages/mcp/src/bin.ts` lazy-imports `@cuekit/tui` only for the `cuekit tui` path.
 - Existing MCP/CLI command handlers remain unchanged.
 
 ## Layout
@@ -212,23 +213,43 @@ Manual-first keeps v1 simpler and avoids surprising DB/tmux polling.
 
 ## Package structure
 
-Suggested files:
+TUI should live in a dedicated package:
 
 ```text
-packages/mcp/src/tui/
-  index.tsx              # runTui(ctx)
-  app.tsx                # top-level state and keyboard routing
-  data.ts                # command-layer data loaders and transcript-tail helper
-  attach.ts              # one-way tmux attach helper
-  components/
-    task-list.tsx
-    task-detail.tsx
-    footer.tsx
-    confirm-dialog.tsx
-    input-dialog.tsx
+packages/tui/
+  package.json           # @cuekit/tui; owns OpenTUI/React dependencies
+  tsconfig.json
+  src/
+    index.tsx            # runTui(ctx)
+    app.tsx              # top-level state and keyboard routing
+    data.ts              # command-layer data loaders and transcript-tail helper
+    attach.ts            # one-way tmux attach helper
+    task-actions.ts      # pure action/selection helpers
+    components/
+      task-list.tsx
+      task-detail.tsx
+      footer.tsx
+      confirm-dialog.tsx
+      input-dialog.tsx
 ```
 
-Keep TUI-specific formatting and keyboard behavior under `src/tui/`. Shared protocol behavior belongs in the existing command layer.
+Rationale:
+
+- `@cuekit/mcp` should stay focused on MCP + structured CLI command surfaces.
+- OpenTUI/React are human-UI dependencies and should not be loaded by the MCP server path.
+- A separate `@cuekit/tui` package makes the human operator UI independently testable and keeps future optional installation possible.
+
+`packages/mcp/src/bin.ts` should keep the `cuekit tui` command as the user-facing entrypoint, but lazy-import the TUI only for that path:
+
+```ts
+if (isTui) {
+  const { runTui } = await import("@cuekit/tui");
+  await runTui({ db, registry });
+  return;
+}
+```
+
+The TUI may reuse existing command-layer functions from `@cuekit/mcp` for the MVP, but imports should be explicit package exports rather than deep `src/commands/*` imports where practical. Longer-term, if more frontends need the same command layer, consider extracting a dedicated control package.
 
 ## Testing strategy
 

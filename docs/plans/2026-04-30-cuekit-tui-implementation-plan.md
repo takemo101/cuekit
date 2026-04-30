@@ -4,7 +4,7 @@
 
 **Goal:** Build `cuekit tui`, a human-facing OpenTUI task cockpit for browsing tasks, inspecting details/events/transcripts, attaching to tmux, and running common task actions.
 
-**Architecture:** Keep cuekit's existing TOON/MCP command surface unchanged and add a separate human-only TUI path. The TUI should reuse command-layer functions for task state and mutations, with TUI-specific rendering, keyboard handling, and attach orchestration isolated under `packages/mcp/src/tui/`.
+**Architecture:** Keep cuekit's existing TOON/MCP command surface unchanged and add a separate human-only TUI path. The TUI should live in `packages/tui` so OpenTUI/React dependencies and human UI code stay outside the MCP server package; `packages/mcp/src/bin.ts` should lazy-import `@cuekit/tui` only when running `cuekit tui`.
 
 **Tech Stack:** Bun, TypeScript, OpenTUI (`@opentui/core`, `@opentui/react`), React, existing `@cuekit/mcp` command layer, existing `@cuekit/adapters` fake tmux test runner.
 
@@ -30,30 +30,36 @@
 Planned files:
 
 ```text
-packages/mcp/src/tui/
-  index.tsx              # runTui(ctx), renderer lifecycle, top-level export
-  app.tsx                # top-level React state, keyboard routing, layout
-  data.ts                # command-layer loaders and transcript-tail helper
-  task-actions.ts        # pure action enablement/selection helpers
-  attach.ts              # attach_hint parsing and one-way tmux attach helper
-  components/
-    task-list.tsx        # selected task list panel
-    task-detail.tsx      # metadata, events, transcript tail panel
-    footer.tsx           # key hints, current message/error
-    confirm-dialog.tsx   # y/N confirmation overlay
-    input-dialog.tsx     # single-line input overlay for steer
+packages/tui/
+  package.json           # @cuekit/tui; owns OpenTUI/React dependencies
+  tsconfig.json
+  src/
+    index.tsx            # runTui(ctx), renderer lifecycle, top-level export
+    app.tsx              # top-level React state, keyboard routing, layout
+    data.ts              # command-layer loaders and transcript-tail helper
+    task-actions.ts      # pure action enablement/selection helpers
+    attach.ts            # attach_hint parsing and one-way tmux attach helper
+    components/
+      task-list.tsx      # selected task list panel
+      task-detail.tsx    # metadata, events, transcript tail panel
+      footer.tsx         # key hints, current message/error
+      confirm-dialog.tsx # y/N confirmation overlay
+      input-dialog.tsx   # single-line input overlay for steer
+
+packages/mcp/src/bin.ts  # keeps `cuekit tui` entrypoint and lazy-imports @cuekit/tui
 ```
 
 Planned tests:
 
 ```text
-packages/mcp/__tests__/tui-data.test.ts
-packages/mcp/__tests__/tui-actions.test.ts
-packages/mcp/__tests__/tui-attach.test.ts
+packages/tui/__tests__/tui-data.test.ts
+packages/tui/__tests__/tui-actions.test.ts
+packages/tui/__tests__/tui-attach.test.ts
+packages/tui/__tests__/tui-smoke.test.ts
 packages/mcp/__tests__/cli.test.ts       # add TUI CLI surface assertions
 ```
 
-Do not add TUI behavior to `CUEKIT_OPERATIONS`; `cuekit tui` is not an MCP request/response operation.
+Do not add TUI behavior to `CUEKIT_OPERATIONS`; `cuekit tui` is not an MCP request/response operation. Keep `@opentui/*` and `react` dependencies in `@cuekit/tui`, not in `@cuekit/mcp`.
 
 ---
 
@@ -62,9 +68,12 @@ Do not add TUI behavior to `CUEKIT_OPERATIONS`; `cuekit tui` is not an MCP reque
 ### Task 1: Add dependencies and TypeScript JSX support
 
 **Files:**
-- Modify: `packages/mcp/package.json`
+- Create/Modify: `packages/tui/package.json`
+- Modify: `packages/mcp/package.json` only to depend on `@cuekit/tui`
 - Modify: `packages/mcp/tsconfig.json` if JSX settings are missing
 - Test: `bun run typecheck`
+
+> Historical note: the MVP originally landed under `packages/mcp/src/tui`. The preferred package boundary is now `packages/tui`; refactor existing TUI files there before adding more TUI features.
 
 - [ ] Step 1: Inspect OpenTUI reference docs
 
@@ -77,7 +86,7 @@ sed -n '1,220p' docs/references/opentui/13-bindings-react.md
 
 - [ ] Step 2: Add runtime dependencies
 
-Add dependencies to `packages/mcp/package.json`:
+Add dependencies to `packages/tui/package.json`:
 
 ```json
 {
@@ -92,11 +101,11 @@ Add dependencies to `packages/mcp/package.json`:
 }
 ```
 
-Use `bun add --filter @cuekit/mcp ...` if workspace filtering works; otherwise edit package metadata through the package manager's lockfile-aware command.
+Use `cd packages/tui && bun add ...` or an equivalent workspace-aware command. `@cuekit/mcp` should depend on `@cuekit/tui` but should not own OpenTUI/React dependencies directly.
 
 - [ ] Step 3: Configure JSX for OpenTUI React
 
-Ensure `packages/mcp/tsconfig.json` supports:
+Ensure `packages/tui/tsconfig.json` supports:
 
 ```json
 {
@@ -122,7 +131,7 @@ Expected: all packages typecheck.
 ### Task 2: Add a minimal `runTui` module and route `cuekit tui`
 
 **Files:**
-- Create: `packages/mcp/src/tui/index.tsx`
+- Create/Move: `packages/tui/src/index.tsx`
 - Modify: `packages/mcp/src/bin.ts`
 - Modify: `packages/mcp/__tests__/cli.test.ts`
 
@@ -160,7 +169,7 @@ For plain `cuekit tui`, call `runTui({ db, registry })`.
 
 - [ ] Step 3: Create minimal `runTui`
 
-`packages/mcp/src/tui/index.tsx` should export:
+`packages/tui/src/index.tsx` should export:
 
 ```ts
 import type { CommandContext } from "../command-context.ts";
@@ -200,8 +209,8 @@ but commit <branch> -m "feat(tui): add cuekit tui entrypoint" --changes <ids> --
 ### Task 3: Implement data loader helpers
 
 **Files:**
-- Create: `packages/mcp/src/tui/data.ts`
-- Test: `packages/mcp/__tests__/tui-data.test.ts`
+- Create: `packages/tui/src/data.ts`
+- Test: `packages/tui/__tests__/tui-data.test.ts`
 
 - [ ] Step 1: Write failing data tests
 
@@ -251,15 +260,15 @@ export function readTranscriptTail(path: string | undefined, maxLines = 80): str
 - [ ] Step 5: Run targeted tests
 
 ```sh
-bun test packages/mcp/__tests__/tui-data.test.ts
+bun test packages/tui/__tests__/tui-data.test.ts
 bun run typecheck
 ```
 
 ### Task 4: Implement pure selection/action helpers
 
 **Files:**
-- Create: `packages/mcp/src/tui/task-actions.ts`
-- Test: `packages/mcp/__tests__/tui-actions.test.ts`
+- Create: `packages/tui/src/task-actions.ts`
+- Test: `packages/tui/__tests__/tui-actions.test.ts`
 
 - [ ] Step 1: Write failing tests
 
@@ -277,7 +286,7 @@ Keep this file pure and independent of OpenTUI.
 - [ ] Step 3: Run tests
 
 ```sh
-bun test packages/mcp/__tests__/tui-actions.test.ts
+bun test packages/tui/__tests__/tui-actions.test.ts
 ```
 
 - [ ] Step 4: Commit
@@ -294,12 +303,12 @@ but commit <branch> -m "feat(tui): add task data and action helpers" --changes <
 ### Task 5: Render task list, detail, footer, refresh, quit
 
 **Files:**
-- Create: `packages/mcp/src/tui/app.tsx`
-- Create: `packages/mcp/src/tui/components/task-list.tsx`
-- Create: `packages/mcp/src/tui/components/task-detail.tsx`
-- Create: `packages/mcp/src/tui/components/footer.tsx`
-- Modify: `packages/mcp/src/tui/index.tsx`
-- Test: `packages/mcp/__tests__/tui-actions.test.ts` or a small import smoke test
+- Create: `packages/tui/src/app.tsx`
+- Create: `packages/tui/src/components/task-list.tsx`
+- Create: `packages/tui/src/components/task-detail.tsx`
+- Create: `packages/tui/src/components/footer.tsx`
+- Modify: `packages/tui/src/index.tsx`
+- Test: `packages/tui/__tests__/tui-actions.test.ts` or a small import smoke test
 
 - [ ] Step 1: Replace placeholder `runTui` with OpenTUI renderer
 
@@ -372,9 +381,9 @@ but commit <branch> -m "feat(tui): render read-only task dashboard" --changes <i
 ### Task 6: Implement safe attach command extraction and execution
 
 **Files:**
-- Create: `packages/mcp/src/tui/attach.ts`
-- Modify: `packages/mcp/src/tui/app.tsx`
-- Test: `packages/mcp/__tests__/tui-attach.test.ts`
+- Create: `packages/tui/src/attach.ts`
+- Modify: `packages/tui/src/app.tsx`
+- Test: `packages/tui/__tests__/tui-attach.test.ts`
 
 - [ ] Step 1: Write failing attach tests
 
@@ -430,10 +439,10 @@ but commit <branch> -m "feat(tui): attach selected task tmux session" --changes 
 ### Task 7: Add cancel/delete confirmation dialogs
 
 **Files:**
-- Create: `packages/mcp/src/tui/components/confirm-dialog.tsx`
-- Modify: `packages/mcp/src/tui/app.tsx`
-- Modify: `packages/mcp/src/tui/task-actions.ts`
-- Test: `packages/mcp/__tests__/tui-actions.test.ts`
+- Create: `packages/tui/src/components/confirm-dialog.tsx`
+- Modify: `packages/tui/src/app.tsx`
+- Modify: `packages/tui/src/task-actions.ts`
+- Test: `packages/tui/__tests__/tui-actions.test.ts`
 
 - [ ] Step 1: Add action enablement tests
 
@@ -479,8 +488,8 @@ Use fake or real tasks:
 ### Task 8: Add steer input dialog
 
 **Files:**
-- Create: `packages/mcp/src/tui/components/input-dialog.tsx`
-- Modify: `packages/mcp/src/tui/app.tsx`
+- Create: `packages/tui/src/components/input-dialog.tsx`
+- Modify: `packages/tui/src/app.tsx`
 - Test: optional pure state tests, manual interactive test required
 
 - [ ] Step 1: Implement input dialog

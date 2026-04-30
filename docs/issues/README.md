@@ -27,6 +27,7 @@ GitHub-ready copies also live under [`github/`](github/).
 - [`cuekit-opencode-run-positional-prompt.md`](cuekit-opencode-run-positional-prompt.md) — OpenCode `run` prompt must be positional and protected by `--`.
 - [`cuekit-delete-session-tmux-leak.md`](cuekit-delete-session-tmux-leak.md) — tmux cleanup bug report and fix context.
 - [`cuekit-tui-task-cockpit-design.md`](cuekit-tui-task-cockpit-design.md) — planned OpenTUI-based human task cockpit.
+- [`cuekit-tui-package-separation-design.md`](cuekit-tui-package-separation-design.md) — refactor design for moving TUI code into `@cuekit/tui`.
 
 ## When to Add Here
 
