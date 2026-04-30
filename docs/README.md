@@ -21,6 +21,7 @@ Important current notes:
 - [OpenCode positional prompt fix](issues/cuekit-opencode-run-positional-prompt.md)
 - [tmux cleanup bug report](issues/cuekit-delete-session-tmux-leak.md)
 - [TUI task cockpit design](issues/cuekit-tui-task-cockpit-design.md)
+- [TUI implementation plan](plans/2026-04-30-cuekit-tui-implementation-plan.md)
 
 ## External / Local References
 
