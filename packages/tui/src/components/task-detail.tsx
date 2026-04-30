@@ -78,8 +78,8 @@ function formatUpdatedAt(value: string): string {
 	return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }
 
-function headerLine(task: TaskSummary, status: TaskStatus): string {
-	return `${task.task_id} · ${status} · ${task.agent_kind}`;
+function detailTitle(task: TaskSummary, status: TaskStatus): string {
+	return `Detail: ${task.task_id}  ${status}  ${task.agent_kind}`;
 }
 
 function metadataBlock(task: TaskSummary, detail: TuiTaskDetail | undefined): string {
@@ -130,8 +130,7 @@ export function TaskDetail(props: { task?: TaskSummary; detail?: TuiTaskDetail }
 	const isTerminal = ["completed", "failed", "cancelled", "timed_out", "blocked"].includes(status);
 
 	return (
-		<box title="Detail" borderStyle="rounded" flexGrow={2} padding={1} flexDirection="column">
-			<text fg={statusColor(status)}>{headerLine(task, status)}</text>
+		<box title={detailTitle(task, status)} borderStyle="rounded" flexGrow={2} padding={1} flexDirection="column">
 			<text fg={MUTED}>{metadataBlock(task, detail)}</text>
 			<text> </text>
 			<text fg={PURPLE}>{eventsBlock(events)}</text>
