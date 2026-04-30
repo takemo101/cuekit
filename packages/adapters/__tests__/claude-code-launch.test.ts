@@ -31,6 +31,23 @@ describe("buildClaudeCodeLaunchCommand", () => {
 		);
 	});
 
+	it("does not skip permissions by default or when explicitly disabled", () => {
+		expect(buildClaudeCodeLaunchCommand(spec())).not.toContain("--dangerously-skip-permissions");
+		expect(
+			buildClaudeCodeLaunchCommand(
+				spec({ adapter_options: { dangerously_skip_permissions: false } }),
+			),
+		).not.toContain("--dangerously-skip-permissions");
+	});
+
+	it("adds --dangerously-skip-permissions only when explicitly enabled", () => {
+		expect(
+			buildClaudeCodeLaunchCommand(
+				spec({ adapter_options: { dangerously_skip_permissions: true }, model: "sonnet" }),
+			),
+		).toStartWith("claude --dangerously-skip-permissions --model 'sonnet' 'do the thing");
+	});
+
 	it("shell-quotes model names with shell metacharacters", () => {
 		const out = buildClaudeCodeLaunchCommand(spec({ model: "sonnet; touch /tmp/pwned" }));
 		expect(out).toContain("--model 'sonnet; touch /tmp/pwned'");
