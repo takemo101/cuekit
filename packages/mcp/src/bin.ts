@@ -97,7 +97,6 @@ async function main(): Promise<void> {
 		const useCustomPath = dbPath !== undefined && dbPath.length > 0;
 		db = openDatabase(useCustomPath ? { path: dbPath } : {});
 		runMigrations(db);
-		installSignalHandlers(db);
 
 		const panes = new PaneBackend();
 		const registry = new AdapterRegistry();
@@ -107,8 +106,11 @@ async function main(): Promise<void> {
 
 		if (isTui) {
 			await runTui({ db, registry });
+			closeQuietly(db);
 			return;
 		}
+
+		installSignalHandlers(db);
 
 		const isMcpServer = process.argv.includes("--mcp");
 		const isMcpConfig = process.argv[2] === "mcp" && process.argv[3] === "config";

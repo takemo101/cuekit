@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { closeSync, existsSync, openSync, readSync, statSync } from "node:fs";
 import { getTaskById } from "@cuekit/store";
 import type { CommandContext } from "../command-context.ts";
 import { runGetTaskStatus, type GetTaskStatusOutput } from "../commands/get-task-status.ts";
@@ -53,11 +53,20 @@ export async function loadTaskDetail(
 	};
 }
 
-export function readTranscriptTail(path: string | undefined, maxLines = 80): string[] {
-	if (!path || maxLines <= 0 || !existsSync(path)) return [];
+export function readTranscriptTail(path: string | undefined, maxLines = 80, maxBytes = 64 * 1024): string[] {
+	if (!path || maxLines <= 0 || maxBytes <= 0 || !existsSync(path)) return [];
+	let fd: number | undefined;
 	try {
-		return readFileSync(path, "utf8").split(/\r?\n/).filter(Boolean).slice(-maxLines);
+		const size = statSync(path).size;
+		const bytesToRead = Math.min(size, maxBytes);
+		const start = Math.max(0, size - bytesToRead);
+		const buffer = Buffer.alloc(bytesToRead);
+		fd = openSync(path, "r");
+		readSync(fd, buffer, 0, bytesToRead, start);
+		return buffer.toString("utf8").split(/\r?\n/).filter(Boolean).slice(-maxLines);
 	} catch {
 		return [];
+	} finally {
+		if (fd !== undefined) closeSync(fd);
 	}
 }

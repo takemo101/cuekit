@@ -1,0 +1,19 @@
+import { describe, expect, it } from "bun:test";
+
+describe("tui module smoke", () => {
+	it("exports the TUI entrypoint and components", async () => {
+		const [{ runTui }, { App }, { TaskList }, { TaskDetail }, { Footer }] = await Promise.all([
+			import("../src/tui/index.tsx"),
+			import("../src/tui/app.tsx"),
+			import("../src/tui/components/task-list.tsx"),
+			import("../src/tui/components/task-detail.tsx"),
+			import("../src/tui/components/footer.tsx"),
+		]);
+
+		expect(runTui).toBeFunction();
+		expect(App).toBeFunction();
+		expect(TaskList).toBeFunction();
+		expect(TaskDetail).toBeFunction();
+		expect(Footer).toBeFunction();
+	});
+});
