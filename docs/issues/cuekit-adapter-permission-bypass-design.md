@@ -1,4 +1,4 @@
-# Design: opt-in permission bypass for claude-code and opencode adapters
+# Design: default permission bypass for claude-code and opencode adapters
 
 ## Background
 
@@ -11,28 +11,40 @@ Both CLIs expose an explicit dangerous bypass flag:
 
 ## Goal
 
-Allow parent callers to opt in per task via `TaskSpec.adapter_options.dangerously_skip_permissions`.
+Enable permission bypass by default for delegated `claude-code` and `opencode` panes so unattended child agents do not stall on runtime permission prompts.
+
+Allow parent callers to opt out per task via `TaskSpec.adapter_options.dangerously_skip_permissions: false`.
 
 ## Non-goals
 
-- Enabling bypass by default
-- Broad permission policy modeling
 - Changing pi adapter behavior
+- Broad permission policy modeling
 - Suppressing non-permission interactive prompts
 
 ## API
+
+Default behavior requires no option:
+
+```json
+{
+  "agent_kind": "claude-code",
+  "objective": "..."
+}
+```
+
+Opt out per task:
 
 ```json
 {
   "agent_kind": "claude-code",
   "objective": "...",
   "adapter_options": {
-    "dangerously_skip_permissions": true
+    "dangerously_skip_permissions": false
   }
 }
 ```
 
-Only the boolean literal `true` enables the flag. Missing, `false`, strings, or other truthy-looking values preserve the safe default.
+Only the boolean literal `false` disables the flag. Missing, `true`, strings, or other values keep the default enabled behavior.
 
 ## Adapter behavior
 
@@ -41,13 +53,13 @@ Only the boolean literal `true` enables the flag. Missing, `false`, strings, or 
 Default:
 
 ```sh
-claude --model 'sonnet' '<prompt>'
+claude --dangerously-skip-permissions --model 'sonnet' '<prompt>'
 ```
 
-Opt-in:
+Opt-out:
 
 ```sh
-claude --dangerously-skip-permissions --model 'sonnet' '<prompt>'
+claude --model 'sonnet' '<prompt>'
 ```
 
 ### OpenCode
@@ -55,24 +67,26 @@ claude --dangerously-skip-permissions --model 'sonnet' '<prompt>'
 Default:
 
 ```sh
-opencode run --model 'provider/model' --prompt '<prompt>'
+opencode run --dangerously-skip-permissions --model 'provider/model' --prompt '<prompt>'
 ```
 
-Opt-in:
+Opt-out:
 
 ```sh
-opencode run --dangerously-skip-permissions --model 'provider/model' --prompt '<prompt>'
+opencode run --model 'provider/model' --prompt '<prompt>'
 ```
 
 ## Safety
 
-This is intentionally task-scoped and opt-in. Callers should use it only in trusted/sandboxed worktrees because it allows the child runtime to auto-approve permissions that would otherwise require review.
+This default is intentionally optimized for delegated unattended child agents. It should be used in trusted/sandboxed worktrees because it allows the child runtime to auto-approve permissions that would otherwise require review.
+
+Callers that want runtime permission prompts must pass `adapter_options.dangerously_skip_permissions: false`.
 
 ## Testing
 
-- Claude builder omits the flag by default
-- Claude builder omits the flag for explicit `false`
+- Claude builder includes the flag by default
 - Claude builder includes the flag for explicit `true`
-- OpenCode builder omits the flag by default
-- OpenCode builder omits the flag for explicit `false`
+- Claude builder omits the flag for explicit `false`
+- OpenCode builder includes the flag by default
 - OpenCode builder includes the flag for explicit `true`
+- OpenCode builder omits the flag for explicit `false`
