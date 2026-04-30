@@ -42,9 +42,9 @@ describe("tui task action helpers", () => {
 		};
 
 		expect(canAttach(base)).toBe(false);
-		expect(canAttach({ ...base, supports_attach: false, attach_hint: "tmux attach-session -t x" })).toBe(
-			false,
-		);
+		expect(
+			canAttach({ ...base, supports_attach: false, attach_hint: "tmux attach-session -t x" }),
+		).toBe(false);
 	});
 
 	it("allows cancel only for non-terminal task statuses", () => {
