@@ -67,13 +67,13 @@ claude --model 'sonnet' '<prompt>'
 Default:
 
 ```sh
-opencode run --dangerously-skip-permissions --model 'provider/model' --prompt '<prompt>'
+opencode run --dangerously-skip-permissions --model 'provider/model' -- '<prompt>'
 ```
 
 Opt-out:
 
 ```sh
-opencode run --model 'provider/model' --prompt '<prompt>'
+opencode run --model 'provider/model' -- '<prompt>'
 ```
 
 ## Safety

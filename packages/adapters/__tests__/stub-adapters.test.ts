@@ -152,9 +152,20 @@ describe("createOpenCodeAdapter (truthful stub)", () => {
 		expect(call[call.length - 1]).toContain("--model 'safe; touch /tmp/pwned'");
 	});
 
+	it("passes the rendered prompt as the positional run message after an option terminator", () => {
+		const launch = buildOpenCodeLaunchCommand({ agent_kind: "opencode", objective: "x" });
+		expect(launch).toStartWith("opencode run --dangerously-skip-permissions -- 'x");
+		expect(launch).not.toContain("--prompt");
+	});
+
+	it("protects prompts that start with option-looking text", () => {
+		const launch = buildOpenCodeLaunchCommand({ agent_kind: "opencode", objective: "--help" });
+		expect(launch).toStartWith("opencode run --dangerously-skip-permissions -- '--help");
+	});
+
 	it("skips permissions by default and when explicitly enabled", () => {
 		expect(buildOpenCodeLaunchCommand({ agent_kind: "opencode", objective: "x" })).toStartWith(
-			"opencode run --dangerously-skip-permissions --prompt",
+			"opencode run --dangerously-skip-permissions -- 'x",
 		);
 		expect(
 			buildOpenCodeLaunchCommand({
@@ -163,7 +174,7 @@ describe("createOpenCodeAdapter (truthful stub)", () => {
 				model: "anthropic/claude",
 				adapter_options: { dangerously_skip_permissions: true },
 			}),
-		).toStartWith("opencode run --dangerously-skip-permissions --model 'anthropic/claude'");
+		).toStartWith("opencode run --dangerously-skip-permissions --model 'anthropic/claude' -- 'x");
 	});
 
 	it("omits --dangerously-skip-permissions when explicitly disabled", () => {
