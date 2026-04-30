@@ -1,5 +1,7 @@
 # Design: parent-side wait/polling APIs for child tasks
 
+> Status update: 最終的に MCP は `wait_tasks` のみを公開し、`wait_task` は実装から削除された。単一 task を待つ場合は `wait_tasks({ task_ids: [task_id] })` を使う。以下の `wait_task` 節は historical reference として残している。
+
 ## 背景
 
 cuekit は `submit_task` で子エージェント task を起動し、子は `report_task_event` で `progress` / `completed` / `failed` / `blocked` などを SQLite `task_events` に記録できる。
@@ -75,9 +77,9 @@ cuekit は `submit_task` で子エージェント task を起動し、子は `re
 }
 ```
 
-## MCP: `wait_task`
+## MCP: `wait_task` (削除済み — historical)
 
-Optional sugar API。
+> 当初は単一 task 用 sugar API として検討したが、最終実装では追加せず削除した。単一 task を待つ場合は `wait_tasks({ task_ids: [task_id] })` を使う。以下のシェイプは設計検討時の記録。
 
 ```ts
 {

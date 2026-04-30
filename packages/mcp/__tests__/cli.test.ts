@@ -54,6 +54,10 @@ describe("createCli", () => {
 		expect(cliPaths).toContain("tool report");
 		expect(cliPaths).toContain("session delete");
 		expect(cliPaths).toContain("mcp config");
+		expect(mcpNames).toContain("wait_tasks");
+		expect(mcpNames).not.toContain("wait_task");
+		expect(cliPaths).toContain("task wait");
+		expect(cliPaths).not.toContain("task wait-one");
 	});
 
 	it("builds an incur CLI without throwing", () => {
