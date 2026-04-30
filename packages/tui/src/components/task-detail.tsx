@@ -45,10 +45,6 @@ function formatUpdatedAt(value: string): string {
 	return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }
 
-function taskTitle(task: TaskSummary, status: TaskStatus): string {
-	return `${task.task_id}   ${task.agent_kind}   ${status}`;
-}
-
 function pathLabel(path: string | undefined): string {
 	if (!path) return "No transcript yet";
 	const cuekitIndex = path.indexOf(".cuekit/tasks/");
@@ -83,6 +79,21 @@ function eventLine(event: TuiTaskEvent): string {
 	return truncateEnd(`${sequence}${type}${message}`, 128);
 }
 
+function SectionTitle(props: { title: string; aside?: string }): ReactNode {
+	return (
+		<box flexDirection="row" justifyContent="space-between">
+			<text fg={BLUE}>{props.title}</text>
+			{props.aside ? <text fg={MUTED}>{props.aside}</text> : null}
+		</box>
+	);
+}
+
+function MetadataLine(props: { label: string; value: string; muted?: boolean }): ReactNode {
+	return (
+		<text fg={props.muted ? MUTED : TEXT_MUTED}>{`${props.label.padEnd(11)} ${props.value}`}</text>
+	);
+}
+
 function EmptyText(props: { children: string }): ReactNode {
 	return <text fg={MUTED}>{props.children}</text>;
 }
@@ -100,63 +111,46 @@ export function TaskDetail(props: { task?: TaskSummary; detail?: TuiTaskDetail }
 	const status = detail?.status.status ?? task.status;
 	const events = detail?.events.slice(-7) ?? [];
 	const lines = outputLines(detail, status);
-	const outputTitle = status === "completed" ? "Output" : "Live output";
+	const outputTitle = status === "completed" ? "OUTPUT" : "LIVE OUTPUT";
 
 	return (
-		<box borderStyle="rounded" flexGrow={2} padding={1} flexDirection="column" gap={1}>
+		<box borderStyle="rounded" flexGrow={2} padding={1} flexDirection="column">
 			<box flexDirection="row" justifyContent="space-between">
-				<text fg={PURPLE}>{taskTitle(task, status)}</text>
-				<text fg={MUTED}>{`updated ${formatUpdatedAt(task.updated_at)}`}</text>
+				<text fg={PURPLE}>{`${task.task_id}  ${task.agent_kind}`}</text>
+				<text fg={statusColor(status)}>{status}</text>
 			</box>
+			<text fg={MUTED}>{`updated ${formatUpdatedAt(task.updated_at)}`}</text>
+			<text> </text>
 
-			<box flexDirection="column">
-				<box flexDirection="row">
-					<text fg={MUTED}>transcript  </text>
-					<text fg={detail?.transcriptPath ? TEXT_MUTED : MUTED}>{pathLabel(detail?.transcriptPath)}</text>
-				</box>
-				{detail?.status.attach_hint ? (
-					<box flexDirection="row">
-						<text fg={MUTED}>attach      </text>
-						<text fg={TEXT_MUTED}>{truncateMiddle(detail.status.attach_hint, 96)}</text>
-					</box>
-				) : null}
-				{detail?.status.summary ? (
-					<box flexDirection="row">
-						<text fg={MUTED}>summary     </text>
-						<text fg={TEXT_MUTED}>{truncateEnd(detail.status.summary, 110)}</text>
-					</box>
-				) : null}
-			</box>
+			<MetadataLine label="transcript" value={pathLabel(detail?.transcriptPath)} muted={!detail?.transcriptPath} />
+			{detail?.status.attach_hint ? (
+				<MetadataLine label="attach" value={truncateMiddle(detail.status.attach_hint, 96)} />
+			) : null}
+			{detail?.status.summary ? (
+				<MetadataLine label="summary" value={truncateEnd(detail.status.summary, 110)} />
+			) : null}
+			<text> </text>
 
-			<box borderStyle="single" padding={1} flexDirection="column" gap={1}>
-				<box flexDirection="row" justifyContent="space-between">
-					<text fg={BLUE}>Events</text>
-					<text fg={MUTED}>{`${events.length} shown`}</text>
-				</box>
-				{events.length > 0 ? (
-					events.map((event) => (
-						<text key={event.id} fg={eventColor(event.type)}>{eventLine(event)}</text>
+			<SectionTitle title="EVENTS" aside={events.length > 0 ? `${events.length} shown` : undefined} />
+			{events.length > 0 ? (
+				events.map((event) => (
+					<text key={event.id} fg={eventColor(event.type)}>{`  ${eventLine(event)}`}</text>
+				))
+			) : (
+				<EmptyText>  No events yet.</EmptyText>
+			)}
+			<text> </text>
+
+			<SectionTitle title={outputTitle} aside={`${lines.length} line(s)`} />
+			<scrollbox flexGrow={1} stickyScroll stickyStart="bottom" viewportCulling>
+				{lines.length > 0 ? (
+					lines.map((line, index) => (
+						<text key={`${index}:${line}`}>{truncateEnd(line, 150)}</text>
 					))
 				) : (
-					<EmptyText>No events yet.</EmptyText>
+					<EmptyText>No output available yet.</EmptyText>
 				)}
-			</box>
-
-			<box borderStyle="single" paddingX={1} paddingY={0} flexDirection="column" flexGrow={1}>
-				<box flexDirection="row" justifyContent="space-between">
-					<text fg={BLUE}>{outputTitle}</text>
-					<text fg={MUTED}>{`${lines.length} line(s)`}</text>
-				</box>
-				<scrollbox flexGrow={1} stickyScroll stickyStart="bottom" viewportCulling>
-					{lines.length > 0 ? (
-						lines.map((line, index) => (
-							<text key={`${index}:${line}`}>{truncateEnd(line, 150)}</text>
-						))
-					) : (
-						<EmptyText>No output available yet.</EmptyText>
-					)}
-				</scrollbox>
-			</box>
+			</scrollbox>
 		</box>
 	);
 }
