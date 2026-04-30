@@ -56,8 +56,10 @@ describe("createCli", () => {
 		expect(cliPaths).toContain("mcp config");
 		expect(mcpNames).toContain("wait_tasks");
 		expect(mcpNames).not.toContain("wait_task");
+		expect(mcpNames).not.toContain("tui");
 		expect(cliPaths).toContain("task wait");
 		expect(cliPaths).not.toContain("task wait-one");
+		expect(cliPaths).not.toContain("tui");
 	});
 
 	it("builds an incur CLI without throwing", () => {
@@ -123,6 +125,44 @@ describe("createCli", () => {
 		const body = JSON.parse(stdout) as { name: string; args: string[] };
 		expect(body.name).toBe("cuekit");
 		expect(body.args).toEqual(["--mcp"]);
+	});
+
+	it("serves tui help as a human-only command outside MCP operations", async () => {
+		const proc = Bun.spawn(["bun", "packages/mcp/src/bin.ts", "tui", "--help"], {
+			cwd: WORKSPACE_ROOT,
+			env: { ...process.env, CUEKIT_DB_PATH: ":memory:" },
+			stderr: "pipe",
+			stdout: "pipe",
+		});
+		const [exitCode, stdout, stderr] = await Promise.all([
+			proc.exited,
+			new Response(proc.stdout).text(),
+			new Response(proc.stderr).text(),
+		]);
+
+		expect(exitCode).toBe(0);
+		expect(stderr).toBe("");
+		expect(stdout).toContain("cuekit tui");
+		expect(stdout).toContain("interactive task cockpit");
+		expect(stdout).toContain("a attach");
+	});
+
+	it("serves tui help before opening the database", async () => {
+		const proc = Bun.spawn(["bun", "packages/mcp/src/bin.ts", "tui", "--help"], {
+			cwd: WORKSPACE_ROOT,
+			env: { ...process.env, CUEKIT_DB_PATH: "/nonexistent-dir/cuekit/state.db" },
+			stderr: "pipe",
+			stdout: "pipe",
+		});
+		const [exitCode, stdout, stderr] = await Promise.all([
+			proc.exited,
+			new Response(proc.stdout).text(),
+			new Response(proc.stderr).text(),
+		]);
+
+		expect(exitCode).toBe(0);
+		expect(stderr).toBe("");
+		expect(stdout).toContain("cuekit tui");
 	});
 
 	it("registers MCP using the local cuekit command instead of npx cuekit", async () => {
