@@ -30,7 +30,6 @@ import { runReportTaskEvent } from "../src/commands/report-task-event.ts";
 import { runShowMcpConfig } from "../src/commands/show-mcp-config.ts";
 import { runSteerTask } from "../src/commands/steer-task.ts";
 import { runSubmitTask } from "../src/commands/submit-task.ts";
-import { runWaitTask } from "../src/commands/wait-task.ts";
 import { runWaitTasks } from "../src/commands/wait-tasks.ts";
 
 let db: Database;
@@ -642,7 +641,7 @@ describe("wait-tasks", () => {
 		expect(waited.error?.code).toBe("permission_denied");
 	});
 
-	it("wait_task wraps wait_tasks for a single task", async () => {
+	it("supports single-task waiting via task_ids with one entry", async () => {
 		const submitted = await runSubmitTask(ctx, {
 			objective: "x",
 			agent_kind: "claude-code",
@@ -651,16 +650,19 @@ describe("wait-tasks", () => {
 		if (!submitted.accepted) throw new Error("setup failed");
 		await runCancelTask(ctx, { task_id: submitted.task_id });
 
-		const waited = await runWaitTask(ctx, {
-			task_id: submitted.task_id,
+		const waited = await runWaitTasks(ctx, {
+			task_ids: [submitted.task_id],
 			session_id: submitted.session_id,
 			timeout_ms: 1,
 			poll_interval_ms: 1,
+			include_results: true,
 		});
 
 		expect(waited.done).toBe(true);
-		expect(waited.status).toBe("cancelled");
-		expect(waited.result?.status).toBe("cancelled");
+		expect(waited.tasks).toHaveLength(1);
+		expect(waited.tasks[0]?.status).toBe("cancelled");
+		expect(waited.tasks[0]?.terminal).toBe(true);
+		expect(waited.tasks[0]?.result?.status).toBe("cancelled");
 	});
 });
 

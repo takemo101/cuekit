@@ -60,7 +60,6 @@ import {
 	SubmitTaskInputSchema,
 	SubmitTaskOutputSchema,
 } from "./commands/submit-task.ts";
-import { runWaitTask, WaitTaskInputSchema, WaitTaskOutputSchema } from "./commands/wait-task.ts";
 import {
 	runWaitTasks,
 	WaitTasksInputSchema,
@@ -116,14 +115,6 @@ export const CUEKIT_OPERATIONS = [
 		options: GetTaskResultInputSchema,
 		output: GetTaskResultOutputSchema,
 		run: runGetTaskResult,
-	}),
-	defineOperation({
-		mcpName: "wait_task",
-		cliPath: ["task", "wait-one"],
-		description: "Wait for a task to become terminal by polling status.",
-		options: WaitTaskInputSchema,
-		output: WaitTaskOutputSchema,
-		run: runWaitTask,
 	}),
 	defineOperation({
 		mcpName: "wait_tasks",

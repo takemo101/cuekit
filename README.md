@@ -96,9 +96,9 @@ Start the stdio MCP server:
 cuekit --mcp
 ```
 
-Agents that speak MCP can list the `submit_task` / `get_task_status` / `get_task_result` / `wait_task` / `wait_tasks` / `cancel_task` / `list_tasks` / `report_task_event` / `list_task_events` / `list_adapters` / `steer_task` / `delete_task` / `delete_session` / `show_mcp_config` tools and call them over stdio. Use `cuekit mcp config` to print a client configuration snippet.
+Agents that speak MCP can list the `submit_task` / `get_task_status` / `get_task_result` / `wait_tasks` / `cancel_task` / `list_tasks` / `report_task_event` / `list_task_events` / `list_adapters` / `steer_task` / `delete_task` / `delete_session` / `show_mcp_config` tools and call them over stdio. Use `cuekit mcp config` to print a client configuration snippet.
 
-`wait_tasks` is the parent-side polling primitive for asynchronous delegation. Submit multiple child tasks, then wait with `mode: "all"` for all terminal states or `mode: "any"` for the first terminal state. Waiting is scoped by `session_id` or the current/explicit `cwd` so a parent does not accidentally observe another project's tasks; a wait timeout only stops waiting and does not cancel child work.
+`wait_tasks` is the parent-side polling primitive for asynchronous delegation. It replaces the previous `wait_task` tool — single-task waits use `task_ids: [task_id]`. Submit one or more child tasks, then wait with `mode: "all"` for all terminal states or `mode: "any"` for the first terminal state. Waiting is scoped by `session_id` or the current/explicit `cwd` so a parent does not accidentally observe another project's tasks; a wait timeout only stops waiting and does not cancel child work.
 
 ## State
 
