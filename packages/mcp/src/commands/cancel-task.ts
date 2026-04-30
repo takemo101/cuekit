@@ -1,35 +1,95 @@
-import { AckSchema } from "@cuekit/core";
+import { JobErrorSchema } from "@cuekit/core";
 import { getTaskById } from "@cuekit/store";
 import { z } from "incur";
 import type { CommandContext } from "../command-context.ts";
 
-export const CancelTaskInputSchema = z.object({
-	task_id: z.string().min(1).describe("cuekit task id."),
+export const CancelTasksInputSchema = z.object({
+	task_ids: z
+		.array(z.string().min(1))
+		.min(1)
+		.describe(
+			"cuekit task ids to cancel. Repeat flag for multiple: --task_ids t_a --task_ids t_b.",
+		),
 });
 
-export type CancelTaskInput = z.infer<typeof CancelTaskInputSchema>;
+export type CancelTasksInput = z.infer<typeof CancelTasksInputSchema>;
 
-export const CancelTaskOutputSchema = AckSchema;
-export type CancelTaskOutput = z.infer<typeof CancelTaskOutputSchema>;
+const CancelTaskItemSchema = z.object({
+	task_id: z.string(),
+	ok: z.boolean(),
+	message: z.string().optional(),
+	error: JobErrorSchema.optional(),
+});
 
-export async function runCancelTask(
+export const CancelTasksOutputSchema = z.discriminatedUnion("ok", [
+	z.object({
+		ok: z.literal(true),
+		message: z.string().optional(),
+		tasks: z.array(CancelTaskItemSchema),
+	}),
+	z.object({
+		ok: z.literal(false),
+		error: JobErrorSchema,
+		tasks: z.array(CancelTaskItemSchema).optional(),
+	}),
+]);
+
+export type CancelTasksOutput = z.infer<typeof CancelTasksOutputSchema>;
+
+function duplicateTaskId(taskIds: string[]): string | null {
+	const seen = new Set<string>();
+	for (const taskId of taskIds) {
+		if (seen.has(taskId)) return taskId;
+		seen.add(taskId);
+	}
+	return null;
+}
+
+export async function runCancelTasks(
 	ctx: CommandContext,
-	input: CancelTaskInput,
-): Promise<CancelTaskOutput> {
-	const task = getTaskById(ctx.db, input.task_id);
-	if (!task) {
+	input: CancelTasksInput,
+): Promise<CancelTasksOutput> {
+	const duplicate = duplicateTaskId(input.task_ids);
+	if (duplicate) {
 		return {
 			ok: false,
 			error: {
-				code: "task_not_found",
-				message: `task '${input.task_id}' not found`,
+				code: "invalid_input",
+				message: `duplicate task_id '${duplicate}'`,
 				retryable: false,
 			},
 		};
 	}
-	const adapterRes = ctx.registry.require(task.agent_kind);
-	if (!adapterRes.ok) {
-		return { ok: false, error: adapterRes.error };
+
+	const results: z.infer<typeof CancelTaskItemSchema>[] = [];
+	for (const taskId of input.task_ids) {
+		const task = getTaskById(ctx.db, taskId);
+		if (!task) {
+			results.push({
+				task_id: taskId,
+				ok: false,
+				error: {
+					code: "task_not_found",
+					message: `task '${taskId}' not found`,
+					retryable: false,
+				},
+			});
+			continue;
+		}
+		const adapterRes = ctx.registry.require(task.agent_kind);
+		if (!adapterRes.ok) {
+			results.push({ task_id: taskId, ok: false, error: adapterRes.error });
+			continue;
+		}
+		const cancelled = await adapterRes.value.cancel(taskId);
+		if (cancelled.ok) {
+			results.push({ task_id: taskId, ok: true, message: cancelled.message });
+		} else {
+			results.push({ task_id: taskId, ok: false, error: cancelled.error });
+		}
 	}
-	return adapterRes.value.cancel(input.task_id);
+
+	const failed = results.find((result) => !result.ok);
+	if (failed?.error) return { ok: false, error: failed.error, tasks: results };
+	return { ok: true, message: `cancelled ${results.length} task(s)`, tasks: results };
 }

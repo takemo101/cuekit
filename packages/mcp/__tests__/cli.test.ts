@@ -55,9 +55,17 @@ describe("createCli", () => {
 		expect(cliPaths).toContain("session delete");
 		expect(cliPaths).toContain("mcp config");
 		expect(mcpNames).toContain("wait_tasks");
+		expect(mcpNames).toContain("cancel_tasks");
+		expect(mcpNames).toContain("delete_tasks");
+		expect(mcpNames).toContain("delete_sessions");
+		expect(mcpNames).toContain("cleanup_tasks");
 		expect(mcpNames).not.toContain("wait_task");
+		expect(mcpNames).not.toContain("cancel_task");
+		expect(mcpNames).not.toContain("delete_task");
+		expect(mcpNames).not.toContain("delete_session");
 		expect(mcpNames).not.toContain("tui");
 		expect(cliPaths).toContain("task wait");
+		expect(cliPaths).toContain("task cleanup");
 		expect(cliPaths).not.toContain("task wait-one");
 		expect(cliPaths).not.toContain("tui");
 	});
@@ -92,7 +100,11 @@ describe("createCli", () => {
 		expect(configBody.data.args).toEqual(["--mcp"]);
 
 		const deleteRes = await cli.fetch(
-			new Request("http://localhost/session/delete?session_id=s_missing"),
+			new Request("http://localhost/session/delete", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({ session_ids: ["s_missing"] }),
+			}),
 		);
 		expect(deleteRes.ok).toBe(true);
 		const deleteBody = (await deleteRes.json()) as {
@@ -394,9 +406,12 @@ describe("createCli", () => {
 			"get_task_status",
 			"get_task_result",
 			"cancel_task",
+			"cancel_tasks",
 			"list_tasks",
 			"steer_task",
 			"delete_task",
+			"delete_tasks",
+			"cleanup_tasks",
 		]) {
 			const res = await cli.fetch(new Request(`http://localhost/${path}`));
 			expect(res.ok).toBe(false);
@@ -405,7 +420,7 @@ describe("createCli", () => {
 
 	it("does not keep flat non-task CLI aliases", async () => {
 		const cli = makeCli();
-		for (const path of ["list_adapters", "delete_session", "show_mcp_config"]) {
+		for (const path of ["list_adapters", "delete_session", "delete_sessions", "show_mcp_config"]) {
 			const res = await cli.fetch(new Request(`http://localhost/${path}`));
 			expect(res.ok).toBe(false);
 		}
