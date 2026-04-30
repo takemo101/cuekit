@@ -1,6 +1,6 @@
 import { useKeyboard, useRenderer } from "@opentui/react";
 import type { TaskSummary } from "@cuekit/core";
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { TuiContext } from "./context.ts";
 import { buildTmuxAttachArgs, getTmuxSessionName } from "./attach.ts";
 import { ConfirmDialog } from "./components/confirm-dialog.tsx";
@@ -10,6 +10,8 @@ import { TaskDetail } from "./components/task-detail.tsx";
 import { TaskList } from "./components/task-list.tsx";
 import { loadTaskDetail, loadTaskList, type TuiTaskDetail } from "./data.ts";
 import { canAttach, canCancel, canDelete, moveSelection } from "./task-actions.ts";
+
+const AUTO_REFRESH_MS = 3000;
 
 type PendingConfirm = { kind: "cancel" | "delete"; taskId: string } | null;
 type SteerInputState = { taskId: string; value: string } | null;
@@ -24,10 +26,13 @@ export function App(props: { ctx: TuiContext; onAttach?: (args: string[]) => voi
 	const [error, setError] = useState<string | undefined>();
 	const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
 	const [steerInput, setSteerInput] = useState<SteerInputState>(null);
+	const refreshInFlight = useRef(false);
 
 	const selectedTask = useMemo(() => tasks[selectedIndex], [tasks, selectedIndex]);
 
 	const refresh = useCallback(async () => {
+		if (refreshInFlight.current) return;
+		refreshInFlight.current = true;
 		setLoading(true);
 		setError(undefined);
 		try {
@@ -44,6 +49,7 @@ export function App(props: { ctx: TuiContext; onAttach?: (args: string[]) => voi
 		} catch (err) {
 			setError(err instanceof Error ? err.message : String(err));
 		} finally {
+			refreshInFlight.current = false;
 			setLoading(false);
 		}
 	}, [props.ctx]);
@@ -51,6 +57,14 @@ export function App(props: { ctx: TuiContext; onAttach?: (args: string[]) => voi
 	useEffect(() => {
 		void refresh();
 	}, [refresh]);
+
+	useEffect(() => {
+		if (pendingConfirm !== null || steerInput !== null) return;
+		const timer = setInterval(() => {
+			void refresh();
+		}, AUTO_REFRESH_MS);
+		return () => clearInterval(timer);
+	}, [pendingConfirm, refresh, steerInput]);
 
 	useEffect(() => {
 		setDetail(undefined);

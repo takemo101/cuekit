@@ -21,6 +21,14 @@ describe("@cuekit/tui package smoke", () => {
 		expect(entrypoint).toContain("createCliRenderer");
 	});
 
+	it("documents and wires the automatic refresh interval", async () => {
+		const app = await Bun.file(new URL("../src/app.tsx", import.meta.url)).text();
+		const footer = await Bun.file(new URL("../src/components/footer.tsx", import.meta.url)).text();
+		expect(app).toContain("AUTO_REFRESH_MS");
+		expect(app).toContain("setInterval");
+		expect(footer).toContain("auto");
+	});
+
 	it("declares OpenTUI dependencies in @cuekit/tui", async () => {
 		const pkg = await Bun.file(new URL("../package.json", import.meta.url)).json();
 		expect(pkg.name).toBe("@cuekit/tui");
