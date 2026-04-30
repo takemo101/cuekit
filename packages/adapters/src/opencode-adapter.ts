@@ -26,7 +26,7 @@ export function buildOpenCodeLaunchCommand(spec: TaskSpec, openCodeBin = "openco
 	if (spec.model) {
 		parts.push("--model", shellQuote(spec.model));
 	}
-	parts.push("--prompt", shellQuote(renderTaskSpecPrompt(spec)));
+	parts.push("--", shellQuote(renderTaskSpecPrompt(spec)));
 	return parts.join(" ");
 }
 
