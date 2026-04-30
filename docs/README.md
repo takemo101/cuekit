@@ -20,6 +20,7 @@ Important current notes:
 - [Adapter permission bypass design](issues/cuekit-adapter-permission-bypass-design.md)
 - [OpenCode positional prompt fix](issues/cuekit-opencode-run-positional-prompt.md)
 - [tmux cleanup bug report](issues/cuekit-delete-session-tmux-leak.md)
+- [TUI task cockpit design](issues/cuekit-tui-task-cockpit-design.md)
 
 ## External / Local References
 

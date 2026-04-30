@@ -26,6 +26,7 @@ GitHub-ready copies also live under [`github/`](github/).
 - [`cuekit-adapter-permission-bypass-design.md`](cuekit-adapter-permission-bypass-design.md) — default permission bypass behavior for unattended child agents.
 - [`cuekit-opencode-run-positional-prompt.md`](cuekit-opencode-run-positional-prompt.md) — OpenCode `run` prompt must be positional and protected by `--`.
 - [`cuekit-delete-session-tmux-leak.md`](cuekit-delete-session-tmux-leak.md) — tmux cleanup bug report and fix context.
+- [`cuekit-tui-task-cockpit-design.md`](cuekit-tui-task-cockpit-design.md) — planned OpenTUI-based human task cockpit.
 
 ## When to Add Here
 
