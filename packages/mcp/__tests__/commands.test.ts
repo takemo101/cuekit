@@ -13,6 +13,7 @@ import { FakeTmuxRunner } from "@cuekit/adapters/testing";
 import {
 	createSession,
 	createTask,
+	createTaskTeam,
 	getSessionById,
 	getTaskById,
 	listSessionsByWorktree,
@@ -23,14 +24,17 @@ import {
 import type { CommandContext } from "../src/command-context.ts";
 import { runCancelTasks } from "../src/commands/cancel-task.ts";
 import { runCleanupTasks } from "../src/commands/cleanup-tasks.ts";
+import { runCreateTeam } from "../src/commands/create-team.ts";
 import { runDeleteSessions } from "../src/commands/delete-session.ts";
 import { runDeleteTasks } from "../src/commands/delete-task.ts";
 import { runGetTaskResult } from "../src/commands/get-task-result.ts";
 import { runGetTaskStatus } from "../src/commands/get-task-status.ts";
+import { runGetTeamStatus } from "../src/commands/get-team-status.ts";
 import { runListAdapters } from "../src/commands/list-adapters.ts";
 import { runListAgentProfiles } from "../src/commands/list-agent-profiles.ts";
 import { runListTaskEvents } from "../src/commands/list-task-events.ts";
 import { runListTasks } from "../src/commands/list-tasks.ts";
+import { runListTeams } from "../src/commands/list-teams.ts";
 import { runReportTaskEvent } from "../src/commands/report-task-event.ts";
 import { runShowMcpConfig } from "../src/commands/show-mcp-config.ts";
 import { runSteerTask } from "../src/commands/steer-task.ts";
@@ -59,6 +63,96 @@ beforeEach(() => {
 		}),
 	);
 	ctx = { db, registry };
+});
+
+describe("team commands", () => {
+	it("create-team auto-creates a session from cwd", () => {
+		const result = runCreateTeam(ctx, {
+			title: "Implement teams",
+			objective: "Coordinate related tasks",
+			cwd: "/my/project",
+		});
+
+		expect("team_id" in result).toBe(true);
+		if (!("team_id" in result)) return;
+		expect(result.team_id).toMatch(/^tm_/);
+		expect(result.session_id).toMatch(/^s_/);
+		expect(result.title).toBe("Implement teams");
+		expect(listSessionsByWorktree(db, "/my/project")).toHaveLength(1);
+	});
+
+	it("create-team rejects empty title", () => {
+		const parsed = runCreateTeam(ctx, { title: "", cwd: "/my/project" });
+
+		expect("error" in parsed).toBe(true);
+		if ("error" in parsed) expect(parsed.error.code).toBe("invalid_input");
+	});
+
+	it("create-team returns session_not_found for an unknown explicit session", () => {
+		const result = runCreateTeam(ctx, { title: "Team", session_id: "s_missing" });
+
+		expect("error" in result).toBe(true);
+		if ("error" in result) expect(result.error.code).toBe("session_not_found");
+	});
+
+	it("list-teams normalizes cwd filters", () => {
+		const cwd = mkdtempSync(join(tmpdir(), "cuekit-team-cwd-"));
+		try {
+			const created = runCreateTeam(ctx, { title: "Team", cwd });
+			if (!("team_id" in created)) throw new Error("setup failed");
+
+			const listed = runListTeams(ctx, { cwd: relative(process.cwd(), cwd) });
+
+			expect(listed.teams.map((team) => team.team_id)).toContain(created.team_id);
+		} finally {
+			rmSync(cwd, { recursive: true, force: true });
+		}
+	});
+
+	it("list-teams filters by session and paginates", () => {
+		createSession(db, {
+			id: "s1",
+			project_root: "/p",
+			worktree_path: "/w",
+			parent_agent_kind: "pi",
+		});
+		createTaskTeam(db, { id: "tm_1", session_id: "s1", title: "One" });
+		createTaskTeam(db, { id: "tm_2", session_id: "s1", title: "Two" });
+
+		const first = runListTeams(ctx, { session_id: "s1", limit: 1 });
+
+		expect(first.teams).toHaveLength(1);
+		expect(first.has_more).toBe(true);
+		expect(first.next_cursor).toBeDefined();
+		const second = runListTeams(ctx, { session_id: "s1", limit: 1, cursor: first.next_cursor });
+		expect(second.teams).toHaveLength(1);
+		expect(second.teams[0]?.team_id).not.toBe(first.teams[0]?.team_id);
+	});
+
+	it("get-team-status returns empty team status", () => {
+		createSession(db, {
+			id: "s1",
+			project_root: "/p",
+			worktree_path: "/w",
+			parent_agent_kind: "pi",
+		});
+		createTaskTeam(db, { id: "tm_1", session_id: "s1", title: "One" });
+
+		const result = runGetTeamStatus(ctx, { team_id: "tm_1" });
+
+		expect("team_id" in result).toBe(true);
+		if (!("team_id" in result)) return;
+		expect(result.status).toBe("empty");
+		expect(result.task_counts.total).toBe(0);
+		expect(result.tasks).toEqual([]);
+	});
+
+	it("get-team-status returns team_not_found", () => {
+		const result = runGetTeamStatus(ctx, { team_id: "tm_missing" });
+
+		expect("error" in result).toBe(true);
+		if ("error" in result) expect(result.error.code).toBe("team_not_found");
+	});
 });
 
 describe("submit-task", () => {

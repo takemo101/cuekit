@@ -11,6 +11,11 @@ import {
 	runCleanupTasks,
 } from "./commands/cleanup-tasks.ts";
 import {
+	CreateTeamInputSchema,
+	CreateTeamOutputSchema,
+	runCreateTeam,
+} from "./commands/create-team.ts";
+import {
 	DeleteSessionsInputSchema,
 	DeleteSessionsOutputSchema,
 	runDeleteSessions,
@@ -31,6 +36,11 @@ import {
 	runGetTaskStatus,
 } from "./commands/get-task-status.ts";
 import {
+	GetTeamStatusInputSchema,
+	GetTeamStatusOutputSchema,
+	runGetTeamStatus,
+} from "./commands/get-team-status.ts";
+import {
 	ListAdaptersInputSchema,
 	ListAdaptersOutputSchema,
 	runListAdapters,
@@ -50,6 +60,11 @@ import {
 	ListTasksOutputSchema,
 	runListTasks,
 } from "./commands/list-tasks.ts";
+import {
+	ListTeamsInputSchema,
+	ListTeamsOutputSchema,
+	runListTeams,
+} from "./commands/list-teams.ts";
 import {
 	ReportTaskEventInputSchema,
 	ReportTaskEventOutputSchema,
@@ -109,6 +124,30 @@ export const CUEKIT_OPERATIONS = [
 		options: SubmitTaskInputSchema,
 		output: SubmitTaskOutputSchema,
 		run: runSubmitTask,
+	}),
+	defineOperation({
+		mcpName: "create_team",
+		cliPath: ["team", "create"],
+		description: "Create a session-scoped task team.",
+		options: CreateTeamInputSchema,
+		output: CreateTeamOutputSchema,
+		run: runCreateTeam,
+	}),
+	defineOperation({
+		mcpName: "list_teams",
+		cliPath: ["team", "list"],
+		description: "List task teams, optionally filtered by session or cwd.",
+		options: ListTeamsInputSchema,
+		output: ListTeamsOutputSchema,
+		run: runListTeams,
+	}),
+	defineOperation({
+		mcpName: "get_team_status",
+		cliPath: ["team", "status"],
+		description: "Fetch aggregate status and member tasks for a task team.",
+		options: GetTeamStatusInputSchema,
+		output: GetTeamStatusOutputSchema,
+		run: runGetTeamStatus,
 	}),
 	defineOperation({
 		mcpName: "get_task_status",
