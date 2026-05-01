@@ -1,14 +1,10 @@
 import type { TaskSummary } from "@cuekit/core";
 import type { ReactNode } from "react";
+import { truncateEnd } from "../format.ts";
 import { statusAccent, statusGlyph, theme } from "../theme.ts";
 
 const TASK_LIST_WIDTH = 42;
 const TASK_ROW_WIDTH = 38;
-
-function truncateEnd(value: string, maxLength: number): string {
-	if (value.length <= maxLength) return value;
-	return `${value.slice(0, Math.max(0, maxLength - 1))}…`;
-}
 
 function compactStatus(status: string): string {
 	if (status === "input_required") return "input";

@@ -1,4 +1,4 @@
-import { useKeyboard, useRenderer } from "@opentui/react";
+import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react";
 import type { TaskSummary } from "@cuekit/core";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { TuiContext } from "./context.ts";
@@ -19,6 +19,7 @@ type SteerInputState = { taskId: string; value: string } | null;
 
 export function App(props: { ctx: TuiContext; onAttach?: (args: string[]) => void }): ReactNode {
 	const renderer = useRenderer();
+	const terminal = useTerminalDimensions();
 	const [tasks, setTasks] = useState<TaskSummary[]>([]);
 	const [selectedIndex, setSelectedIndex] = useState(0);
 	const [detail, setDetail] = useState<TuiTaskDetail | undefined>();
@@ -244,7 +245,7 @@ export function App(props: { ctx: TuiContext; onAttach?: (args: string[]) => voi
 			{steerInput !== null ? (
 				<InputDialog title={`Steer ${steerInput.taskId}`} value={steerInput.value} />
 			) : null}
-			<Footer message={message} error={error} loading={loading} />
+			<Footer message={message} error={error} loading={loading} terminalWidth={terminal.width} />
 		</box>
 	);
 }

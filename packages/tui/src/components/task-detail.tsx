@@ -2,21 +2,8 @@ import type { TaskStatus, TaskSummary } from "@cuekit/core";
 import type { ReactNode } from "react";
 import type { TuiTaskEvent } from "../context.ts";
 import type { TuiTaskDetail } from "../data.ts";
+import { truncateEnd, truncateMiddle } from "../format.ts";
 import { statusAccent, statusGlyph, theme } from "../theme.ts";
-
-function truncateMiddle(value: string, maxLength: number): string {
-	if (value.length <= maxLength) return value;
-	if (maxLength <= 3) return value.slice(0, maxLength);
-	const keep = maxLength - 3;
-	const start = Math.ceil(keep / 2);
-	const end = Math.floor(keep / 2);
-	return `${value.slice(0, start)}...${value.slice(value.length - end)}`;
-}
-
-function truncateEnd(value: string, maxLength: number): string {
-	if (value.length <= maxLength) return value;
-	return `${value.slice(0, Math.max(0, maxLength - 1))}…`;
-}
 
 function pathLabel(path: string | undefined): string {
 	if (!path) return "No transcript yet";
@@ -105,11 +92,13 @@ export function TaskDetail(props: { task?: TaskSummary; detail?: TuiTaskDetail }
 	}
 
 	const status = detail?.status.status ?? task.status;
-	const events = detail?.events.slice(-3) ?? [];
+	const events = detail?.events.slice(-2) ?? [];
 	const lines = outputLines(detail);
 	const isTerminal = ["completed", "failed", "cancelled", "timed_out", "blocked"].includes(status);
 	const metadata = metadataLines(task, detail);
 	const eventRows = eventsLines(events, detail?.eventsError);
+	const contextRows = [...metadata, ...eventRows];
+	const contextHeight = Math.min(6, Math.max(1, contextRows.length));
 
 	return (
 		<box
@@ -121,14 +110,9 @@ export function TaskDetail(props: { task?: TaskSummary; detail?: TuiTaskDetail }
 			padding={1}
 			flexDirection="column"
 		>
-			{metadata.map((line) => (
-				<text key={line} fg={theme.muted} flexShrink={0}>{line}</text>
-			))}
-			<text flexShrink={0}> </text>
-			{eventRows.map((line, index) => (
-				<text key={`${index}:${line}`} fg={theme.purple} flexShrink={0}>{line}</text>
-			))}
-			<text flexShrink={0}> </text>
+			<scrollbox height={contextHeight} flexShrink={1} viewportCulling>
+				<text fg={theme.muted}>{contextRows.join("\n")}</text>
+			</scrollbox>
 			{isTerminal ? (
 				<>
 					<box backgroundColor={theme.panelAlt} height={1} flexShrink={0}>

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import { footerLine } from "../src/components/footer.tsx";
 
 const TUI_FILES = [
 	"../src/index.ts",
@@ -9,6 +10,8 @@ const TUI_FILES = [
 	"../src/components/confirm-dialog.tsx",
 	"../src/components/input-dialog.tsx",
 	"../src/components/modal-frame.tsx",
+	"../src/theme.ts",
+	"../src/format.ts",
 ].map((path) => new URL(path, import.meta.url));
 
 describe("@cuekit/tui package smoke", () => {
@@ -27,6 +30,45 @@ describe("@cuekit/tui package smoke", () => {
 		expect(app).toContain("AUTO_REFRESH_MS");
 		expect(app).toContain("setInterval");
 		expect(footer).toContain("auto");
+	});
+
+	it("preserves the compact two-pane cockpit layout", async () => {
+		const app = await Bun.file(new URL("../src/app.tsx", import.meta.url)).text();
+		const taskList = await Bun.file(
+			new URL("../src/components/task-list.tsx", import.meta.url),
+		).text();
+		expect(app).toContain("<TaskList tasks={tasks} selectedIndex={selectedIndex} />");
+		expect(app).toContain("<TaskDetail task={selectedTask} detail={detail} />");
+		expect(taskList).toContain("const TASK_LIST_WIDTH = 42");
+		expect(taskList).not.toContain("RESULT");
+	});
+
+	it("keeps detail output in a protected scrollbox", async () => {
+		const detail = await Bun.file(
+			new URL("../src/components/task-detail.tsx", import.meta.url),
+		).text();
+		expect(detail).toContain("const contextHeight = Math.min(6");
+		expect(detail).toContain("<scrollbox height={contextHeight}");
+		expect(detail).toContain("TRANSCRIPT TAIL");
+		expect(detail).toContain("LIVE OUTPUT");
+		expect(detail).toContain("flexGrow={1} flexShrink={1}");
+	});
+
+	it("keeps footer and modal styling aligned with the shared theme", async () => {
+		const footer = await Bun.file(new URL("../src/components/footer.tsx", import.meta.url)).text();
+		const modal = await Bun.file(
+			new URL("../src/components/modal-frame.tsx", import.meta.url),
+		).text();
+		expect(footer).toContain("↑/↓|j/k");
+		expect(footerLine("Ready", 80).length).toBeLessThanOrEqual(76);
+		expect(
+			footerLine("A very long status message that should be truncated", 80).length,
+		).toBeLessThanOrEqual(76);
+		expect(footerLine("Ready", 24).length).toBeLessThanOrEqual(20);
+		expect(footerLine("Ready", 10).length).toBeLessThanOrEqual(6);
+		expect(footerLine("Ready", 0)).toBe("");
+		expect(modal).toContain("borderColor={theme.cyan}");
+		expect(modal).toContain("backgroundColor={theme.panel}");
 	});
 
 	it("declares OpenTUI dependencies in @cuekit/tui", async () => {
