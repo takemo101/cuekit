@@ -22,10 +22,11 @@ describe("selectAgentProfile", () => {
 
 	it("falls back deterministically when preferred profile is missing", () => {
 		const selected = selectAgentProfile({
-			objective: "review this diff",
+			objective: "review the docs diff",
 			profiles: profiles.filter((profile) => profile.id !== "reviewer"),
 		});
 		expect(selected?.profile.id).toBe("worker");
+		expect(selected?.reason).toContain("reviewer keywords but profile missing");
 	});
 
 	it("returns undefined for no available profiles", () => {

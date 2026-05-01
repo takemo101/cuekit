@@ -51,6 +51,17 @@ function matchesKeyword(haystack: string, keyword: string): boolean {
 	return new RegExp(`\\b${escaped}\\b`).test(haystack);
 }
 
+function fallbackProfile(
+	profiles: ResolvedAgentProfile[],
+	reasonPrefix = "defaulted",
+): SelectAgentProfileResult | undefined {
+	const worker = profileById(profiles, "worker");
+	if (worker) return { profile: worker, reason: `${reasonPrefix} to worker fallback` };
+	const first = [...profiles].sort((a, b) => a.id.localeCompare(b.id))[0];
+	if (!first) return undefined;
+	return { profile: first, reason: `${reasonPrefix} to first available profile '${first.id}'` };
+}
+
 export function selectAgentProfile(
 	input: SelectAgentProfileInput,
 ): SelectAgentProfileResult | undefined {
@@ -59,10 +70,10 @@ export function selectAgentProfile(
 		if (!rule.keywords.some((keyword) => matchesKeyword(haystack, keyword))) continue;
 		const profile = profileById(input.profiles, rule.id);
 		if (profile) return { profile, reason: rule.reason };
+		return fallbackProfile(
+			input.profiles,
+			`matched ${rule.id} keywords but profile missing; defaulted`,
+		);
 	}
-	const worker = profileById(input.profiles, "worker");
-	if (worker) return { profile: worker, reason: "defaulted to worker fallback" };
-	const first = [...input.profiles].sort((a, b) => a.id.localeCompare(b.id))[0];
-	if (!first) return undefined;
-	return { profile: first, reason: `defaulted to first available profile '${first.id}'` };
+	return fallbackProfile(input.profiles);
 }
