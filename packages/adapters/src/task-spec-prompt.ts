@@ -16,6 +16,11 @@ export function renderTaskSpecPrompt(spec: TaskSpec): string {
 		sections.push(`Context:\n${spec.context}`);
 	}
 
+	if (spec.role && spec.role_instructions) {
+		const source = spec.role_source ? ` (${spec.role_source})` : "";
+		sections.push(`Agent profile: ${spec.role}${source}\n${spec.role_instructions}`);
+	}
+
 	if (spec.constraints && spec.constraints.length > 0) {
 		sections.push(`Constraints:\n${spec.constraints.map((c) => `- ${c}`).join("\n")}`);
 	}

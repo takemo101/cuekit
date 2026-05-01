@@ -2,6 +2,21 @@ import { describe, expect, it } from "bun:test";
 import { renderTaskSpecPrompt } from "../src/task-spec-prompt.ts";
 
 describe("renderTaskSpecPrompt", () => {
+	it("injects role instructions before the child reporting contract", () => {
+		const prompt = renderTaskSpecPrompt({
+			agent_kind: "claude-code",
+			objective: "do the thing",
+			role: "reviewer",
+			role_source: "project",
+			role_instructions: "Review carefully.",
+		});
+
+		expect(prompt).toContain("Agent profile: reviewer (project)\nReview carefully.");
+		expect(prompt.indexOf("Agent profile: reviewer")).toBeLessThan(
+			prompt.indexOf("Child reporting contract:"),
+		);
+	});
+
 	it("injects the child reporting contract", () => {
 		const prompt = renderTaskSpecPrompt({ agent_kind: "claude-code", objective: "do the thing" });
 
