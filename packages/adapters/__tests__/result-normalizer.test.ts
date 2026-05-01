@@ -13,6 +13,8 @@ function makeTask(overrides: Partial<Task> = {}): Task {
 		role: null,
 		role_source: null,
 		role_selection_reason: null,
+		team_id: null,
+		team_position: null,
 		objective: "x",
 		status: "completed",
 		native_task_ref: null,

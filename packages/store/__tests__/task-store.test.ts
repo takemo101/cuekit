@@ -74,6 +74,70 @@ describe("createTask", () => {
 		expect(t.model).toBe("sonnet");
 	});
 
+	it("persists team metadata when provided", () => {
+		db.prepare(
+			"insert into task_teams (id, session_id, title, created_at, updated_at) values (?, ?, ?, ?, ?)",
+		).run("tm_1", "s1", "Team", "2026-05-01T00:00:00.000Z", "2026-05-01T00:00:00.000Z");
+		const t = createTask(db, {
+			id: "t1",
+			session_id: "s1",
+			agent_kind: "claude-code",
+			objective: "x",
+			team_id: "tm_1",
+			team_position: "worker",
+		});
+		expect(t.team_id).toBe("tm_1");
+		expect(t.team_position).toBe("worker");
+		expect(getTaskById(db, "t1")?.team_id).toBe("tm_1");
+	});
+
+	it("rejects team metadata from a different session", () => {
+		createSession(db, {
+			id: "s2",
+			project_root: "/p2",
+			worktree_path: "/w2",
+			parent_agent_kind: "pi",
+		});
+		db.prepare(
+			"insert into task_teams (id, session_id, title, created_at, updated_at) values (?, ?, ?, ?, ?)",
+		).run("tm_1", "s1", "Team", "2026-05-01T00:00:00.000Z", "2026-05-01T00:00:00.000Z");
+
+		expect(() =>
+			createTask(db, {
+				id: "t1",
+				session_id: "s2",
+				agent_kind: "claude-code",
+				objective: "x",
+				team_id: "tm_1",
+				team_position: "worker",
+			}),
+		).toThrow(/team_id must belong to task session/);
+	});
+
+	it("rejects moving a team to another session while tasks reference it", () => {
+		createSession(db, {
+			id: "s2",
+			project_root: "/p2",
+			worktree_path: "/w2",
+			parent_agent_kind: "pi",
+		});
+		db.prepare(
+			"insert into task_teams (id, session_id, title, created_at, updated_at) values (?, ?, ?, ?, ?)",
+		).run("tm_1", "s1", "Team", "2026-05-01T00:00:00.000Z", "2026-05-01T00:00:00.000Z");
+		createTask(db, {
+			id: "t1",
+			session_id: "s1",
+			agent_kind: "claude-code",
+			objective: "x",
+			team_id: "tm_1",
+			team_position: "worker",
+		});
+
+		expect(() =>
+			db.prepare("update task_teams set session_id = ? where id = ?").run("s2", "tm_1"),
+		).toThrow(/team session cannot move while tasks reference it/);
+	});
+
 	it("persists the full TaskSpec JSON for recovery and audit", () => {
 		const t = createTask(db, {
 			id: "t1",

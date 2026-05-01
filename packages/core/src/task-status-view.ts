@@ -2,6 +2,7 @@ import { z } from "zod";
 import { ArtifactRefSchema } from "./artifact-ref.ts";
 import { JobErrorSchema } from "./job-error.ts";
 import { TaskStatusSchema } from "./task-status.ts";
+import { TeamPositionSchema } from "./team.ts";
 
 // Two valid envelope shapes (mcp-api-spec §6.5):
 //
@@ -31,6 +32,8 @@ export const TaskStatusViewSchema = z
 		role_source: z.string().min(1).optional(),
 		role_selection_reason: z.string().min(1).optional(),
 		status: TaskStatusSchema,
+		team_id: z.string().min(1).optional(),
+		position: TeamPositionSchema.optional(),
 		summary: z.string().optional(),
 		progress_text: z.string().optional(),
 		created_at: z.string().datetime({ offset: true }).optional(),
