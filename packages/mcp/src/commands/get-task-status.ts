@@ -47,6 +47,8 @@ export async function runGetTaskStatus(
 			agent_kind: task.agent_kind,
 			...(task.model ? { model: task.model } : {}),
 			...(task.role ? { role: task.role } : {}),
+			...(task.team_id ? { team_id: task.team_id } : {}),
+			...(task.team_position ? { position: task.team_position } : {}),
 			...(task.role_source ? { role_source: task.role_source } : {}),
 			...(task.role_selection_reason ? { role_selection_reason: task.role_selection_reason } : {}),
 			...getTaskActivity(ctx.db, { ...task, status: "failed" }),
@@ -62,6 +64,8 @@ export async function runGetTaskStatus(
 		...view,
 		...(refreshed.model ? { model: refreshed.model } : {}),
 		...(refreshed.role ? { role: refreshed.role } : {}),
+		...(refreshed.team_id ? { team_id: refreshed.team_id } : {}),
+		...(refreshed.team_position ? { position: refreshed.team_position } : {}),
 		...(refreshed.role_source ? { role_source: refreshed.role_source } : {}),
 		...(refreshed.role_selection_reason
 			? { role_selection_reason: refreshed.role_selection_reason }

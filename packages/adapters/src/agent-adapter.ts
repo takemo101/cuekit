@@ -9,11 +9,14 @@ import type {
 	TaskSpec,
 	TaskStatusView,
 	TaskSummary,
+	TeamPosition,
 } from "@cuekit/core";
 
 export interface AdapterSubmitInput {
 	spec: TaskSpec;
 	session_id: string;
+	team_id?: string;
+	position?: TeamPosition;
 }
 
 export type AdapterResult<T> = { ok: true; value: T } | { ok: false; error: JobError };

@@ -1,4 +1,4 @@
-import { TaskStatusSchema } from "@cuekit/core";
+import { TaskStatusSchema, TeamPositionSchema } from "@cuekit/core";
 import { z } from "zod";
 
 // Schema for a raw row pulled out of the `tasks` table. Nullable fields match
@@ -13,7 +13,7 @@ export const TaskSchema = z.object({
 	role_source: z.string().min(1).nullable(),
 	role_selection_reason: z.string().min(1).nullable(),
 	team_id: z.string().min(1).nullable(),
-	team_position: z.string().min(1).nullable(),
+	team_position: TeamPositionSchema.nullable(),
 	objective: z.string().min(1),
 	status: TaskStatusSchema,
 	native_task_ref: z.string().min(1).nullable(),

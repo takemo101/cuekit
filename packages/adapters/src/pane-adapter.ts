@@ -254,6 +254,8 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 				session_id: input.session_id,
 				agent_kind: config.kind,
 				model: input.spec.model,
+				team_id: input.team_id,
+				team_position: input.position,
 				objective: input.spec.objective,
 				status: "queued",
 				spec: input.spec,
@@ -436,6 +438,8 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 			return {
 				task_id,
 				agent_kind: config.kind,
+				...(live.team_id ? { team_id: live.team_id } : {}),
+				...(live.team_position ? { position: live.team_position } : {}),
 				status: live.status,
 				summary: live.summary ?? undefined,
 				created_at: live.created_at,
@@ -584,6 +588,8 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 			return tasks.map((t) => ({
 				task_id: t.id,
 				agent_kind: t.agent_kind,
+				...(t.team_id ? { team_id: t.team_id } : {}),
+				...(t.team_position ? { position: t.team_position } : {}),
 				status: t.status,
 				summary: t.summary ?? undefined,
 				updated_at: t.updated_at,

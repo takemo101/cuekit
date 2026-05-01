@@ -5,6 +5,7 @@ export const TaskListFilterSchema = z.object({
 	status: TaskStatusSchema.optional(),
 	agent_kind: z.string().optional(),
 	session_id: z.string().optional(),
+	team_id: z.string().optional(),
 	cwd: z.string().optional(),
 	// Page size. Min 1, capped at 1000 so a single request can't pull
 	// every recorded task at once. Omitted → implementation default.
