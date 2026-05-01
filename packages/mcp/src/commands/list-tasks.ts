@@ -103,6 +103,10 @@ export async function runListTasks(
 			tasks: page.map((t) => ({
 				task_id: t.id,
 				agent_kind: t.agent_kind,
+				...(t.model ? { model: t.model } : {}),
+				...(t.role ? { role: t.role } : {}),
+				...(t.role_source ? { role_source: t.role_source } : {}),
+				...(t.role_selection_reason ? { role_selection_reason: t.role_selection_reason } : {}),
 				status: t.status,
 				summary: t.summary ?? undefined,
 				updated_at: t.updated_at,
