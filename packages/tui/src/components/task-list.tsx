@@ -39,7 +39,7 @@ export function TaskList(props: { tasks: TaskSummary[]; selectedIndex: number })
 			padding={1}
 		>
 			<box backgroundColor={theme.panelAlt} height={1}>
-				<text fg={theme.muted}>{"  ST TASK_ID      AGENT    STATUS"}</text>
+				<text fg={theme.muted}>{"    TASK_ID      AGENT    STATUS"}</text>
 			</box>
 			{tasks.length === 0 ? (
 				<text fg={theme.muted}>No tasks found.</text>
