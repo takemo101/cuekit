@@ -11,6 +11,11 @@ import {
 	runCleanupTasks,
 } from "./commands/cleanup-tasks.ts";
 import {
+	CleanupTeamInputSchema,
+	CleanupTeamOutputSchema,
+	runCleanupTeam,
+} from "./commands/cleanup-team.ts";
+import {
 	CreateTeamInputSchema,
 	CreateTeamOutputSchema,
 	runCreateTeam,
@@ -90,6 +95,7 @@ import {
 	WaitTasksInputSchema,
 	WaitTasksOutputSchema,
 } from "./commands/wait-tasks.ts";
+import { runWaitTeam, WaitTeamInputSchema, WaitTeamOutputSchema } from "./commands/wait-team.ts";
 export interface CuekitOperation<InputSchema extends z.ZodType, OutputSchema extends z.ZodType> {
 	mcpName: string;
 	cliPath: readonly [string, string];
@@ -172,6 +178,22 @@ export const CUEKIT_OPERATIONS = [
 		options: WaitTasksInputSchema,
 		output: WaitTasksOutputSchema,
 		run: runWaitTasks,
+	}),
+	defineOperation({
+		mcpName: "wait_team",
+		cliPath: ["team", "wait"],
+		description: "Wait for all or any snapshotted tasks in a team.",
+		options: WaitTeamInputSchema,
+		output: WaitTeamOutputSchema,
+		run: runWaitTeam,
+	}),
+	defineOperation({
+		mcpName: "cleanup_team",
+		cliPath: ["team", "cleanup"],
+		description: "Delete terminal tasks in a team while keeping the team row.",
+		options: CleanupTeamInputSchema,
+		output: CleanupTeamOutputSchema,
+		run: runCleanupTeam,
 	}),
 	defineOperation({
 		mcpName: "cancel_tasks",

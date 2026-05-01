@@ -24,6 +24,7 @@ import {
 import type { CommandContext } from "../src/command-context.ts";
 import { runCancelTasks } from "../src/commands/cancel-task.ts";
 import { runCleanupTasks } from "../src/commands/cleanup-tasks.ts";
+import { runCleanupTeam } from "../src/commands/cleanup-team.ts";
 import { runCreateTeam } from "../src/commands/create-team.ts";
 import { runDeleteSessions } from "../src/commands/delete-session.ts";
 import { runDeleteTasks } from "../src/commands/delete-task.ts";
@@ -40,6 +41,7 @@ import { runShowMcpConfig } from "../src/commands/show-mcp-config.ts";
 import { runSteerTask } from "../src/commands/steer-task.ts";
 import { runSubmitTask } from "../src/commands/submit-task.ts";
 import { runWaitTasks } from "../src/commands/wait-tasks.ts";
+import { runWaitTeam } from "../src/commands/wait-team.ts";
 
 let db: Database;
 let runner: FakeTmuxRunner;
@@ -149,6 +151,92 @@ describe("team commands", () => {
 
 	it("get-team-status returns team_not_found", () => {
 		const result = runGetTeamStatus(ctx, { team_id: "tm_missing" });
+
+		expect("error" in result).toBe(true);
+		if ("error" in result) expect(result.error.code).toBe("team_not_found");
+	});
+});
+
+describe("wait-team and cleanup-team", () => {
+	it("wait-team returns immediately for an empty team", async () => {
+		createSession(db, {
+			id: "s1",
+			project_root: "/p",
+			worktree_path: "/w",
+			parent_agent_kind: "pi",
+		});
+		createTaskTeam(db, { id: "tm_1", session_id: "s1", title: "Team" });
+
+		const result = await runWaitTeam(ctx, { team_id: "tm_1", timeout_ms: 0 });
+
+		expect(result.status).toBe("empty");
+		expect(result.done).toBe(true);
+		expect(result.tasks).toEqual([]);
+	});
+
+	it("wait-team waits over the snapshotted team tasks", async () => {
+		createSession(db, {
+			id: "s1",
+			project_root: "/p",
+			worktree_path: "/w",
+			parent_agent_kind: "pi",
+		});
+		createTaskTeam(db, { id: "tm_1", session_id: "s1", title: "Team" });
+		createTask(db, {
+			id: "t_done",
+			session_id: "s1",
+			agent_kind: "claude-code",
+			team_id: "tm_1",
+			team_position: "worker",
+			objective: "done",
+			status: "completed",
+		});
+
+		const result = await runWaitTeam(ctx, { team_id: "tm_1", timeout_ms: 0 });
+
+		expect(result.status).toBe("completed");
+		expect(result.done).toBe(true);
+		expect(result.tasks.map((task) => task.task_id)).toEqual(["t_done"]);
+	});
+
+	it("cleanup-team deletes terminal team tasks and keeps the team row", async () => {
+		createSession(db, {
+			id: "s1",
+			project_root: "/p",
+			worktree_path: "/w",
+			parent_agent_kind: "pi",
+		});
+		createTaskTeam(db, { id: "tm_1", session_id: "s1", title: "Team" });
+		createTask(db, {
+			id: "t_done",
+			session_id: "s1",
+			agent_kind: "claude-code",
+			team_id: "tm_1",
+			objective: "done",
+			status: "completed",
+		});
+		createTask(db, {
+			id: "t_run",
+			session_id: "s1",
+			agent_kind: "claude-code",
+			team_id: "tm_1",
+			objective: "run",
+			status: "running",
+		});
+
+		const result = await runCleanupTeam(ctx, { team_id: "tm_1" });
+
+		expect("deleted" in result).toBe(true);
+		if (!("deleted" in result)) return;
+		expect(result.deleted.map((task) => task.task_id)).toEqual(["t_done"]);
+		expect(result.remaining.total).toBe(1);
+		expect(getTaskById(db, "t_done")).toBeNull();
+		expect(getTaskById(db, "t_run")?.status).toBe("running");
+		expect(runGetTeamStatus(ctx, { team_id: "tm_1" })).toMatchObject({ team_id: "tm_1" });
+	});
+
+	it("cleanup-team returns team_not_found for unknown teams", async () => {
+		const result = await runCleanupTeam(ctx, { team_id: "tm_missing" });
 
 		expect("error" in result).toBe(true);
 		if ("error" in result) expect(result.error.code).toBe("team_not_found");

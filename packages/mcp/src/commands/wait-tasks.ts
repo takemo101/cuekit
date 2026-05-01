@@ -10,9 +10,9 @@ import { z } from "incur";
 import type { CommandContext } from "../command-context.ts";
 import { getTaskActivity } from "../task-activity.ts";
 
-const WaitModeSchema = z.enum(["all", "any"]);
+export const WaitModeSchema = z.enum(["all", "any"]);
 
-const TaskEventOutputSchema = z.object({
+export const TaskEventOutputSchema = z.object({
 	sequence: z.number().int().positive(),
 	id: z.string(),
 	task_id: z.string(),
@@ -22,7 +22,7 @@ const TaskEventOutputSchema = z.object({
 	created_at: z.string(),
 });
 
-const WaitTaskSnapshotSchema = z.object({
+export const WaitTaskSnapshotSchema = z.object({
 	task_id: z.string(),
 	status: TaskStatusSchema,
 	terminal: z.boolean(),
