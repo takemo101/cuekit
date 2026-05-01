@@ -12,8 +12,8 @@
 
 ## References
 
-- Design: [`docs/issues/cuekit-tui-task-cockpit-design.md`](../issues/cuekit-tui-task-cockpit-design.md)
-- OpenTUI references: [`docs/references/opentui/README.md`](../references/opentui/README.md)
+- Design: [`docs/issues/cuekit-tui-task-cockpit-design.md`](../../issues/cuekit-tui-task-cockpit-design.md)
+- OpenTUI references: [`docs/references/opentui/README.md`](../../references/opentui/README.md)
 - CLI entrypoint: `packages/mcp/src/bin.ts`
 - CLI projection: `packages/mcp/src/cli.ts`
 - Command context: `packages/mcp/src/command-context.ts`
