@@ -2,13 +2,7 @@ import type { TaskStatus, TaskSummary } from "@cuekit/core";
 import type { ReactNode } from "react";
 import type { TuiTaskEvent } from "../context.ts";
 import type { TuiTaskDetail } from "../data.ts";
-
-const MUTED = "#565f89";
-const BLUE = "#7dcfff";
-const PURPLE = "#bb9af7";
-const GREEN = "#9ece6a";
-const RED = "#f7768e";
-const YELLOW = "#e0af68";
+import { statusAccent, statusGlyph, theme } from "../theme.ts";
 
 function truncateMiddle(value: string, maxLength: number): string {
 	if (value.length <= maxLength) return value;
@@ -22,13 +16,6 @@ function truncateMiddle(value: string, maxLength: number): string {
 function truncateEnd(value: string, maxLength: number): string {
 	if (value.length <= maxLength) return value;
 	return `${value.slice(0, Math.max(0, maxLength - 1))}…`;
-}
-
-function statusColor(status: string): string {
-	if (status === "completed") return GREEN;
-	if (status === "failed" || status === "timed_out" || status === "blocked") return RED;
-	if (status === "cancelled") return YELLOW;
-	return BLUE;
 }
 
 function pathLabel(path: string | undefined): string {
@@ -69,7 +56,7 @@ function formatUpdatedAt(value: string): string {
 }
 
 function detailTitle(task: TaskSummary, status: TaskStatus): string {
-	return `Detail: ${task.task_id} / ${status} / ${task.agent_kind}`;
+	return `Detail: ${statusGlyph(status)} ${task.task_id} / ${status} / ${task.agent_kind}`;
 }
 
 function metadataLines(task: TaskSummary, detail: TuiTaskDetail | undefined): string[] {
@@ -104,14 +91,14 @@ function resultBlock(detail: TuiTaskDetail | undefined, status: TaskStatus): str
 }
 
 function EmptyText(props: { children: string }): ReactNode {
-	return <text fg={MUTED}>{props.children}</text>;
+	return <text fg={theme.muted}>{props.children}</text>;
 }
 
 export function TaskDetail(props: { task?: TaskSummary; detail?: TuiTaskDetail }): ReactNode {
 	const { task, detail } = props;
 	if (!task) {
 		return (
-			<box title="Detail" borderStyle="rounded" flexGrow={2} padding={1}>
+			<box title="Detail" borderStyle="single" borderColor={theme.border} backgroundColor={theme.panel} flexGrow={2} padding={1}>
 				<EmptyText>Select a task.</EmptyText>
 			</box>
 		);
@@ -125,23 +112,35 @@ export function TaskDetail(props: { task?: TaskSummary; detail?: TuiTaskDetail }
 	const eventRows = eventsLines(events, detail?.eventsError);
 
 	return (
-		<box title={detailTitle(task, status)} borderStyle="rounded" flexGrow={2} padding={1} flexDirection="column">
+		<box
+			title={detailTitle(task, status)}
+			borderStyle="single"
+			borderColor={statusAccent(status)}
+			backgroundColor={theme.panel}
+			flexGrow={2}
+			padding={1}
+			flexDirection="column"
+		>
 			{metadata.map((line) => (
-				<text key={line} fg={MUTED} flexShrink={0}>{line}</text>
+				<text key={line} fg={theme.muted} flexShrink={0}>{line}</text>
 			))}
 			<text flexShrink={0}> </text>
 			{eventRows.map((line, index) => (
-				<text key={`${index}:${line}`} fg={PURPLE} flexShrink={0}>{line}</text>
+				<text key={`${index}:${line}`} fg={theme.purple} flexShrink={0}>{line}</text>
 			))}
 			<text flexShrink={0}> </text>
 			{isTerminal ? (
 				<>
-					<text fg={BLUE} flexShrink={0}>RESULT</text>
+					<box backgroundColor={theme.panelAlt} height={1} flexShrink={0}>
+						<text fg={theme.cyan}>RESULT</text>
+					</box>
 					<text flexShrink={0}>{resultBlock(detail, status)}</text>
 					<text flexShrink={0}> </text>
-					<text fg={BLUE} flexShrink={0}>{`TRANSCRIPT TAIL (${lines.length} line${lines.length === 1 ? "" : "s"})`}</text>
+					<box backgroundColor={theme.panelAlt} height={1} flexShrink={0}>
+						<text fg={theme.cyan}>{`TRANSCRIPT TAIL (${lines.length} line${lines.length === 1 ? "" : "s"})`}</text>
+					</box>
 					<scrollbox flexGrow={1} flexShrink={1} stickyScroll stickyStart="bottom" viewportCulling>
-						<text>{
+						<text fg={theme.text}>{
 							lines.length > 0
 								? lines.map((line) => truncateEnd(line, 150)).join("\n")
 								: "No transcript output available."
@@ -150,9 +149,11 @@ export function TaskDetail(props: { task?: TaskSummary; detail?: TuiTaskDetail }
 				</>
 			) : (
 				<>
-					<text fg={BLUE} flexShrink={0}>{`LIVE OUTPUT (${lines.length} line${lines.length === 1 ? "" : "s"})`}</text>
+					<box backgroundColor={theme.panelAlt} height={1} flexShrink={0}>
+						<text fg={theme.cyan}>{`LIVE OUTPUT (${lines.length} line${lines.length === 1 ? "" : "s"})`}</text>
+					</box>
 					<scrollbox flexGrow={1} flexShrink={1} stickyScroll stickyStart="bottom" viewportCulling>
-						<text>{
+						<text fg={theme.text}>{
 							lines.length > 0
 								? lines.map((line) => truncateEnd(line, 150)).join("\n")
 								: "No output available yet."

@@ -10,6 +10,7 @@ import { TaskDetail } from "./components/task-detail.tsx";
 import { TaskList } from "./components/task-list.tsx";
 import { loadTaskDetail, loadTaskList, type TuiTaskDetail } from "./data.ts";
 import { canAttach, canCancel, canDelete, moveSelection } from "./task-actions.ts";
+import { theme } from "./theme.ts";
 
 const AUTO_REFRESH_MS = 3000;
 
@@ -229,8 +230,8 @@ export function App(props: { ctx: TuiContext; onAttach?: (args: string[]) => voi
 	});
 
 	return (
-		<box width="100%" height="100%" flexDirection="column">
-			<box flexDirection="row" flexGrow={1} gap={1}>
+		<box width="100%" height="100%" flexDirection="column" backgroundColor={theme.bg}>
+			<box flexDirection="row" flexGrow={1} gap={1} backgroundColor={theme.bg}>
 				<TaskList tasks={tasks} selectedIndex={selectedIndex} />
 				<TaskDetail task={selectedTask} detail={detail} />
 			</box>
