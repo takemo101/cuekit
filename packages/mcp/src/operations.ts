@@ -36,6 +36,11 @@ import {
 	runListAdapters,
 } from "./commands/list-adapters.ts";
 import {
+	ListAgentProfilesInputSchema,
+	ListAgentProfilesOutputSchema,
+	runListAgentProfiles,
+} from "./commands/list-agent-profiles.ts";
+import {
 	ListTaskEventsInputSchema,
 	ListTaskEventsOutputSchema,
 	runListTaskEvents,
@@ -168,6 +173,14 @@ export const CUEKIT_OPERATIONS = [
 		options: ListAdaptersInputSchema,
 		output: ListAdaptersOutputSchema,
 		run: runListAdapters,
+	}),
+	defineOperation({
+		mcpName: "list_agent_profiles",
+		cliPath: ["agent", "list"],
+		description: "List builtin, user, and project agent profiles.",
+		options: ListAgentProfilesInputSchema,
+		output: ListAgentProfilesOutputSchema,
+		run: runListAgentProfiles,
 	}),
 	defineOperation({
 		mcpName: "steer_task",

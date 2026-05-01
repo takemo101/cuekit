@@ -19,6 +19,14 @@
         "zod": "^4.3.6",
       },
     },
+    "packages/agent-profiles": {
+      "name": "@cuekit/agent-profiles",
+      "version": "0.0.0",
+      "dependencies": {
+        "@cuekit/core": "workspace:*",
+        "zod": "^4.3.6",
+      },
+    },
     "packages/core": {
       "name": "@cuekit/core",
       "version": "0.0.0",
@@ -34,6 +42,7 @@
       },
       "dependencies": {
         "@cuekit/adapters": "workspace:*",
+        "@cuekit/agent-profiles": "workspace:*",
         "@cuekit/core": "workspace:*",
         "@cuekit/store": "workspace:*",
         "@cuekit/tui": "workspace:*",
@@ -85,6 +94,8 @@
     "@cfworker/json-schema": ["@cfworker/json-schema@4.1.1", "", {}, "sha512-gAmrUZSGtKc3AiBL71iNWxDsyUC5uMaKKGdvzYsBoTW/xi42JQHl7eKV2OYzCUqvc+D2RCcf7EXY2iCyFIk6og=="],
 
     "@cuekit/adapters": ["@cuekit/adapters@workspace:packages/adapters"],
+
+    "@cuekit/agent-profiles": ["@cuekit/agent-profiles@workspace:packages/agent-profiles"],
 
     "@cuekit/core": ["@cuekit/core@workspace:packages/core"],
 
