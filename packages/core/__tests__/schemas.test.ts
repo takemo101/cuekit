@@ -308,17 +308,25 @@ describe("AckSchema", () => {
 });
 
 describe("TaskStatusViewSchema", () => {
-	it("accepts a running task view with attach_hint", () => {
+	it("accepts a running task view with attach_hint and activity metadata", () => {
 		const result = TaskStatusViewSchema.safeParse({
 			task_id: "t1",
 			agent_kind: "claude-code",
 			status: "running",
 			created_at: "2026-04-24T10:00:00Z",
 			updated_at: "2026-04-24T10:02:00Z",
+			last_event_at: "2026-04-24T10:01:00Z",
+			last_transcript_at: "2026-04-24T10:01:30Z",
+			idle_ms: 30_000,
+			attention_hint: "no_recent_activity",
 			supports_attach: true,
 			attach_hint: "tmux attach-session -t cuekit-task-t1",
 		});
 		expect(result.success).toBe(true);
+		if (result.success) {
+			expect(result.data.idle_ms).toBe(30_000);
+			expect(result.data.attention_hint).toBe("no_recent_activity");
+		}
 	});
 
 	it("rejects non-ISO-8601 timestamps", () => {

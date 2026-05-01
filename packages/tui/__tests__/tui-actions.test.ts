@@ -31,6 +31,20 @@ describe("tui task action helpers", () => {
 		expect(canAttach(withMetadata)).toBe(true);
 	});
 
+	it("rejects attach for terminal tasks even when stale tmux metadata remains", () => {
+		const view: TaskStatusView = {
+			task_id: "t_1",
+			agent_kind: "opencode",
+			status: "cancelled",
+			created_at: "2026-04-30T00:00:00.000Z",
+			updated_at: "2026-04-30T00:00:00.000Z",
+			supports_attach: true,
+			metadata: { tmux_session_name: "cuekit-task-t_1" },
+		};
+
+		expect(canAttach(view)).toBe(false);
+	});
+
 	it("rejects attach when support or attach target is missing", () => {
 		const base: TaskStatusView = {
 			task_id: "t_1",

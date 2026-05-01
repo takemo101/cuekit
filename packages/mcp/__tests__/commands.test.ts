@@ -136,7 +136,9 @@ describe("submit-task", () => {
 			expect(result.role).toBe("reviewer");
 			const task = getTaskById(db, result.task_id);
 			expect(task?.role).toBe("reviewer");
-			expect(JSON.parse(task?.spec_json ?? "{}").role_instructions).toContain("strict reviewer");
+			expect(JSON.parse(task?.spec_json ?? "{}").role_instructions).toContain(
+				"evidence-based reviewer",
+			);
 		} finally {
 			rmSync(root, { recursive: true, force: true });
 		}

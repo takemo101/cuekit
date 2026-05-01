@@ -2,6 +2,7 @@ import { type TaskStatusView, TaskStatusViewSchema } from "@cuekit/core";
 import { getTaskById } from "@cuekit/store";
 import { z } from "incur";
 import type { CommandContext } from "../command-context.ts";
+import { getTaskActivity } from "../task-activity.ts";
 
 export const GetTaskStatusInputSchema = z.object({
 	task_id: z.string().min(1).describe("cuekit task id."),
@@ -48,6 +49,7 @@ export async function runGetTaskStatus(
 			...(task.role ? { role: task.role } : {}),
 			...(task.role_source ? { role_source: task.role_source } : {}),
 			...(task.role_selection_reason ? { role_selection_reason: task.role_selection_reason } : {}),
+			...getTaskActivity(ctx.db, { ...task, status: "failed" }),
 			status: "failed",
 			created_at: task.created_at,
 			updated_at: task.updated_at,
@@ -55,11 +57,15 @@ export async function runGetTaskStatus(
 		};
 	}
 	const view = await adapterRes.value.status(input.task_id);
+	const refreshed = getTaskById(ctx.db, input.task_id) ?? task;
 	return {
 		...view,
-		...(task.model ? { model: task.model } : {}),
-		...(task.role ? { role: task.role } : {}),
-		...(task.role_source ? { role_source: task.role_source } : {}),
-		...(task.role_selection_reason ? { role_selection_reason: task.role_selection_reason } : {}),
+		...(refreshed.model ? { model: refreshed.model } : {}),
+		...(refreshed.role ? { role: refreshed.role } : {}),
+		...(refreshed.role_source ? { role_source: refreshed.role_source } : {}),
+		...(refreshed.role_selection_reason
+			? { role_selection_reason: refreshed.role_selection_reason }
+			: {}),
+		...getTaskActivity(ctx.db, refreshed),
 	};
 }

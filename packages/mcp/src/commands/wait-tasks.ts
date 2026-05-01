@@ -8,6 +8,7 @@ import {
 import { getSessionById, getTaskById, listTaskEvents } from "@cuekit/store";
 import { z } from "incur";
 import type { CommandContext } from "../command-context.ts";
+import { getTaskActivity } from "../task-activity.ts";
 
 const WaitModeSchema = z.enum(["all", "any"]);
 
@@ -25,6 +26,10 @@ const WaitTaskSnapshotSchema = z.object({
 	task_id: z.string(),
 	status: TaskStatusSchema,
 	terminal: z.boolean(),
+	last_event_at: z.string().datetime({ offset: true }).optional(),
+	last_transcript_at: z.string().datetime({ offset: true }).optional(),
+	idle_ms: z.number().int().nonnegative().optional(),
+	attention_hint: z.enum(["no_recent_activity", "stop_hook_or_idle_prompt_suspected"]).optional(),
 	result: TaskResultSchema.optional(),
 	events: z.array(TaskEventOutputSchema).optional(),
 });
@@ -186,6 +191,7 @@ async function snapshotTask(
 		task_id: taskId,
 		status: task.status,
 		terminal,
+		...getTaskActivity(ctx.db, task),
 	};
 
 	if (input.include_events) {
