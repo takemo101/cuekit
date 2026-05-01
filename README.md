@@ -102,7 +102,7 @@ cuekit task submit --objective "debug the failing auth tests" \
                   --cwd /path/to/repo
 ```
 
-Explicit `--agent_kind` / `--model` override profile defaults. `role: "auto"` uses deterministic keyword selection and records the selected role plus reason in task status/list output and the TUI detail pane. See [Agent Profiles](docs/guides/agent-profiles.md).
+Explicit `--agent_kind` / `--model` override profile defaults. `role: "auto"` uses deterministic keyword selection and records the selected role plus reason in task status/list output; the TUI detail pane shows role/source/model when present. See [Agent Profiles](docs/guides/agent-profiles.md).
 
 
 Every command accepts `--help`, `--llms` / `--llms-full` (machine-readable manifest for LLM-friendly CLIs), `--schema` (JSON Schema for the command input), and `--format` (toon / json / yaml / md / jsonl) via incur.
