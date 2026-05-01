@@ -25,16 +25,22 @@ describe("TaskSpecSchema", () => {
 		expect(result.success).toBe(true);
 	});
 
-	it("accepts spec with model and adapter_options", () => {
+	it("accepts spec with model, role metadata, and adapter_options", () => {
 		const result = TaskSpecSchema.safeParse({
 			agent_kind: "claude-code",
 			objective: "Add retry logic",
 			model: "sonnet",
+			role: "reviewer",
+			role_instructions: "Review carefully.",
+			role_source: "project",
+			role_sources: ["builtin", "project"],
+			role_selection_reason: "explicit role",
 			adapter_options: { max_turns: 50 },
 		});
 		expect(result.success).toBe(true);
 		if (result.success) {
 			expect(result.data.model).toBe("sonnet");
+			expect(result.data.role).toBe("reviewer");
 		}
 	});
 

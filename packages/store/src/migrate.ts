@@ -12,6 +12,7 @@ const MIGRATIONS = [
 	"005-tasks-spec-json.sql",
 	"006-child-reporting.sql",
 	"007-task-events-delete-cascade.sql",
+	"008-task-role-metadata.sql",
 ] as const;
 
 // Bootstrap table created outside the migration files so it can be relied on
