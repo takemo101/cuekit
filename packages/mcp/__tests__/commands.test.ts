@@ -10,6 +10,7 @@ import {
 import { FakeTmuxRunner } from "@cuekit/adapters/testing";
 import {
 	createSession,
+	createTask,
 	getSessionById,
 	getTaskById,
 	listSessionsByWorktree,
@@ -832,15 +833,16 @@ describe("list-tasks", () => {
 			worktree_path: "legacy/relative",
 			parent_agent_kind: "cuekit-cli",
 		});
-		const task = await runSubmitTask(ctx, {
-			objective: "legacy task",
-			agent_kind: "claude-code",
+		const task = createTask(db, {
+			id: "t_relative",
 			session_id: "s_relative",
+			agent_kind: "claude-code",
+			objective: "legacy task",
+			status: "running",
 		});
-		if (!task.accepted) throw new Error("setup failed");
 		const result = await runListTasks(ctx, { cwd: "legacy/relative" });
 		if ("error" in result) throw new Error(result.error.message);
-		expect(result.tasks.map((t) => t.task_id)).toContain(task.task_id);
+		expect(result.tasks.map((t) => t.task_id)).toContain(task.id);
 	});
 
 	it("signals has_more=false and omits next_cursor when the whole set fits in one page", async () => {

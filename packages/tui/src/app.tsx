@@ -1,4 +1,4 @@
-import { useKeyboard, useRenderer } from "@opentui/react";
+import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react";
 import type { TaskSummary } from "@cuekit/core";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { TuiContext } from "./context.ts";
@@ -10,6 +10,7 @@ import { TaskDetail } from "./components/task-detail.tsx";
 import { TaskList } from "./components/task-list.tsx";
 import { loadTaskDetail, loadTaskList, type TuiTaskDetail } from "./data.ts";
 import { canAttach, canCancel, canDelete, moveSelection } from "./task-actions.ts";
+import { theme } from "./theme.ts";
 
 const AUTO_REFRESH_MS = 3000;
 
@@ -18,6 +19,7 @@ type SteerInputState = { taskId: string; value: string } | null;
 
 export function App(props: { ctx: TuiContext; onAttach?: (args: string[]) => void }): ReactNode {
 	const renderer = useRenderer();
+	const terminal = useTerminalDimensions();
 	const [tasks, setTasks] = useState<TaskSummary[]>([]);
 	const [selectedIndex, setSelectedIndex] = useState(0);
 	const [detail, setDetail] = useState<TuiTaskDetail | undefined>();
@@ -229,8 +231,8 @@ export function App(props: { ctx: TuiContext; onAttach?: (args: string[]) => voi
 	});
 
 	return (
-		<box width="100%" height="100%" flexDirection="column">
-			<box flexDirection="row" flexGrow={1} gap={1}>
+		<box width="100%" height="100%" flexDirection="column" backgroundColor={theme.bg}>
+			<box flexDirection="row" flexGrow={1} gap={1} backgroundColor={theme.bg}>
 				<TaskList tasks={tasks} selectedIndex={selectedIndex} />
 				<TaskDetail task={selectedTask} detail={detail} />
 			</box>
@@ -243,7 +245,7 @@ export function App(props: { ctx: TuiContext; onAttach?: (args: string[]) => voi
 			{steerInput !== null ? (
 				<InputDialog title={`Steer ${steerInput.taskId}`} value={steerInput.value} />
 			) : null}
-			<Footer message={message} error={error} loading={loading} />
+			<Footer message={message} error={error} loading={loading} terminalWidth={terminal.width} />
 		</box>
 	);
 }
