@@ -1,0 +1,120 @@
+import { resolve } from "node:path";
+import { JobErrorSchema, TeamPositionSchema } from "@cuekit/core";
+import { getSessionById, getTaskTeamById } from "@cuekit/store";
+import { z } from "incur";
+import type { CommandContext } from "../command-context.ts";
+import { runSubmitTask, SubmitTaskInputSchema } from "./submit-task.ts";
+
+export const SubmitTeamTaskItemSchema = SubmitTaskInputSchema.omit({
+	session_id: true,
+	team_id: true,
+});
+
+export const SubmitTeamTasksInputSchema = z.object({
+	team_id: z.string().min(1),
+	tasks: z.array(z.unknown()).min(1),
+});
+
+export type SubmitTeamTasksInput = z.infer<typeof SubmitTeamTasksInputSchema>;
+
+const AcceptedTeamTaskSchema = z.object({
+	index: z.number().int().nonnegative(),
+	task_id: z.string(),
+	agent_kind: z.string(),
+	role: z.string().optional(),
+	position: TeamPositionSchema.optional(),
+	model: z.string().optional(),
+});
+
+const RejectedTeamTaskSchema = z.object({
+	index: z.number().int().nonnegative(),
+	error: JobErrorSchema,
+});
+
+export const SubmitTeamTasksOutputSchema = z.union([
+	z.object({
+		team_id: z.string(),
+		accepted: z.array(AcceptedTeamTaskSchema),
+		rejected: z.array(RejectedTeamTaskSchema),
+	}),
+	z.object({ error: JobErrorSchema }),
+]);
+
+export type SubmitTeamTasksOutput = z.infer<typeof SubmitTeamTasksOutputSchema>;
+
+function commandError(
+	code: z.infer<typeof JobErrorSchema>["code"],
+	message: string,
+): SubmitTeamTasksOutput {
+	return { error: { code, message, retryable: false } };
+}
+
+function taskError(
+	index: number,
+	code: z.infer<typeof JobErrorSchema>["code"],
+	message: string,
+): z.infer<typeof RejectedTeamTaskSchema> {
+	return { index, error: { code, message, retryable: false } };
+}
+
+export async function runSubmitTeamTasks(
+	ctx: CommandContext,
+	input: SubmitTeamTasksInput,
+): Promise<SubmitTeamTasksOutput> {
+	const parsed = SubmitTeamTasksInputSchema.safeParse(input);
+	if (!parsed.success) {
+		return commandError(
+			"invalid_input",
+			parsed.error.issues.map((issue) => issue.message).join("; "),
+		);
+	}
+	const team = getTaskTeamById(ctx.db, parsed.data.team_id);
+	if (!team) return commandError("team_not_found", `team '${parsed.data.team_id}' not found`);
+	const session = getSessionById(ctx.db, team.session_id);
+	if (!session) return commandError("session_not_found", `session '${team.session_id}' not found`);
+
+	const accepted: z.infer<typeof AcceptedTeamTaskSchema>[] = [];
+	const rejected: z.infer<typeof RejectedTeamTaskSchema>[] = [];
+	for (const [index, rawTask] of parsed.data.tasks.entries()) {
+		const parsedTask = SubmitTeamTaskItemSchema.safeParse(rawTask);
+		if (!parsedTask.success) {
+			rejected.push(
+				taskError(
+					index,
+					"invalid_input",
+					parsedTask.error.issues.map((issue) => issue.message).join("; "),
+				),
+			);
+			continue;
+		}
+		const task = parsedTask.data;
+		if (task.cwd !== undefined && resolve(task.cwd) !== resolve(session.worktree_path)) {
+			rejected.push(
+				taskError(
+					index,
+					"invalid_input",
+					`task cwd '${resolve(task.cwd)}' is outside team session '${team.session_id}' worktree '${resolve(session.worktree_path)}'`,
+				),
+			);
+			continue;
+		}
+		const result = await runSubmitTask(ctx, {
+			...task,
+			session_id: team.session_id,
+			team_id: team.id,
+		});
+		if (result.accepted) {
+			accepted.push({
+				index,
+				task_id: result.task_id,
+				agent_kind: result.agent_kind,
+				...(result.role ? { role: result.role } : {}),
+				...(result.position ? { position: result.position } : {}),
+				...(task.model ? { model: task.model } : {}),
+			});
+		} else {
+			rejected.push({ index, error: result.error });
+		}
+	}
+	return { team_id: team.id, accepted, rejected };
+}
