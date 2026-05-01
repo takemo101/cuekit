@@ -88,6 +88,7 @@ Included:
 - team-position aware batch submission
 - lightweight team context prompt injection
 - coordinator prompt guidance for using existing MCP tools such as `get_team_status`, `wait_team`, `get_task_result`, `steer_task`, and `submit_team_tasks`
+- coordinator runtime guidance: choose the caller/orchestrator runtime or an equivalent MCP-capable runtime
 
 This keeps `create_team` simple and makes adding more tasks to an existing team natural. Coordinator behavior remains prompt-guided, not runtime-enforced.
 
@@ -166,6 +167,8 @@ Recommended meaning:
 - `observer`: watches or reports without owning implementation.
 
 Cuekit does not enforce special permissions for positions in Phase 1/2. A coordinator is a normal cuekit task with coordinator-oriented metadata and prompt context. If its runtime has MCP access, it can use existing tools to inspect the team and steer workers; cuekit does not automatically wake it, route reports to it, or require workers to obey it.
+
+A coordinator should normally use the same coding-agent runtime as the caller/orchestrator, or at least a runtime with equivalent cuekit MCP access. In dogfood runs where only the caller's runtime has cuekit MCP configured, the coordinator should use that same runtime. Workers and reviewers may use other adapters because they can complete scoped work and report results without orchestrating the team.
 
 ## Team Status Aggregation
 
@@ -456,6 +459,7 @@ Rules:
 - Task spec validation should mirror `submit_task`.
 - Role resolution should mirror existing explicit/auto role behavior.
 - Team context prompt injection should be applied to every accepted team task before the final child reporting contract is rendered.
+- For `position: "coordinator"`, callers should select the same `agent_kind` as the caller/orchestrator when that is the only runtime known to have cuekit MCP configured. Cuekit does not verify MCP availability in Phase 2.
 
 Output:
 
@@ -486,6 +490,7 @@ Coordinator prompt context should say, in substance:
 ```text
 You are the coordinator for cuekit team <team_id>: <title>.
 Use cuekit MCP tools to inspect team status, wait for workers, inspect task results, submit follow-up team tasks if needed, and steer workers when they are blocked or off-scope.
+You are expected to run in the same coding-agent runtime as the caller/orchestrator, or another runtime with equivalent cuekit MCP access.
 Do not micromanage workers unnecessarily. Do not cleanup tasks unless explicitly requested.
 ```
 
@@ -683,3 +688,5 @@ Cleanup of an empty team is not an error.
    - Recommendation: no. Keep `role` and `position` independent; omission should mean unknown/unspecified team position.
 6. Should coordinator tasks be required for every team?
    - Recommendation: no. Teams can be simple management containers; coordinator is recommended for Swarm-lite workflows but not required.
+7. Should cuekit enforce that coordinators use an MCP-capable runtime?
+   - Recommendation: no for Phase 2. Document the rule and rely on the caller to choose the caller/orchestrator runtime or an equivalent MCP-capable runtime. Automatic capability verification can be considered later.
