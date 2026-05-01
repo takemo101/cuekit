@@ -1,6 +1,8 @@
 import { Database } from "bun:sqlite";
 import { beforeEach, describe, expect, it } from "bun:test";
-import { relative, resolve } from "node:path";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, relative, resolve } from "node:path";
 import {
 	AdapterRegistry,
 	createClaudeCodeAdapter,
@@ -26,6 +28,7 @@ import { runDeleteTasks } from "../src/commands/delete-task.ts";
 import { runGetTaskResult } from "../src/commands/get-task-result.ts";
 import { runGetTaskStatus } from "../src/commands/get-task-status.ts";
 import { runListAdapters } from "../src/commands/list-adapters.ts";
+import { runListAgentProfiles } from "../src/commands/list-agent-profiles.ts";
 import { runListTaskEvents } from "../src/commands/list-task-events.ts";
 import { runListTasks } from "../src/commands/list-tasks.ts";
 import { runReportTaskEvent } from "../src/commands/report-task-event.ts";
@@ -1283,5 +1286,61 @@ describe("delete-sessions", () => {
 		const ack = await runDeleteSessions(ctx, { session_ids: ["s_same", "s_same"] });
 		expect(ack.ok).toBe(false);
 		if (!ack.ok) expect(ack.error.code).toBe("invalid_input");
+	});
+});
+
+describe("list-agent-profiles", () => {
+	it("lists builtin profiles without instructions by default", () => {
+		const result = runListAgentProfiles(ctx, {});
+		expect("profiles" in result).toBe(true);
+		if (!("profiles" in result)) return;
+		expect(result.profiles.map((profile) => profile.id)).toContain("worker");
+		expect(
+			result.profiles.find((profile) => profile.id === "worker")?.instructions,
+		).toBeUndefined();
+	});
+
+	it("uses session worktree for project discovery", () => {
+		const root = mkdtempSync(join(tmpdir(), "cuekit-mcp-profiles-"));
+		try {
+			mkdirSync(join(root, ".git"));
+			mkdirSync(join(root, ".cuekit", "agents"), { recursive: true });
+			writeFileSync(
+				join(root, ".cuekit", "agents", "reviewer.md"),
+				"---\nid: reviewer\nmodel: opus\n---",
+			);
+			createSession(db, {
+				id: "s_profiles",
+				project_root: root,
+				worktree_path: root,
+				parent_agent_kind: "pi",
+			});
+			const result = runListAgentProfiles(ctx, { session_id: "s_profiles" });
+			expect("profiles" in result).toBe(true);
+			if (!("profiles" in result)) return;
+			expect(result.profiles.find((profile) => profile.id === "reviewer")?.model).toBe("opus");
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("returns session_not_found for unknown sessions", () => {
+		const result = runListAgentProfiles(ctx, { session_id: "missing" });
+		expect("error" in result).toBe(true);
+		if ("error" in result) expect(result.error.code).toBe("session_not_found");
+	});
+
+	it("returns invalid_input for malformed project profiles", () => {
+		const root = mkdtempSync(join(tmpdir(), "cuekit-mcp-profiles-"));
+		try {
+			mkdirSync(join(root, ".git"));
+			mkdirSync(join(root, ".cuekit", "agents"), { recursive: true });
+			writeFileSync(join(root, ".cuekit", "agents", "broken.md"), "---\nid: broken");
+			const result = runListAgentProfiles(ctx, { cwd: root });
+			expect("error" in result).toBe(true);
+			if ("error" in result) expect(result.error.code).toBe("invalid_input");
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
 	});
 });

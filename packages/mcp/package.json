@@ -18,6 +18,7 @@
 		"@cuekit/core": "workspace:*",
 		"@cuekit/store": "workspace:*",
 		"@cuekit/tui": "workspace:*",
-		"incur": "0.4.3"
+		"incur": "0.4.3",
+		"@cuekit/agent-profiles": "workspace:*"
 	}
 }
