@@ -2,8 +2,8 @@ import type { TaskSummary } from "@cuekit/core";
 import type { ReactNode } from "react";
 import { statusAccent, statusGlyph, theme } from "../theme.ts";
 
-const TASK_LIST_WIDTH = 48;
-const TASK_ROW_WIDTH = 44;
+const TASK_LIST_WIDTH = 42;
+const TASK_ROW_WIDTH = 38;
 
 function truncateEnd(value: string, maxLength: number): string {
 	if (value.length <= maxLength) return value;
@@ -20,7 +20,7 @@ function taskRow(task: TaskSummary, selected: boolean): string {
 	const marker = selected ? "›" : " ";
 	const glyph = statusGlyph(task.status);
 	const id = task.task_id.padEnd(12).slice(0, 12);
-	const agent = task.agent_kind.padEnd(9).slice(0, 9);
+	const agent = task.agent_kind.padEnd(8).slice(0, 8);
 	const status = compactStatus(task.status).padEnd(8).slice(0, 8);
 	return truncateEnd(`${marker} ${glyph} ${id} ${agent} ${status}`, TASK_ROW_WIDTH);
 }
@@ -43,7 +43,7 @@ export function TaskList(props: { tasks: TaskSummary[]; selectedIndex: number })
 			padding={1}
 		>
 			<box backgroundColor={theme.panelAlt} height={1}>
-				<text fg={theme.muted}>{"  ST TASK_ID      AGENT     STATUS"}</text>
+				<text fg={theme.muted}>{"  ST TASK_ID      AGENT    STATUS"}</text>
 			</box>
 			{tasks.length === 0 ? (
 				<text fg={theme.muted}>No tasks found.</text>
