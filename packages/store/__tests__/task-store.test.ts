@@ -47,6 +47,9 @@ describe("createTask", () => {
 		expect(t.model).toBeNull();
 		expect(t.summary).toBeNull();
 		expect(t.child_token_hash).toBeNull();
+		expect(t.role).toBeNull();
+		expect(t.role_source).toBeNull();
+		expect(t.role_selection_reason).toBeNull();
 	});
 
 	it("returns the row as it lives in the DB (re-read after insert)", () => {
@@ -87,6 +90,28 @@ describe("createTask", () => {
 		});
 		expect(t.spec_json).toContain("do not edit package.json");
 		expect(JSON.parse(t.spec_json ?? "{}").timeout_ms).toBe(1000);
+	});
+
+	it("persists role metadata from TaskSpec", () => {
+		const t = createTask(db, {
+			id: "t1",
+			session_id: "s1",
+			agent_kind: "claude-code",
+			objective: "x",
+			spec: {
+				agent_kind: "claude-code",
+				objective: "x",
+				role: "reviewer",
+				role_instructions: "Review carefully.",
+				role_source: "project",
+				role_sources: ["builtin", "project"],
+				role_selection_reason: "explicit role",
+			},
+		});
+		expect(t.role).toBe("reviewer");
+		expect(t.role_source).toBe("project");
+		expect(t.role_selection_reason).toBe("explicit role");
+		expect(JSON.parse(t.spec_json ?? "{}").role_instructions).toBe("Review carefully.");
 	});
 
 	it("persists parent_task_id for lineage", () => {

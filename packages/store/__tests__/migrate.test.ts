@@ -30,6 +30,7 @@ describe("runMigrations", () => {
 		expect(versions).toContain("001-init.sql");
 		expect(versions).toContain("006-child-reporting.sql");
 		expect(versions).toContain("007-task-events-delete-cascade.sql");
+		expect(versions).toContain("008-task-role-metadata.sql");
 	});
 
 	it("upgrades existing task_events foreign keys to cascade on task delete", () => {
@@ -124,8 +125,12 @@ describe("runMigrations", () => {
 		const childTokenColumn = db
 			.prepare("select name from pragma_table_info('tasks') where name = 'child_token_hash'")
 			.get();
+		const roleColumn = db
+			.prepare("select name from pragma_table_info('tasks') where name = 'role'")
+			.get();
 		expect(taskEventsTable).toBeDefined();
 		expect(childTokenColumn).toBeDefined();
+		expect(roleColumn).toBeDefined();
 	});
 
 	it("creates expected indexes", () => {
