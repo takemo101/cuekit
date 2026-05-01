@@ -23,6 +23,7 @@ Important current notes:
 - [TUI task cockpit design](issues/cuekit-tui-task-cockpit-design.md)
 - [TUI implementation plan](plans/2026-04-30-cuekit-tui-implementation-plan.md)
 - [TUI package separation design](issues/cuekit-tui-package-separation-design.md)
+- [Agent profiles guide](guides/agent-profiles.md)
 
 ## External / Local References
 
@@ -41,6 +42,7 @@ Current references:
 - `docs/plans/` — implementation plans.
 - `docs/references/` — local reference material for dependencies/tools.
 - `docs/handoffs/` — handoff notes and historical context.
+- `docs/guides/` — operator/developer feature guides.
 
 ## Rule of Thumb
 

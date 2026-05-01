@@ -86,6 +86,25 @@ cuekit task wait --task_ids t_abc... --session_id s_abc... --mode all
 cuekit task list --status running
 ```
 
+### Agent profiles
+
+Use `role` to submit a task with focused child-agent instructions. Profiles are discovered from builtins, `~/.cuekit/agents/*.md`, and `<project-root>/.cuekit/agents/*.md`; project profiles override user profiles, which override builtins.
+
+```sh
+cuekit agent list
+
+cuekit task submit --objective "review this diff" \
+                  --role reviewer \
+                  --cwd /path/to/repo
+
+cuekit task submit --objective "debug the failing auth tests" \
+                  --role auto \
+                  --cwd /path/to/repo
+```
+
+Explicit `--agent_kind` / `--model` override profile defaults. `role: "auto"` uses deterministic keyword selection and records the selected role plus reason in task status/list output; the TUI detail pane shows role/source/model when present. See [Agent Profiles](docs/guides/agent-profiles.md).
+
+
 Every command accepts `--help`, `--llms` / `--llms-full` (machine-readable manifest for LLM-friendly CLIs), `--schema` (JSON Schema for the command input), and `--format` (toon / json / yaml / md / jsonl) via incur.
 
 ### Human TUI
