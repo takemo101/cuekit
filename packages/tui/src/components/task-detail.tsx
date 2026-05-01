@@ -48,10 +48,15 @@ function detailTitle(task: TaskSummary, status: TaskStatus): string {
 
 type MetadataEntry = { label: string; value: string; color?: string };
 
-function metadataEntries(task: TaskSummary, detail: TuiTaskDetail | undefined): MetadataEntry[] {
+export function metadataEntries(
+	task: TaskSummary,
+	detail: TuiTaskDetail | undefined,
+): MetadataEntry[] {
 	const role = detail?.status.role ?? task.role;
 	const model = detail?.status.model ?? task.model;
 	const roleSource = detail?.status.role_source ?? task.role_source;
+	const teamId = detail?.status.team_id ?? task.team_id;
+	const position = detail?.status.position ?? task.position;
 	const entries: MetadataEntry[] = [
 		{ label: "updated", value: formatUpdatedAt(task.updated_at), color: theme.yellow },
 	];
@@ -64,6 +69,12 @@ function metadataEntries(task: TaskSummary, detail: TuiTaskDetail | undefined): 
 	}
 	if (model) {
 		entries.push({ label: "model", value: model, color: theme.cyan });
+	}
+	if (teamId) {
+		entries.push({ label: "team", value: teamId, color: theme.purple });
+	}
+	if (position) {
+		entries.push({ label: "position", value: position, color: theme.purple });
 	}
 	entries.push({ label: "transcript", value: pathLabel(detail?.transcriptPath), color: theme.cyan });
 	if (detail?.status.last_event_at) {

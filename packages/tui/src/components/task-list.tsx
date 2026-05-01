@@ -12,13 +12,20 @@ function compactStatus(status: string): string {
 	return status;
 }
 
-function taskRow(task: TaskSummary, selected: boolean): string {
+function teamTag(task: TaskSummary): string {
+	if (!task.team_id) return "-";
+	const position = task.position ? task.position.slice(0, 1) : "t";
+	return `${position}@${task.team_id.slice(-4)}`;
+}
+
+export function taskRow(task: TaskSummary, selected: boolean): string {
 	const marker = selected ? "›" : " ";
 	const glyph = statusGlyph(task.status);
-	const id = task.task_id.padEnd(12).slice(0, 12);
-	const agent = task.agent_kind.padEnd(8).slice(0, 8);
-	const status = compactStatus(task.status).padEnd(8).slice(0, 8);
-	return truncateEnd(`${marker} ${glyph} ${id} ${agent} ${status}`, TASK_ROW_WIDTH);
+	const id = task.task_id.padEnd(10).slice(0, 10);
+	const agent = task.agent_kind.padEnd(6).slice(0, 6);
+	const status = compactStatus(task.status).padEnd(7).slice(0, 7);
+	const team = teamTag(task).padEnd(6).slice(0, 6);
+	return truncateEnd(`${marker} ${glyph} ${id} ${agent} ${status} ${team}`, TASK_ROW_WIDTH);
 }
 
 function rowBackground(index: number, selected: boolean): string {
@@ -39,7 +46,7 @@ export function TaskList(props: { tasks: TaskSummary[]; selectedIndex: number })
 			padding={1}
 		>
 			<box backgroundColor={theme.panelAlt} height={1}>
-				<text fg={theme.muted}>{"    TASK_ID      AGENT    STATUS"}</text>
+				<text fg={theme.muted}>{"    TASK_ID    AGENT  STATUS  TEAM"}</text>
 			</box>
 			{tasks.length === 0 ? (
 				<text fg={theme.muted}>No tasks found.</text>
