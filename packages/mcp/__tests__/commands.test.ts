@@ -121,6 +121,64 @@ describe("submit-task", () => {
 		}
 	});
 
+	it("resolves an explicit role into agent_kind, model, and prompt metadata", async () => {
+		const root = mkdtempSync(join(tmpdir(), "cuekit-submit-role-"));
+		try {
+			mkdirSync(join(root, ".git"));
+			const result = await runSubmitTask(ctx, {
+				objective: "review this",
+				role: "reviewer",
+				cwd: root,
+			});
+			expect(result.accepted).toBe(true);
+			if (!result.accepted) return;
+			expect(result.agent_kind).toBe("claude-code");
+			expect(result.role).toBe("reviewer");
+			const task = getTaskById(db, result.task_id);
+			expect(task?.role).toBe("reviewer");
+			expect(JSON.parse(task?.spec_json ?? "{}").role_instructions).toContain("strict reviewer");
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("uses session worktree when resolving an explicit role", async () => {
+		const root = mkdtempSync(join(tmpdir(), "cuekit-submit-role-"));
+		try {
+			mkdirSync(join(root, ".git"));
+			mkdirSync(join(root, ".cuekit", "agents"), { recursive: true });
+			writeFileSync(
+				join(root, ".cuekit", "agents", "reviewer.md"),
+				"---\nid: reviewer\nmodel: bad-model\n---",
+			);
+			createSession(db, {
+				id: "s_role",
+				project_root: root,
+				worktree_path: root,
+				parent_agent_kind: "pi",
+			});
+			const result = await runSubmitTask(ctx, {
+				objective: "review this",
+				role: "reviewer",
+				session_id: "s_role",
+			});
+			expect(result.accepted).toBe(false);
+			if (!result.accepted) expect(result.error.code).toBe("invalid_input");
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("returns invalid_input for an unknown explicit role", async () => {
+		const result = await runSubmitTask(ctx, {
+			objective: "x",
+			role: "missing-role",
+			cwd: "/tmp",
+		});
+		expect(result.accepted).toBe(false);
+		if (!result.accepted) expect(result.error.code).toBe("invalid_input");
+	});
+
 	it("accepts the full TaskSpec shape — context / constraints / inputs / expected_output (P2-3)", async () => {
 		// Earlier the SubmitTaskInputSchema was hand-written and silently
 		// dropped these four optional protocol fields. Now the schema is
