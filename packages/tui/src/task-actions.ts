@@ -13,8 +13,9 @@ function hasTmuxSessionMetadata(view: TaskStatusView): boolean {
 }
 
 export function canAttach(view: TaskStatusView): boolean {
-	if (isTerminalTaskStatus(view.status)) return false;
 	if (view.supports_attach !== true) return false;
+	if (view.status === "cancelled" || view.status === "timed_out") return false;
+	if (isTerminalTaskStatus(view.status)) return hasTmuxSessionMetadata(view);
 	return Boolean(view.attach_hint) || hasTmuxSessionMetadata(view);
 }
 
