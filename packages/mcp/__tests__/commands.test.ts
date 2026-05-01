@@ -40,6 +40,7 @@ import { runReportTaskEvent } from "../src/commands/report-task-event.ts";
 import { runShowMcpConfig } from "../src/commands/show-mcp-config.ts";
 import { runSteerTask } from "../src/commands/steer-task.ts";
 import { runSubmitTask } from "../src/commands/submit-task.ts";
+import { runSubmitTeamTasks } from "../src/commands/submit-team-tasks.ts";
 import { runWaitTasks } from "../src/commands/wait-tasks.ts";
 import { runWaitTeam } from "../src/commands/wait-team.ts";
 
@@ -151,6 +152,113 @@ describe("team commands", () => {
 
 	it("get-team-status returns team_not_found", () => {
 		const result = runGetTeamStatus(ctx, { team_id: "tm_missing" });
+
+		expect("error" in result).toBe(true);
+		if ("error" in result) expect(result.error.code).toBe("team_not_found");
+	});
+});
+
+describe("submit-team-tasks", () => {
+	it("submits multiple team tasks with positions", async () => {
+		createSession(db, {
+			id: "s1",
+			project_root: "/p",
+			worktree_path: "/w",
+			parent_agent_kind: "pi",
+		});
+		createTaskTeam(db, { id: "tm_1", session_id: "s1", title: "Team" });
+
+		const result = await runSubmitTeamTasks(ctx, {
+			team_id: "tm_1",
+			tasks: [
+				{ objective: "Coordinate", agent_kind: "claude-code", position: "coordinator" },
+				{ objective: "Work", agent_kind: "claude-code", position: "worker" },
+			],
+		});
+
+		expect("accepted" in result).toBe(true);
+		if (!("accepted" in result)) return;
+		expect(result.accepted).toHaveLength(2);
+		expect(result.rejected).toEqual([]);
+		expect(result.accepted.map((item) => item.index)).toEqual([0, 1]);
+		expect(result.accepted.map((item) => item.position)).toEqual(["coordinator", "worker"]);
+		expect(getTaskById(db, result.accepted[0]?.task_id ?? "")?.team_id).toBe("tm_1");
+	});
+
+	it("keeps accepted tasks when later task input is malformed", async () => {
+		createSession(db, {
+			id: "s1",
+			project_root: "/p",
+			worktree_path: "/w",
+			parent_agent_kind: "pi",
+		});
+		createTaskTeam(db, { id: "tm_1", session_id: "s1", title: "Team" });
+
+		const result = await runSubmitTeamTasks(ctx, {
+			team_id: "tm_1",
+			tasks: [
+				{ objective: "Work", agent_kind: "claude-code", position: "worker" },
+				{ objective: "", agent_kind: "claude-code", position: "worker" },
+			],
+		});
+
+		expect("accepted" in result).toBe(true);
+		if (!("accepted" in result)) return;
+		expect(result.accepted).toHaveLength(1);
+		expect(result.rejected).toHaveLength(1);
+		expect(result.rejected[0]?.index).toBe(1);
+		expect(result.rejected[0]?.error.code).toBe("invalid_input");
+	});
+
+	it("keeps accepted tasks when later team tasks are rejected", async () => {
+		createSession(db, {
+			id: "s1",
+			project_root: "/p",
+			worktree_path: "/w",
+			parent_agent_kind: "pi",
+		});
+		createTaskTeam(db, { id: "tm_1", session_id: "s1", title: "Team" });
+
+		const result = await runSubmitTeamTasks(ctx, {
+			team_id: "tm_1",
+			tasks: [
+				{ objective: "Work", agent_kind: "claude-code", position: "worker" },
+				{ objective: "Bad", agent_kind: "missing-adapter", position: "worker" },
+			],
+		});
+
+		expect("accepted" in result).toBe(true);
+		if (!("accepted" in result)) return;
+		expect(result.accepted).toHaveLength(1);
+		expect(result.rejected).toHaveLength(1);
+		expect(result.rejected[0]?.index).toBe(1);
+	});
+
+	it("rejects task cwd outside the team session", async () => {
+		createSession(db, {
+			id: "s1",
+			project_root: "/p",
+			worktree_path: "/w",
+			parent_agent_kind: "pi",
+		});
+		createTaskTeam(db, { id: "tm_1", session_id: "s1", title: "Team" });
+
+		const result = await runSubmitTeamTasks(ctx, {
+			team_id: "tm_1",
+			tasks: [{ objective: "Work", agent_kind: "claude-code", cwd: "/elsewhere" }],
+		});
+
+		expect("accepted" in result).toBe(true);
+		if (!("accepted" in result)) return;
+		expect(result.accepted).toEqual([]);
+		expect(result.rejected[0]?.error.code).toBe("invalid_input");
+	});
+
+	it("returns team_not_found for unknown teams", async () => {
+		const result = await runSubmitTeamTasks(ctx, {
+			team_id: "tm_missing",
+			tasks: [{ objective: "Work", agent_kind: "claude-code" }],
+		});
 
 		expect("error" in result).toBe(true);
 		if ("error" in result) expect(result.error.code).toBe("team_not_found");

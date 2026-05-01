@@ -91,6 +91,11 @@ import {
 	SubmitTaskOutputSchema,
 } from "./commands/submit-task.ts";
 import {
+	runSubmitTeamTasks,
+	SubmitTeamTasksInputSchema,
+	SubmitTeamTasksOutputSchema,
+} from "./commands/submit-team-tasks.ts";
+import {
 	runWaitTasks,
 	WaitTasksInputSchema,
 	WaitTasksOutputSchema,
@@ -130,6 +135,14 @@ export const CUEKIT_OPERATIONS = [
 		options: SubmitTaskInputSchema,
 		output: SubmitTaskOutputSchema,
 		run: runSubmitTask,
+	}),
+	defineOperation({
+		mcpName: "submit_team_tasks",
+		cliPath: ["team", "submit"],
+		description: "Submit multiple tasks into an existing team with best-effort per-task results.",
+		options: SubmitTeamTasksInputSchema,
+		output: SubmitTeamTasksOutputSchema,
+		run: runSubmitTeamTasks,
 	}),
 	defineOperation({
 		mcpName: "create_team",
