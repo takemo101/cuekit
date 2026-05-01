@@ -23,6 +23,3 @@ Current focused work on outstanding issues:
 
 Add a document here when the work is an investigation, bug report, or focused design note that is not stable enough to be an ADR and not broad enough to be a spec.
 
-## Archived Materials
-
-Original GitHub issue drafts from the project scaffold phase and completed implementation plans are archived under [`../archive/issues/`](../archive/issues/) and [`../archive/plans/`](../archive/plans/) respectively. See [`../archive/README.md`](../archive/README.md) for historical context.
