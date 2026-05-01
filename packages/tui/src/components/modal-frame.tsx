@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { theme } from "../theme.ts";
 
 export function ModalFrame(props: { title: string; children: ReactNode }): ReactNode {
 	return (
@@ -8,12 +9,13 @@ export function ModalFrame(props: { title: string; children: ReactNode }): React
 			top="30%"
 			width="50%"
 			borderStyle="double"
+			borderColor={theme.cyan}
 			padding={1}
 			flexDirection="column"
 			zIndex={100}
-			backgroundColor="#1a1b26"
+			backgroundColor={theme.panel}
 		>
-			<text fg="#e0af68">{props.title}</text>
+			<text fg={theme.yellow}>{props.title}</text>
 			{props.children}
 		</box>
 	);
