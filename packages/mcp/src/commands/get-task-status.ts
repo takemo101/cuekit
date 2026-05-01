@@ -44,11 +44,22 @@ export async function runGetTaskStatus(
 		return {
 			task_id: input.task_id,
 			agent_kind: task.agent_kind,
+			...(task.model ? { model: task.model } : {}),
+			...(task.role ? { role: task.role } : {}),
+			...(task.role_source ? { role_source: task.role_source } : {}),
+			...(task.role_selection_reason ? { role_selection_reason: task.role_selection_reason } : {}),
 			status: "failed",
 			created_at: task.created_at,
 			updated_at: task.updated_at,
 			error: adapterRes.error,
 		};
 	}
-	return adapterRes.value.status(input.task_id);
+	const view = await adapterRes.value.status(input.task_id);
+	return {
+		...view,
+		...(task.model ? { model: task.model } : {}),
+		...(task.role ? { role: task.role } : {}),
+		...(task.role_source ? { role_source: task.role_source } : {}),
+		...(task.role_selection_reason ? { role_selection_reason: task.role_selection_reason } : {}),
+	};
 }

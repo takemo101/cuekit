@@ -191,6 +191,11 @@ describe("submit-task", () => {
 		expect(result.role_selection_reason).toContain("docs");
 		const task = getTaskById(db, result.task_id);
 		expect(task?.role).toBe("docs-writer");
+		const status = await runGetTaskStatus(ctx, { task_id: result.task_id });
+		expect(status.role).toBe("docs-writer");
+		const list = await runListTasks(ctx, { session_id: result.session_id });
+		expect("tasks" in list).toBe(true);
+		if ("tasks" in list) expect(list.tasks[0]?.role).toBe("docs-writer");
 	});
 
 	it("auto role selection uses session worktree discovery", async () => {

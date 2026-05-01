@@ -42,10 +42,23 @@ function detailTitle(task: TaskSummary, status: TaskStatus): string {
 type MetadataEntry = { label: string; value: string; color?: string };
 
 function metadataEntries(task: TaskSummary, detail: TuiTaskDetail | undefined): MetadataEntry[] {
+	const role = detail?.status.role ?? task.role;
+	const model = detail?.status.model ?? task.model;
+	const roleSource = detail?.status.role_source ?? task.role_source;
 	const entries: MetadataEntry[] = [
 		{ label: "updated", value: formatUpdatedAt(task.updated_at), color: theme.yellow },
-		{ label: "transcript", value: pathLabel(detail?.transcriptPath), color: theme.cyan },
 	];
+	if (role) {
+		entries.push({
+			label: "role",
+			value: `${role}${roleSource ? ` (${roleSource})` : ""}`,
+			color: theme.purple,
+		});
+	}
+	if (model) {
+		entries.push({ label: "model", value: model, color: theme.cyan });
+	}
+	entries.push({ label: "transcript", value: pathLabel(detail?.transcriptPath), color: theme.cyan });
 	if (detail?.status.attach_hint) {
 		entries.push({
 			label: "attach",
