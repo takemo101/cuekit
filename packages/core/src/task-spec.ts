@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { ExpectedOutputSpecSchema } from "./expected-output.ts";
 import { InputRefSchema } from "./input-ref.ts";
+import { TeamPositionSchema } from "./team.ts";
 
 export const TaskSpecSchema = z.object({
 	agent_kind: z.string().min(1),
@@ -11,6 +12,14 @@ export const TaskSpecSchema = z.object({
 	role_source: z.enum(["builtin", "user", "project"]).optional(),
 	role_sources: z.array(z.enum(["builtin", "user", "project"])).optional(),
 	role_selection_reason: z.string().min(1).optional(),
+	team_context: z
+		.object({
+			team_id: z.string().min(1),
+			title: z.string().min(1),
+			objective: z.string().min(1).optional(),
+			position: TeamPositionSchema.optional(),
+		})
+		.optional(),
 	adapter_options: z.record(z.string(), z.unknown()).optional(),
 	context: z.string().min(1).optional(),
 	constraints: z.array(z.string().min(1)).optional(),

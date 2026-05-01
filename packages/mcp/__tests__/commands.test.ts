@@ -374,6 +374,11 @@ describe("submit-task", () => {
 		const task = getTaskById(db, result.task_id);
 		expect(task?.team_id).toBe("tm_1");
 		expect(task?.team_position).toBe("worker");
+		expect(JSON.parse(task?.spec_json ?? "{}").team_context).toMatchObject({
+			team_id: "tm_1",
+			title: "Team",
+			position: "worker",
+		});
 		const status = await runGetTaskStatus(ctx, { task_id: result.task_id });
 		expect(status.team_id).toBe("tm_1");
 		expect(status.position).toBe("worker");
