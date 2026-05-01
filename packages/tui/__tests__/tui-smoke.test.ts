@@ -47,11 +47,13 @@ describe("@cuekit/tui package smoke", () => {
 		const detail = await Bun.file(
 			new URL("../src/components/task-detail.tsx", import.meta.url),
 		).text();
-		expect(detail).toContain("const contextHeight = Math.min(6");
-		expect(detail).toContain("<scrollbox height={contextHeight}");
+		expect(detail).toContain("function ContextPanel");
+		expect(detail).toContain("return Math.min(7");
 		expect(detail).toContain("TRANSCRIPT TAIL");
 		expect(detail).toContain("LIVE OUTPUT");
 		expect(detail).toContain("flexGrow={1} flexShrink={1}");
+		expect(detail).toContain("function MetadataRow");
+		expect(detail).toContain("function EventRow");
 	});
 
 	it("keeps footer and modal styling aligned with the shared theme", async () => {
