@@ -72,7 +72,7 @@ Profiles are loaded from three scopes:
 ```text
 1. project: .cuekit/agents/*.md
 2. user:    ~/.cuekit/agents/*.md
-3. builtin: packages/mcp/src/agent-profiles/builtin/*.md or package data
+3. builtin: packages/agent-profiles/src/builtins.ts embedded profile markdown strings
 ```
 
 Precedence is:
@@ -195,16 +195,16 @@ The exact model names must remain compatible with each adapter's advertised `ava
 
 Profile discovery must be anchored deterministically:
 
-1. Resolve the effective task cwd first:
+1. MCP resolves the effective task cwd before calling `@cuekit/agent-profiles`:
    - `submit_task.cwd` if provided
-   - else existing session `worktree_path` when `session_id` is provided
+   - else existing session `worktree_path` when `session_id` is provided, resolved by `@cuekit/mcp` using `@cuekit/store`
    - else `process.cwd()` for CLI/server process context
-2. Canonicalize to an absolute path.
-3. Find the project root by walking upward to the nearest `.git` directory/file. If none is found, use the effective cwd.
-4. Load project profiles from `<project_root>/.cuekit/agents/*.md`.
-5. Load user profiles from `~/.cuekit/agents/*.md`.
+2. MCP passes only the resolved absolute cwd (or project root) into `@cuekit/agent-profiles`.
+3. `@cuekit/agent-profiles` canonicalizes that path and finds the project root by walking upward to the nearest `.git` directory/file. If none is found, it uses the effective cwd.
+4. `@cuekit/agent-profiles` loads project profiles from `<project_root>/.cuekit/agents/*.md`.
+5. `@cuekit/agent-profiles` loads user profiles from `~/.cuekit/agents/*.md`.
 
-This mirrors existing session root behavior and prevents MCP callers from accidentally loading profiles from an unrelated server cwd when they pass an explicit task cwd.
+This mirrors existing session root behavior and prevents MCP callers from accidentally loading profiles from an unrelated server cwd when they pass an explicit task cwd. The package boundary is explicit: `@cuekit/agent-profiles` does not know about sessions or import `@cuekit/store`; session-to-cwd resolution remains in `@cuekit/mcp`.
 
 ## Submit-time resolution
 
@@ -360,9 +360,13 @@ Input:
 ```ts
 {
   scope?: "all" | "builtin" | "user" | "project";
+  cwd?: string;
+  session_id?: string;
   include_instructions?: boolean; // default false
 }
 ```
+
+For `scope: "project"` or `scope: "all"`, MCP resolves `cwd`/`session_id` exactly like `submit_task` before calling `@cuekit/agent-profiles`. If neither is provided, CLI/MCP may fall back to `process.cwd()`, but that fallback should be explicit in output/debug logs so callers understand which project profile directory was inspected. `scope: "builtin"` and `scope: "user"` do not need project cwd resolution.
 
 Output:
 
@@ -451,25 +455,50 @@ adapter     claude-code
 
 ## Package placement
 
-Suggested implementation units:
+Create a dedicated workspace package from the start:
 
 ```text
-packages/core/src/agent-profile.ts
-  schemas and types
+packages/agent-profiles/
+  package.json              # @cuekit/agent-profiles
+  tsconfig.json
+  src/
+    index.ts
+    schema.ts               # profile file/resolved schemas and public types
+    frontmatter.ts          # parse markdown frontmatter/body
+    discovery.ts            # load builtin/user/project profiles
+    merge.ts                # override merge and duplicate validation
+    selection.ts            # deterministic auto selector
+    project-root.ts         # cwd/project-root profile anchor helper; no session/store dependency
+    builtins.ts             # embedded builtin profile markdown strings
 
-packages/mcp/src/agent-profiles/
-  discovery.ts         # load builtin/user/project, merge overrides
-  frontmatter.ts       # parse markdown frontmatter/body
-  selection.ts         # deterministic auto selector
-  builtins.ts          # embedded builtin profile markdown strings
+packages/core/src/task-spec.ts
+  role metadata fields only
+
+packages/store/src/*
+  task role columns migration and row mapping
 
 packages/mcp/src/commands/list-agent-profiles.ts
 packages/mcp/src/commands/submit-task.ts
+packages/mcp/src/operations.ts
 packages/adapters/src/task-spec-prompt.ts
 packages/tui/src/data.ts / task-detail.tsx
 ```
 
-`@cuekit/core` owns schema/types because `TaskSpec` and prompt rendering need typed profile fields. Discovery can live in `@cuekit/mcp` initially because it is command-surface behavior and needs cwd/home context.
+Dependency direction:
+
+```text
+@cuekit/agent-profiles -> @cuekit/core
+@cuekit/mcp            -> @cuekit/agent-profiles
+@cuekit/mcp            -> @cuekit/core / @cuekit/store / @cuekit/adapters
+@cuekit/tui            -> @cuekit/core
+@cuekit/adapters       -> @cuekit/core
+```
+
+`@cuekit/tui` does not import `@cuekit/agent-profiles`; it only displays role metadata persisted on tasks/status views. This keeps profile discovery out of human UI code and avoids frontend/package cycles.
+
+`@cuekit/agent-profiles` owns discovery, parsing, merge, builtin profiles, and selection because those concerns are reusable beyond MCP: future TUI profile managers, profile init/show commands, or orchestration features can depend on the package without pulling in MCP server code.
+
+`@cuekit/core` should not own profile discovery. It only needs the `TaskSpec` role fields because adapter prompt rendering consumes those fields.
 
 Builtin profiles should be embedded in TypeScript (`builtins.ts`) for MVP rather than loaded from `src/**/*.md` at runtime. This avoids build/publish asset-copy issues. A later packaging pass can move them to external Markdown assets if the package build explicitly includes them.
 
@@ -499,7 +528,10 @@ Builtin profiles should be embedded in TypeScript (`builtins.ts`) for MVP rather
   - `instructions_mode: append`
   - duplicate ids in same scope fail deterministically
   - reserved `id: auto` fails
-  - explicit `cwd`, relative `cwd`, omitted `cwd`, existing `session_id`, and nested project roots anchor project profile lookup correctly
+  - explicit `cwd`, relative `cwd`, omitted `cwd`, and nested project roots anchor project profile lookup correctly
+- MCP command integration:
+  - `submit_task.session_id` resolves to session `worktree_path` before profile discovery
+  - `list_agent_profiles.session_id` resolves to session `worktree_path` before profile discovery
 - submit:
   - explicit role resolves `agent_kind` and `model`
   - explicit `agent_kind` / `model` override profile fields
@@ -524,10 +556,10 @@ Builtin profiles should be embedded in TypeScript (`builtins.ts`) for MVP rather
 
 ## Recommended first implementation slice
 
-1. Add profile schema/types and builtin markdown profiles.
-2. Add discovery + override merge.
-3. Add `list_agent_profiles`.
-4. Extend `submit_task` with explicit `role` only.
+1. Add `@cuekit/agent-profiles` package with schema/types, frontmatter parsing, embedded builtin markdown strings, discovery, merge, and validation.
+2. Add deterministic project/user/builtin discovery with override merge.
+3. Add `list_agent_profiles` MCP/CLI operation backed by `@cuekit/agent-profiles`.
+4. Extend `submit_task` with explicit `role` only and resolve to a strict `TaskSpec`.
 5. Inject role instructions into prompt and persist role columns.
 6. Add TUI detail role/model display.
 7. Add `role: "auto"` deterministic selector after explicit-role path is stable.
