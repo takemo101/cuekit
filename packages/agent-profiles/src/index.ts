@@ -4,3 +4,4 @@ export * from "./frontmatter.ts";
 export * from "./merge.ts";
 export * from "./project-root.ts";
 export * from "./schema.ts";
+export * from "./selection.ts";
