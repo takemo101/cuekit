@@ -121,8 +121,8 @@ function resolveTeam(
 	ctx: CommandContext,
 	session_id: string,
 	input: SubmitTaskInput,
-): { ok: true } | { ok: false; output: SubmitTaskOutput } {
-	if (!input.team_id) return { ok: true };
+): { ok: true; specPatch: Partial<TaskSpec> } | { ok: false; output: SubmitTaskOutput } {
+	if (!input.team_id) return { ok: true, specPatch: {} };
 	const team = getTaskTeamById(ctx.db, input.team_id);
 	if (!team) {
 		return {
@@ -145,7 +145,17 @@ function resolveTeam(
 			),
 		};
 	}
-	return { ok: true };
+	return {
+		ok: true,
+		specPatch: {
+			team_context: {
+				team_id: team.id,
+				title: team.title,
+				...(team.objective ? { objective: team.objective } : {}),
+				...(input.position ? { position: input.position } : {}),
+			},
+		},
+	};
 }
 
 export async function runSubmitTask(
@@ -172,6 +182,7 @@ export async function runSubmitTask(
 	const unresolvedSpec = {
 		...rawSpec,
 		...roleResolution.specPatch,
+		...teamResolution.specPatch,
 		...(rawSpec.cwd !== undefined ? { cwd: resolve(rawSpec.cwd) } : {}),
 	};
 	const parsedSpec = TaskSpecSchema.safeParse(unresolvedSpec);

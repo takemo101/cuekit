@@ -17,6 +17,26 @@ describe("renderTaskSpecPrompt", () => {
 		);
 	});
 
+	it("injects team context before the child reporting contract", () => {
+		const prompt = renderTaskSpecPrompt({
+			agent_kind: "claude-code",
+			objective: "coordinate the team",
+			team_context: {
+				team_id: "tm_1",
+				title: "Launch",
+				position: "coordinator",
+			},
+		});
+
+		expect(prompt).toContain("This team context is supplemental");
+		expect(prompt).toContain("You are the coordinator for cuekit team tm_1: Launch.");
+		expect(prompt).toContain("get_team_status");
+		expect(prompt).toContain("submit follow-up team tasks");
+		expect(prompt.indexOf("Team context:")).toBeLessThan(
+			prompt.indexOf("Child reporting contract:"),
+		);
+	});
+
 	it("injects the child reporting contract", () => {
 		const prompt = renderTaskSpecPrompt({ agent_kind: "claude-code", objective: "do the thing" });
 
