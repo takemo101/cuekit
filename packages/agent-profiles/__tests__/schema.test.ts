@@ -10,7 +10,7 @@ describe("agent profile schemas", () => {
 		});
 		expect(parsed.description).toBeUndefined();
 		expect(parsed.instructions_mode).toBe("replace");
-		expect(parsed.tags).toEqual([]);
+		expect(parsed.tags).toBeUndefined();
 	});
 
 	it("requires description and instructions after merge", () => {

@@ -18,7 +18,7 @@ export const AgentProfileFileSchema = z.object({
 	description: z.string().min(1).optional(),
 	agent_kind: z.string().min(1).optional(),
 	model: z.string().min(1).optional(),
-	tags: z.array(z.string().min(1)).default([]),
+	tags: z.array(z.string().min(1)).optional(),
 	instructions: z.string().default(""),
 	instructions_mode: InstructionsModeSchema.default("replace"),
 	source: AgentProfileSourceSchema,
