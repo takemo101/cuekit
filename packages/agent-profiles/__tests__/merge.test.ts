@@ -38,13 +38,22 @@ Review carefully.`,
 		});
 	});
 
-	it("lets user override builtin model", () => {
+	it("lets user override builtin model while inheriting omitted tags", () => {
 		const user = profile("---\nid: reviewer\nmodel: opus\n---", "user", "user/reviewer.md");
 		const result = mergeAgentProfiles([builtin, user]);
 		expect(result.ok).toBe(true);
 		if (!result.ok) return;
 		expect(result.profiles[0]?.model).toBe("opus");
 		expect(result.profiles[0]?.description).toBe("Review code");
+		expect(result.profiles[0]?.tags).toEqual(["review", "code-quality"]);
+	});
+
+	it("lets explicit empty tags clear inherited tags", () => {
+		const user = profile("---\nid: reviewer\ntags:\n---", "user", "user/reviewer.md");
+		const result = mergeAgentProfiles([builtin, user]);
+		expect(result.ok).toBe(true);
+		if (!result.ok) return;
+		expect(result.profiles[0]?.tags).toEqual([]);
 	});
 
 	it("lets project override user and builtin", () => {

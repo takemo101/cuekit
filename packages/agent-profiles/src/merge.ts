@@ -53,7 +53,7 @@ function mergeOne(
 		description: override.description ?? base?.description ?? "",
 		agent_kind: override.agent_kind ?? base?.agent_kind,
 		model: override.model ?? base?.model,
-		tags: override.tags.length > 0 ? override.tags : (base?.tags ?? []),
+		tags: override.tags ?? base?.tags ?? [],
 		instructions,
 		instructions_mode: instructionsMode,
 		source: sources[sources.length - 1] ?? override.source,
