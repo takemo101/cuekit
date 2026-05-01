@@ -56,6 +56,7 @@ function rowStillMatchesFilter(row: Task, filter: ListTasksInput): boolean {
 	if (filter.status !== undefined && row.status !== filter.status) return false;
 	if (filter.agent_kind !== undefined && row.agent_kind !== filter.agent_kind) return false;
 	if (filter.session_id !== undefined && row.session_id !== filter.session_id) return false;
+	if (filter.team_id !== undefined && row.team_id !== filter.team_id) return false;
 	return true;
 }
 
@@ -105,6 +106,8 @@ export async function runListTasks(
 				agent_kind: t.agent_kind,
 				...(t.model ? { model: t.model } : {}),
 				...(t.role ? { role: t.role } : {}),
+				...(t.team_id ? { team_id: t.team_id } : {}),
+				...(t.team_position ? { position: t.team_position } : {}),
 				...(t.role_source ? { role_source: t.role_source } : {}),
 				...(t.role_selection_reason ? { role_selection_reason: t.role_selection_reason } : {}),
 				status: t.status,

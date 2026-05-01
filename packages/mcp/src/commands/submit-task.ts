@@ -1,7 +1,7 @@
 import { resolve } from "node:path";
 import { discoverAgentProfiles, selectAgentProfile } from "@cuekit/agent-profiles";
-import { JobErrorSchema, type TaskSpec, TaskSpecSchema } from "@cuekit/core";
-import { getSessionById } from "@cuekit/store";
+import { JobErrorSchema, type TaskSpec, TaskSpecSchema, TeamPositionSchema } from "@cuekit/core";
+import { getSessionById, getTaskTeamById } from "@cuekit/store";
 import { z } from "incur";
 import type { CommandContext } from "../command-context.ts";
 import { resolveSessionId } from "../session-helpers.ts";
@@ -14,6 +14,8 @@ export const SubmitTaskInputSchema = TaskSpecSchema.extend({
 		.min(1)
 		.optional()
 		.describe("cuekit session id. Auto-created from cwd when omitted."),
+	team_id: z.string().min(1).optional(),
+	position: TeamPositionSchema.optional(),
 });
 
 export type SubmitTaskInput = z.infer<typeof SubmitTaskInputSchema>;
@@ -26,6 +28,8 @@ export const SubmitTaskOutputSchema = z.discriminatedUnion("accepted", [
 		session_id: z.string(),
 		role: z.string().optional(),
 		role_selection_reason: z.string().optional(),
+		team_id: z.string().optional(),
+		position: TeamPositionSchema.optional(),
 	}),
 	z.object({
 		accepted: z.literal(false),
@@ -113,17 +117,58 @@ function resolveExplicitRole(
 	return patchForProfile(input, profile, `explicit role '${profile.id}'`);
 }
 
+function resolveTeam(
+	ctx: CommandContext,
+	session_id: string,
+	input: SubmitTaskInput,
+): { ok: true } | { ok: false; output: SubmitTaskOutput } {
+	if (!input.team_id) return { ok: true };
+	const team = getTaskTeamById(ctx.db, input.team_id);
+	if (!team) {
+		return {
+			ok: false,
+			output: {
+				accepted: false,
+				error: {
+					code: "team_not_found",
+					message: `team '${input.team_id}' not found`,
+					retryable: false,
+				},
+			},
+		};
+	}
+	if (team.session_id !== session_id) {
+		return {
+			ok: false,
+			output: invalidInput(
+				`team '${input.team_id}' belongs to session '${team.session_id}', not '${session_id}'`,
+			),
+		};
+	}
+	return { ok: true };
+}
+
 export async function runSubmitTask(
 	ctx: CommandContext,
 	input: SubmitTaskInput,
 ): Promise<SubmitTaskOutput> {
+	const parsedInput = SubmitTaskInputSchema.safeParse(input);
+	if (!parsedInput.success) {
+		return invalidInput(parsedInput.error.issues.map((issue) => issue.message).join("; "));
+	}
+	input = parsedInput.data;
+	if (input.position && !input.team_id) {
+		return invalidInput("position requires team_id");
+	}
 	const session_id = resolveSessionId(ctx.db, {
 		session_id: input.session_id,
 		cwd: input.cwd,
 	});
+	const teamResolution = resolveTeam(ctx, session_id, input);
+	if (!teamResolution.ok) return teamResolution.output;
 	const roleResolution = resolveExplicitRole(ctx, input, session_id);
 	if (!roleResolution.ok) return roleResolution.output;
-	const { session_id: _ignored, ...rawSpec } = input;
+	const { session_id: _ignored, team_id, position, ...rawSpec } = input;
 	const unresolvedSpec = {
 		...rawSpec,
 		...roleResolution.specPatch,
@@ -138,7 +183,7 @@ export async function runSubmitTask(
 	if (!adapterRes.ok) {
 		return { accepted: false, error: adapterRes.error };
 	}
-	const result = await adapterRes.value.submit({ spec, session_id });
+	const result = await adapterRes.value.submit({ spec, session_id, team_id, position });
 	if (!result.ok) {
 		return { accepted: false, error: result.error };
 	}
@@ -149,5 +194,7 @@ export async function runSubmitTask(
 		session_id,
 		...(spec.role ? { role: spec.role } : {}),
 		...(spec.role_selection_reason ? { role_selection_reason: spec.role_selection_reason } : {}),
+		...(team_id ? { team_id } : {}),
+		...(position ? { position } : {}),
 	};
 }

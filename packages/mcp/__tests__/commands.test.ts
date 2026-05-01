@@ -156,6 +156,76 @@ describe("team commands", () => {
 });
 
 describe("submit-task", () => {
+	it("attaches submitted tasks to a team", async () => {
+		createSession(db, {
+			id: "s_team",
+			project_root: "/team",
+			worktree_path: "/team",
+			parent_agent_kind: "pi",
+		});
+		createTaskTeam(db, { id: "tm_1", session_id: "s_team", title: "Team" });
+
+		const result = await runSubmitTask(ctx, {
+			objective: "Do team work",
+			agent_kind: "claude-code",
+			session_id: "s_team",
+			team_id: "tm_1",
+			position: "worker",
+		});
+
+		expect(result.accepted).toBe(true);
+		if (!result.accepted) return;
+		const task = getTaskById(db, result.task_id);
+		expect(task?.team_id).toBe("tm_1");
+		expect(task?.team_position).toBe("worker");
+		const status = await runGetTaskStatus(ctx, { task_id: result.task_id });
+		expect(status.team_id).toBe("tm_1");
+		expect(status.position).toBe("worker");
+		const listed = await runListTasks(ctx, { session_id: "s_team" });
+		if ("error" in listed) throw new Error(listed.error.message);
+		expect(listed.tasks[0]?.team_id).toBe("tm_1");
+		expect(listed.tasks[0]?.position).toBe("worker");
+	});
+
+	it("rejects position without team_id", async () => {
+		const result = await runSubmitTask(ctx, {
+			objective: "Do team work",
+			agent_kind: "claude-code",
+			cwd: "/team",
+			position: "worker",
+		});
+
+		expect(result.accepted).toBe(false);
+		if (!result.accepted) expect(result.error.code).toBe("invalid_input");
+	});
+
+	it("rejects team metadata for a different session", async () => {
+		createSession(db, {
+			id: "s1",
+			project_root: "/one",
+			worktree_path: "/one",
+			parent_agent_kind: "pi",
+		});
+		createSession(db, {
+			id: "s2",
+			project_root: "/two",
+			worktree_path: "/two",
+			parent_agent_kind: "pi",
+		});
+		createTaskTeam(db, { id: "tm_1", session_id: "s1", title: "Team" });
+
+		const result = await runSubmitTask(ctx, {
+			objective: "Do team work",
+			agent_kind: "claude-code",
+			session_id: "s2",
+			team_id: "tm_1",
+			position: "worker",
+		});
+
+		expect(result.accepted).toBe(false);
+		if (!result.accepted) expect(result.error.code).toBe("invalid_input");
+	});
+
 	it("auto-creates a session from cwd when session_id is omitted", async () => {
 		const result = await runSubmitTask(ctx, {
 			objective: "Add retry logic",

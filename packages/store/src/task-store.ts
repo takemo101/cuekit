@@ -135,6 +135,10 @@ export function listTasks(db: Database, filter: TaskListFilter = {}): Task[] {
 		conditions.push("t.session_id = :session_id");
 		bindings[":session_id"] = filter.session_id;
 	}
+	if (filter.team_id) {
+		conditions.push("t.team_id = :team_id");
+		bindings[":team_id"] = filter.team_id;
+	}
 	const joinCwd = filter.cwd !== undefined;
 	if (joinCwd && filter.cwd !== undefined) {
 		conditions.push("s.worktree_path = :cwd");
