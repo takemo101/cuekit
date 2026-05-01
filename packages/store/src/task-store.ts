@@ -139,10 +139,14 @@ export function listTasks(db: Database, filter: TaskListFilter = {}): Task[] {
 		conditions.push("t.team_id = :team_id");
 		bindings[":team_id"] = filter.team_id;
 	}
-	const joinCwd = filter.cwd !== undefined;
-	if (joinCwd && filter.cwd !== undefined) {
+	const joinSession = filter.cwd !== undefined || filter.project_root !== undefined;
+	if (filter.cwd !== undefined) {
 		conditions.push("s.worktree_path = :cwd");
 		bindings[":cwd"] = filter.cwd;
+	}
+	if (filter.project_root !== undefined) {
+		conditions.push("s.project_root = :project_root");
+		bindings[":project_root"] = filter.project_root;
 	}
 
 	// Keyset predicate: rows that come after the cursor in the
@@ -159,7 +163,7 @@ export function listTasks(db: Database, filter: TaskListFilter = {}): Task[] {
 	}
 
 	const where = conditions.length > 0 ? `where ${conditions.join(" and ")}` : "";
-	const join = joinCwd ? "join sessions s on s.id = t.session_id" : "";
+	const join = joinSession ? "join sessions s on s.id = t.session_id" : "";
 
 	bindings[":limit"] = filter.limit ?? DEFAULT_LIST_TASKS_LIMIT;
 
