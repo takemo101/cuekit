@@ -63,7 +63,22 @@ export function sanitizeTerminalText(value: string): string {
 function isLowValueTranscriptLine(line: string): boolean {
 	const trimmed = line.trim();
 	if (trimmed.length === 0) return true;
-	return trimmed.length <= 2 && !/[\p{L}\p{N}]/u.test(trimmed);
+	if (trimmed.length <= 2 && !/[\p{L}\p{N}]/u.test(trimmed)) return true;
+	return (
+		/^ran\s+\d+\s+stop hooks(?:\s*\([^)]*\))?$/i.test(trimmed) ||
+		/^stop hook prevented continuation$/i.test(trimmed) ||
+		/^[⏵>»\s]*bypass\s*permissions\s*on(?:\s*\([^)]*\))?$/i.test(trimmed) ||
+		/^\(?shift\+tab\s+to\s+cycle\)?$/i.test(trimmed) ||
+		/^tokens:\s*\d+$/i.test(trimmed) ||
+		/^[-*•]\s*if\s*mcp\s*is\s*unavailable,\s*use\s*the\s*cli\s*fallback:\s*cuekit\s*tool\s*report\s*--type\s*<progress\|completed>\s*$/i.test(
+			trimmed,
+		) ||
+		/^[-*•]\s*cuekit_task_id\s*and\s*cuekit_child_token\s*are\s*already\s*provided\s*in\s*your\s*environment;\s*do\s*not\s*print\s*$/i.test(
+			trimmed,
+		) ||
+		/^[-*•]\s*reporting\s*does\s*not\s*automatically\s*close\s*$/i.test(trimmed) ||
+		/^[-*•]\s*transcript\s*markers\s*and\s*direct\s*result\s*$/i.test(trimmed)
+	);
 }
 
 export function readTranscriptTail(

@@ -185,6 +185,49 @@ describe("tui data helpers", () => {
 		expect(sanitizeTerminalText("\u009b31mred\u009dtitle\u007f text")).toBe("31mredtitle text");
 	});
 
+	it("filters common Claude UI and cuekit prompt contract noise from transcript tails", () => {
+		const dir = mkdtempSync(`${tmpdir()}/cuekit-tui-transcript-noise-`);
+		try {
+			const path = join(dir, "transcript.txt");
+			writeFileSync(
+				path,
+				[
+					"Ran 3 stop hooks (ctrl+o to expand)",
+					"Stop hook prevented continuation",
+					"⏵⏵ bypass permissions on (shift+tab to cycle)",
+					"- If MCP is unavailable, use the CLI fallback: cuekit tool report --type <progress|completed>",
+					"- CUEKIT_TASK_ID and CUEKIT_CHILD_TOKEN are already provided in your environment; do not print",
+					"Useful final summary",
+				].join("\n"),
+			);
+
+			expect(readTranscriptTail(path, 10)).toEqual(["Useful final summary"]);
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
+	it("keeps useful non-contract transcript lines that mention filtered phrases", () => {
+		const dir = mkdtempSync(`${tmpdir()}/cuekit-tui-transcript-noise-`);
+		try {
+			const path = join(dir, "transcript.txt");
+			writeFileSync(
+				path,
+				[
+					"Investigation note: if MCP is unavailable, check the server logs.",
+					"I fixed the stop hook prevented continuation bug.",
+				].join("\n"),
+			);
+
+			expect(readTranscriptTail(path, 10)).toEqual([
+				"Investigation note: if MCP is unavailable, check the server logs.",
+				"I fixed the stop hook prevented continuation bug.",
+			]);
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
 	it("filters punctuation-only terminal spinner fragments from transcript tails", () => {
 		const dir = mkdtempSync(`${tmpdir()}/cuekit-tui-transcript-noise-`);
 		try {

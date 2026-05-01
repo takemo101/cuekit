@@ -35,6 +35,13 @@ function formatUpdatedAt(value: string): string {
 	return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }
 
+function formatIdleMs(value: number | undefined): string | undefined {
+	if (value === undefined) return undefined;
+	if (value < 1000) return `${value}ms`;
+	if (value < 60_000) return `${Math.round(value / 1000)}s`;
+	return `${Math.round(value / 60_000)}m`;
+}
+
 function detailTitle(task: TaskSummary, status: TaskStatus): string {
 	return `Detail: ${statusGlyph(status)} ${task.task_id} / ${status} / ${task.agent_kind}`;
 }
@@ -59,6 +66,30 @@ function metadataEntries(task: TaskSummary, detail: TuiTaskDetail | undefined): 
 		entries.push({ label: "model", value: model, color: theme.cyan });
 	}
 	entries.push({ label: "transcript", value: pathLabel(detail?.transcriptPath), color: theme.cyan });
+	if (detail?.status.last_event_at) {
+		entries.push({
+			label: "event",
+			value: formatUpdatedAt(detail.status.last_event_at),
+			color: theme.cyan,
+		});
+	}
+	if (detail?.status.last_transcript_at) {
+		entries.push({
+			label: "output",
+			value: formatUpdatedAt(detail.status.last_transcript_at),
+			color: theme.cyan,
+		});
+	}
+	const idleLabel = formatIdleMs(detail?.status.idle_ms);
+	if (idleLabel) {
+		entries.push({
+			label: "idle",
+			value: detail?.status.attention_hint
+				? `${idleLabel} — ${detail.status.attention_hint}`
+				: idleLabel,
+			color: detail?.status.attention_hint ? theme.yellow : theme.muted,
+		});
+	}
 	if (detail?.status.attach_hint) {
 		entries.push({
 			label: "attach",
