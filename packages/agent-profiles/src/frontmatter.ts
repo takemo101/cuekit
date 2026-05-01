@@ -25,9 +25,9 @@ function unquote(value: string): string {
 	return trimmed;
 }
 
-function parseScalarOrList(raw: string): string | string[] {
+function parseValue(key: string, raw: string): string | string[] {
 	const value = unquote(raw);
-	if (!value.includes(",")) return value;
+	if (key !== "tags" || !value.includes(",")) return value;
 	return value
 		.split(",")
 		.map((item) => unquote(item))
@@ -52,7 +52,7 @@ function parseFrontmatterBlock(block: string): Record<string, unknown> {
 		const key = match[1] ?? "";
 		const rawValue = match[2] ?? "";
 		listKey = rawValue.trim().length === 0 ? key : undefined;
-		fields[key] = rawValue.trim().length === 0 ? [] : parseScalarOrList(rawValue);
+		fields[key] = rawValue.trim().length === 0 ? [] : parseValue(key, rawValue);
 	}
 	return fields;
 }

@@ -34,7 +34,7 @@ Review carefully.`,
 		const result = parseAgentProfileMarkdown({
 			content: `---
 id: 'docs-writer'
-description: "Write docs"
+description: "Write docs, examples, and guides"
 ---
 
 Write docs.`,
@@ -43,7 +43,7 @@ Write docs.`,
 		expect(result.ok).toBe(true);
 		if (!result.ok) return;
 		expect(result.profile.id).toBe("docs-writer");
-		expect(result.profile.description).toBe("Write docs");
+		expect(result.profile.description).toBe("Write docs, examples, and guides");
 	});
 
 	it("parses tags as yaml list", () => {
