@@ -18,8 +18,6 @@ Stable documentation and design notes for completed features:
 - [TUI task cockpit design](issues/cuekit-tui-task-cockpit-design.md) — human-facing OpenTUI interface
 - [TUI package separation design](issues/cuekit-tui-package-separation-design.md) — implementation architecture
 
-Implementation plans for these features are archived under [`archive/plans/`](archive/README.md#plans-archive).
-
 ## Feature / Investigation Notes
 
 Additional focused design notes, bug reports, and investigations live under [issues](issues/README.md):
@@ -50,10 +48,6 @@ Current references:
 - `docs/references/` — local reference material for dependencies/tools.
 - `docs/guides/` — operator/developer feature guides.
 
-**Historical documentation:**
-
-- `docs/archive/` — completed implementation phases, historical handoffs, and obsolete plans.
-
 ## Rule of Thumb
 
 Before implementing a new feature:
@@ -63,6 +57,3 @@ Before implementing a new feature:
 3. If the feature depends on a library/tool, check `docs/references/`.
 4. Add a focused design note when the work changes behavior or introduces a new surface.
 
-## Archive
-
-Historical documentation including original project-scaffold issue drafts, completed implementation plans, and initial-phase handoffs is kept under [`archive/`](archive/README.md). These preserve context for understanding how cuekit was built and decisions made during initial implementation.
