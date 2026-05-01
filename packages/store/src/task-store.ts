@@ -20,6 +20,8 @@ export interface CreateTaskInput {
 	role?: string;
 	role_source?: string;
 	role_selection_reason?: string;
+	team_id?: string;
+	team_position?: string;
 	objective: string;
 	status?: TaskStatus;
 	native_task_ref?: string;
@@ -31,9 +33,9 @@ export function createTask(db: Database, input: CreateTaskInput): Task {
 	db.prepare(
 		`insert into tasks (
 			id, session_id, parent_task_id, agent_kind, model, role, role_source,
-			role_selection_reason, objective, status, native_task_ref, summary,
-			result_ref, transcript_ref, created_at, updated_at, completed_at, spec_json
-		) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			role_selection_reason, team_id, team_position, objective, status, native_task_ref,
+			summary, result_ref, transcript_ref, created_at, updated_at, completed_at, spec_json
+		) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 	).run(
 		input.id,
 		input.session_id,
@@ -43,6 +45,8 @@ export function createTask(db: Database, input: CreateTaskInput): Task {
 		input.role ?? input.spec?.role ?? null,
 		input.role_source ?? input.spec?.role_source ?? null,
 		input.role_selection_reason ?? input.spec?.role_selection_reason ?? null,
+		input.team_id ?? null,
+		input.team_position ?? null,
 		input.objective,
 		input.status ?? "queued",
 		input.native_task_ref ?? null,

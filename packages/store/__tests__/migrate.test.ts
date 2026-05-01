@@ -31,6 +31,40 @@ describe("runMigrations", () => {
 		expect(versions).toContain("006-child-reporting.sql");
 		expect(versions).toContain("007-task-events-delete-cascade.sql");
 		expect(versions).toContain("008-task-role-metadata.sql");
+		expect(versions).toContain("009-task-teams.sql");
+	});
+
+	it("creates task team storage", () => {
+		const db = new Database(":memory:");
+		runMigrations(db);
+		const teamTable = db
+			.prepare("select name from sqlite_master where type = 'table' and name = 'task_teams'")
+			.get();
+		const teamIdColumn = db
+			.prepare("select name from pragma_table_info('tasks') where name = 'team_id'")
+			.get();
+		const teamPositionColumn = db
+			.prepare("select name from pragma_table_info('tasks') where name = 'team_position'")
+			.get();
+		expect(teamTable).toBeDefined();
+		expect(teamIdColumn).toBeDefined();
+		expect(teamPositionColumn).toBeDefined();
+	});
+
+	it("cascades task teams when a session is deleted", () => {
+		const db = new Database(":memory:");
+		db.exec("pragma foreign_keys = ON;");
+		runMigrations(db);
+		db.prepare(
+			"insert into sessions (id, project_root, worktree_path, parent_agent_kind, status, created_at, updated_at) values (?, ?, ?, ?, ?, ?, ?)",
+		).run("s1", "/p", "/w", "pi", "active", "2026-05-01T00:00:00.000Z", "2026-05-01T00:00:00.000Z");
+		db.prepare(
+			"insert into task_teams (id, session_id, title, created_at, updated_at) values (?, ?, ?, ?, ?)",
+		).run("tm_1", "s1", "Team", "2026-05-01T00:00:00.000Z", "2026-05-01T00:00:00.000Z");
+
+		db.prepare("delete from sessions where id = ?").run("s1");
+
+		expect(db.prepare("select * from task_teams where id = ?").get("tm_1")).toBeNull();
 	});
 
 	it("upgrades existing task_events foreign keys to cascade on task delete", () => {
@@ -149,6 +183,9 @@ describe("runMigrations", () => {
 		expect(names).toContain("idx_tasks_agent_kind");
 		expect(names).toContain("idx_task_events_task_id_sequence");
 		expect(names).toContain("idx_task_events_type");
+		expect(names).toContain("idx_task_teams_session_id");
+		expect(names).toContain("idx_task_teams_updated_at");
+		expect(names).toContain("idx_tasks_team_id");
 	});
 
 	it("is idempotent — running twice does not duplicate recorded versions", () => {

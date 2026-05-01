@@ -12,6 +12,8 @@ export const TaskSchema = z.object({
 	role: z.string().min(1).nullable(),
 	role_source: z.string().min(1).nullable(),
 	role_selection_reason: z.string().min(1).nullable(),
+	team_id: z.string().min(1).nullable(),
+	team_position: z.string().min(1).nullable(),
 	objective: z.string().min(1),
 	status: TaskStatusSchema,
 	native_task_ref: z.string().min(1).nullable(),

@@ -4,7 +4,7 @@ import { AdapterCapabilitiesSchema } from "../src/adapter-capabilities.ts";
 import { ArtifactRefSchema } from "../src/artifact-ref.ts";
 import { ExpectedOutputSpecSchema } from "../src/expected-output.ts";
 import { InputRefSchema } from "../src/input-ref.ts";
-import { JobErrorSchema } from "../src/job-error.ts";
+import { JobErrorCodeSchema, JobErrorSchema } from "../src/job-error.ts";
 import { SessionStatusSchema } from "../src/session-status.ts";
 import { SteeringMessageSchema } from "../src/steering-message.ts";
 import { TaskHandleSchema } from "../src/task-handle.ts";
@@ -15,6 +15,27 @@ import { TaskSpecSchema } from "../src/task-spec.ts";
 import { TaskStatusSchema } from "../src/task-status.ts";
 import { TaskStatusViewSchema } from "../src/task-status-view.ts";
 import { TaskSummarySchema } from "../src/task-summary.ts";
+import { TeamPositionSchema, TeamStatusSchema } from "../src/team.ts";
+
+describe("Team schemas", () => {
+	it("accepts known team positions and statuses", () => {
+		expect(TeamPositionSchema.safeParse("coordinator").success).toBe(true);
+		expect(TeamPositionSchema.safeParse("worker").success).toBe(true);
+		expect(TeamPositionSchema.safeParse("reviewer").success).toBe(true);
+		expect(TeamPositionSchema.safeParse("observer").success).toBe(true);
+		expect(TeamPositionSchema.safeParse("manager").success).toBe(false);
+
+		expect(TeamStatusSchema.safeParse("empty").success).toBe(true);
+		expect(TeamStatusSchema.safeParse("running").success).toBe(true);
+		expect(TeamStatusSchema.safeParse("completed").success).toBe(true);
+		expect(TeamStatusSchema.safeParse("failed").success).toBe(true);
+		expect(TeamStatusSchema.safeParse("cancelled").success).toBe(true);
+		expect(TeamStatusSchema.safeParse("timed_out").success).toBe(true);
+		expect(TeamStatusSchema.safeParse("blocked").success).toBe(true);
+		expect(TeamStatusSchema.safeParse("mixed").success).toBe(true);
+		expect(TeamStatusSchema.safeParse("done").success).toBe(false);
+	});
+});
 
 describe("TaskSpecSchema", () => {
 	it("accepts minimal valid spec", () => {
@@ -266,6 +287,15 @@ describe("JobErrorSchema", () => {
 		expect(result.success).toBe(true);
 	});
 
+	it("accepts team_not_found code", () => {
+		expect(JobErrorCodeSchema.safeParse("team_not_found").success).toBe(true);
+		const result = JobErrorSchema.safeParse({
+			code: "team_not_found",
+			message: "team not found",
+		});
+		expect(result.success).toBe(true);
+	});
+
 	it("rejects unknown code", () => {
 		const result = JobErrorSchema.safeParse({ code: "whatever", message: "x" });
 		expect(result.success).toBe(false);
@@ -313,6 +343,8 @@ describe("TaskStatusViewSchema", () => {
 			task_id: "t1",
 			agent_kind: "claude-code",
 			status: "running",
+			team_id: "tm_123",
+			position: "coordinator",
 			created_at: "2026-04-24T10:00:00Z",
 			updated_at: "2026-04-24T10:02:00Z",
 			last_event_at: "2026-04-24T10:01:00Z",
@@ -326,6 +358,8 @@ describe("TaskStatusViewSchema", () => {
 		if (result.success) {
 			expect(result.data.idle_ms).toBe(30_000);
 			expect(result.data.attention_hint).toBe("no_recent_activity");
+			expect(result.data.team_id).toBe("tm_123");
+			expect(result.data.position).toBe("coordinator");
 		}
 	});
 
@@ -396,6 +430,22 @@ describe("TaskSummarySchema", () => {
 			updated_at: "2026-04-24T10:00:00Z",
 		});
 		expect(result.success).toBe(true);
+	});
+
+	it("accepts team metadata", () => {
+		const result = TaskSummarySchema.safeParse({
+			task_id: "t1",
+			agent_kind: "pi",
+			status: "running",
+			team_id: "tm_123",
+			position: "worker",
+			updated_at: "2026-04-24T10:00:00Z",
+		});
+		expect(result.success).toBe(true);
+		if (result.success) {
+			expect(result.data.team_id).toBe("tm_123");
+			expect(result.data.position).toBe("worker");
+		}
 	});
 
 	it("rejects bad timestamp", () => {

@@ -7,6 +7,7 @@ export const JobErrorCodeSchema = z.enum([
 	"steering_unsupported",
 	"collect_unavailable",
 	"task_not_found",
+	"team_not_found",
 	"session_not_found",
 	"invalid_state",
 	"invalid_input",
