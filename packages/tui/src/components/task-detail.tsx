@@ -84,8 +84,9 @@ function eventTypeColor(type: string): string {
 	return theme.purple;
 }
 
-function contextHeight(metadata: MetadataEntry[], events: TuiTaskEvent[]): number {
-	return Math.min(7, Math.max(2, metadata.length + 1 + Math.max(1, events.length)));
+export function contextHeight(metadata: MetadataEntry[], events: TuiTaskEvent[]): number {
+	const eventRows = Math.max(1, events.length * 2);
+	return Math.min(12, Math.max(4, metadata.length + 1 + eventRows));
 }
 
 function terminalEvent(detail: TuiTaskDetail | undefined): TuiTaskEvent | undefined {
