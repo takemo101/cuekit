@@ -179,6 +179,47 @@ describe("submit-task", () => {
 		if (!result.accepted) expect(result.error.code).toBe("invalid_input");
 	});
 
+	it("auto-selects roles from the objective", async () => {
+		const result = await runSubmitTask(ctx, {
+			objective: "update the README docs",
+			role: "auto",
+			cwd: "/tmp",
+		});
+		expect(result.accepted).toBe(true);
+		if (!result.accepted) return;
+		expect(result.role).toBe("docs-writer");
+		expect(result.role_selection_reason).toContain("docs");
+		const task = getTaskById(db, result.task_id);
+		expect(task?.role).toBe("docs-writer");
+	});
+
+	it("auto role selection uses session worktree discovery", async () => {
+		const root = mkdtempSync(join(tmpdir(), "cuekit-submit-auto-role-"));
+		try {
+			mkdirSync(join(root, ".git"));
+			mkdirSync(join(root, ".cuekit", "agents"), { recursive: true });
+			writeFileSync(
+				join(root, ".cuekit", "agents", "debugger.md"),
+				"---\nid: debugger\nmodel: bad-model\n---",
+			);
+			createSession(db, {
+				id: "s_auto_role",
+				project_root: root,
+				worktree_path: root,
+				parent_agent_kind: "pi",
+			});
+			const result = await runSubmitTask(ctx, {
+				objective: "debug failing tests",
+				role: "auto",
+				session_id: "s_auto_role",
+			});
+			expect(result.accepted).toBe(false);
+			if (!result.accepted) expect(result.error.code).toBe("invalid_input");
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
 	it("accepts the full TaskSpec shape — context / constraints / inputs / expected_output (P2-3)", async () => {
 		// Earlier the SubmitTaskInputSchema was hand-written and silently
 		// dropped these four optional protocol fields. Now the schema is

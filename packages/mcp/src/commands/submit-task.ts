@@ -1,5 +1,5 @@
 import { resolve } from "node:path";
-import { discoverAgentProfiles } from "@cuekit/agent-profiles";
+import { discoverAgentProfiles, selectAgentProfile } from "@cuekit/agent-profiles";
 import { JobErrorSchema, type TaskSpec, TaskSpecSchema } from "@cuekit/core";
 import { getSessionById } from "@cuekit/store";
 import { z } from "incur";
@@ -57,28 +57,11 @@ function sessionCwd(
 	return session.worktree_path;
 }
 
-function resolveExplicitRole(
-	ctx: CommandContext,
+function patchForProfile(
 	input: SubmitTaskInput,
-	session_id: string,
+	profile: NonNullable<ReturnType<typeof selectAgentProfile>>["profile"],
+	reason: string,
 ): { ok: true; specPatch: Partial<TaskSpec> } | { ok: false; output: SubmitTaskOutput } {
-	if (!input.role) return { ok: true, specPatch: {} };
-	if (input.role === "auto") return { ok: true, specPatch: {} };
-	const cwd = input.session_id ? sessionCwd(ctx, session_id) : input.cwd;
-	if (typeof cwd !== "string" && cwd !== undefined) return { ok: false, output: cwd };
-	const discovered = discoverAgentProfiles({ cwd });
-	if (!discovered.ok) return { ok: false, output: invalidInput(discovered.error) };
-	const profile = discovered.profiles.find((candidate) => candidate.id === input.role);
-	if (!profile) {
-		return {
-			ok: false,
-			output: invalidInput(
-				`unknown role '${input.role}'. Available roles: ${discovered.profiles
-					.map((candidate) => candidate.id)
-					.join(", ")}`,
-			),
-		};
-	}
 	const agent_kind = input.agent_kind ?? profile.agent_kind;
 	if (!agent_kind) {
 		return { ok: false, output: invalidInput(`role '${profile.id}' does not define agent_kind`) };
@@ -92,9 +75,42 @@ function resolveExplicitRole(
 			role_instructions: profile.instructions,
 			role_source: profile.source,
 			role_sources: profile.sources,
-			role_selection_reason: `explicit role '${profile.id}'`,
+			role_selection_reason: reason,
 		},
 	};
+}
+
+function resolveExplicitRole(
+	ctx: CommandContext,
+	input: SubmitTaskInput,
+	session_id: string,
+): { ok: true; specPatch: Partial<TaskSpec> } | { ok: false; output: SubmitTaskOutput } {
+	if (!input.role) return { ok: true, specPatch: {} };
+	const cwd = input.session_id ? sessionCwd(ctx, session_id) : input.cwd;
+	if (typeof cwd !== "string" && cwd !== undefined) return { ok: false, output: cwd };
+	const discovered = discoverAgentProfiles({ cwd });
+	if (!discovered.ok) return { ok: false, output: invalidInput(discovered.error) };
+	if (input.role === "auto") {
+		const selected = selectAgentProfile({
+			objective: input.objective,
+			context: input.context,
+			profiles: discovered.profiles,
+		});
+		if (!selected) return { ok: false, output: invalidInput("no agent profiles available") };
+		return patchForProfile(input, selected.profile, selected.reason);
+	}
+	const profile = discovered.profiles.find((candidate) => candidate.id === input.role);
+	if (!profile) {
+		return {
+			ok: false,
+			output: invalidInput(
+				`unknown role '${input.role}'. Available roles: ${discovered.profiles
+					.map((candidate) => candidate.id)
+					.join(", ")}`,
+			),
+		};
+	}
+	return patchForProfile(input, profile, `explicit role '${profile.id}'`);
 }
 
 export async function runSubmitTask(
