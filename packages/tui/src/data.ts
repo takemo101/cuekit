@@ -4,7 +4,7 @@ import type { TuiContext, TuiTaskEvent, TuiTaskListOutput } from "./context.ts";
 
 type LoadTaskListOptions = Pick<
 	TaskListFilter,
-	"cwd" | "limit" | "status" | "agent_kind" | "session_id" | "cursor"
+	"cwd" | "project_root" | "limit" | "status" | "agent_kind" | "session_id" | "cursor"
 >;
 
 export type TuiTaskDetail = {
