@@ -1,4 +1,4 @@
-import { resolve } from "node:path";
+import { isAbsolute, relative, resolve, sep } from "node:path";
 import { JobErrorSchema, TeamPositionSchema } from "@cuekit/core";
 import { getSessionById, getTaskTeamById } from "@cuekit/store";
 import { z } from "incur";
@@ -57,6 +57,13 @@ function taskError(
 	return { index, error: { code, message, retryable: false } };
 }
 
+function isSameOrInsidePath(candidate: string, root: string): boolean {
+	const resolvedCandidate = resolve(candidate);
+	const resolvedRoot = resolve(root);
+	const rel = relative(resolvedRoot, resolvedCandidate);
+	return rel === "" || (rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel));
+}
+
 export async function runSubmitTeamTasks(
 	ctx: CommandContext,
 	input: SubmitTeamTasksInput,
@@ -88,7 +95,7 @@ export async function runSubmitTeamTasks(
 			continue;
 		}
 		const task = parsedTask.data;
-		if (task.cwd !== undefined && resolve(task.cwd) !== resolve(session.worktree_path)) {
+		if (task.cwd !== undefined && !isSameOrInsidePath(task.cwd, session.worktree_path)) {
 			rejected.push(
 				taskError(
 					index,

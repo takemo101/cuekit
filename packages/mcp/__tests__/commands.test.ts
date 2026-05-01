@@ -234,6 +234,66 @@ describe("submit-team-tasks", () => {
 		expect(result.rejected[0]?.index).toBe(1);
 	});
 
+	it("accepts task cwd inside a team session subdirectory", async () => {
+		createSession(db, {
+			id: "s1",
+			project_root: "/repo",
+			worktree_path: "/repo",
+			parent_agent_kind: "pi",
+		});
+		createTaskTeam(db, { id: "tm_1", session_id: "s1", title: "Team" });
+
+		const result = await runSubmitTeamTasks(ctx, {
+			team_id: "tm_1",
+			tasks: [{ objective: "Work", agent_kind: "claude-code", cwd: "/repo/packages/mcp" }],
+		});
+
+		expect("accepted" in result).toBe(true);
+		if (!("accepted" in result)) return;
+		expect(result.accepted).toHaveLength(1);
+		expect(result.rejected).toEqual([]);
+	});
+
+	it("accepts in-worktree cwd segments that start with dotdot text", async () => {
+		createSession(db, {
+			id: "s1",
+			project_root: "/repo",
+			worktree_path: "/repo",
+			parent_agent_kind: "pi",
+		});
+		createTaskTeam(db, { id: "tm_1", session_id: "s1", title: "Team" });
+
+		const result = await runSubmitTeamTasks(ctx, {
+			team_id: "tm_1",
+			tasks: [{ objective: "Work", agent_kind: "claude-code", cwd: "/repo/..cache" }],
+		});
+
+		expect("accepted" in result).toBe(true);
+		if (!("accepted" in result)) return;
+		expect(result.accepted).toHaveLength(1);
+		expect(result.rejected).toEqual([]);
+	});
+
+	it("rejects path-prefix sibling cwd outside the team session", async () => {
+		createSession(db, {
+			id: "s1",
+			project_root: "/repo",
+			worktree_path: "/repo",
+			parent_agent_kind: "pi",
+		});
+		createTaskTeam(db, { id: "tm_1", session_id: "s1", title: "Team" });
+
+		const result = await runSubmitTeamTasks(ctx, {
+			team_id: "tm_1",
+			tasks: [{ objective: "Work", agent_kind: "claude-code", cwd: "/repo2" }],
+		});
+
+		expect("accepted" in result).toBe(true);
+		if (!("accepted" in result)) return;
+		expect(result.accepted).toEqual([]);
+		expect(result.rejected[0]?.error.code).toBe("invalid_input");
+	});
+
 	it("rejects task cwd outside the team session", async () => {
 		createSession(db, {
 			id: "s1",
