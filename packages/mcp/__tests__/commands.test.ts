@@ -552,6 +552,124 @@ describe("submit-task", () => {
 		}
 	});
 
+	it("submit defaults: fills role agent model timeout and priority from project config safely", async () => {
+		const root = mkdtempSync(join(tmpdir(), "cuekit-submit-defaults-"));
+		try {
+			writeFileSync(
+				join(root, ".cuekit.yaml"),
+				[
+					"submit:",
+					"  role: reviewer",
+					"  agent: claude-code",
+					"  model: sonnet",
+					"  timeout_ms: 1234",
+					"  priority: high",
+				].join("\n"),
+			);
+
+			const result = await runSubmitTask(ctx, {
+				objective: "Use defaults",
+				cwd: root,
+			});
+
+			expect(result.accepted).toBe(true);
+			if (!result.accepted) return;
+			expect(result.agent_kind).toBe("claude-code");
+			expect(result.role).toBe("reviewer");
+			const spec = JSON.parse(getTaskById(db, result.task_id)?.spec_json ?? "{}");
+			expect(spec.model).toBe("sonnet");
+			expect(spec.timeout_ms).toBe(1234);
+			expect(spec.priority).toBe("high");
+			expect(spec.adapter_options).toEqual({ dangerously_skip_permissions: false });
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("submit defaults: explicit input wins and caller adapter options are preserved", async () => {
+		const root = mkdtempSync(join(tmpdir(), "cuekit-submit-defaults-explicit-"));
+		try {
+			writeFileSync(
+				join(root, ".cuekit.yaml"),
+				"submit:\n  agent: pi\n  model: opus\n  timeout_ms: 1\n  priority: low\nadapters:\n  claude-code:\n    permissions: prompt\n",
+			);
+
+			const result = await runSubmitTask(ctx, {
+				objective: "Use explicit values",
+				agent_kind: "claude-code",
+				model: "sonnet",
+				timeout_ms: 2,
+				priority: "high",
+				adapter_options: { dangerously_skip_permissions: true },
+				cwd: root,
+			});
+
+			expect(result.accepted).toBe(true);
+			if (!result.accepted) return;
+			expect(result.agent_kind).toBe("claude-code");
+			const spec = JSON.parse(getTaskById(db, result.task_id)?.spec_json ?? "{}");
+			expect(spec.model).toBe("sonnet");
+			expect(spec.timeout_ms).toBe(2);
+			expect(spec.priority).toBe("high");
+			expect(spec.adapter_options).toEqual({ dangerously_skip_permissions: true });
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("submit defaults: profile agent and model win over config agent and model", async () => {
+		const root = mkdtempSync(join(tmpdir(), "cuekit-submit-defaults-profile-"));
+		try {
+			mkdirSync(join(root, ".git"), { recursive: true });
+			mkdirSync(join(root, ".cuekit", "agents"), { recursive: true });
+			writeFileSync(
+				join(root, ".cuekit.yaml"),
+				"submit:\n  role: custom\n  agent: pi\n  model: opus\n",
+			);
+			writeFileSync(
+				join(root, ".cuekit", "agents", "custom.md"),
+				"---\nid: custom\ndescription: Custom profile\nagent_kind: claude-code\nmodel: haiku\n---\nProfile instructions",
+			);
+
+			const result = await runSubmitTask(ctx, {
+				objective: "Use profile defaults",
+				cwd: root,
+			});
+
+			expect(result.accepted).toBe(true);
+			if (!result.accepted) return;
+			expect(result.agent_kind).toBe("claude-code");
+			const spec = JSON.parse(getTaskById(db, result.task_id)?.spec_json ?? "{}");
+			expect(spec.model).toBe("haiku");
+			expect(spec.adapter_options).toEqual({ dangerously_skip_permissions: false });
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("submit defaults: adapter permissions prompt forces safe options for explicit agent", async () => {
+		const root = mkdtempSync(join(tmpdir(), "cuekit-submit-defaults-prompt-"));
+		try {
+			writeFileSync(
+				join(root, ".cuekit.yaml"),
+				"adapters:\n  claude-code:\n    permissions: prompt\n",
+			);
+
+			const result = await runSubmitTask(ctx, {
+				objective: "Use prompt permissions",
+				agent_kind: "claude-code",
+				cwd: root,
+			});
+
+			expect(result.accepted).toBe(true);
+			if (!result.accepted) return;
+			const spec = JSON.parse(getTaskById(db, result.task_id)?.spec_json ?? "{}");
+			expect(spec.adapter_options).toEqual({ dangerously_skip_permissions: false });
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
 	it("project config: explicit session_id does not mutate stored identity", async () => {
 		const root = mkdtempSync(join(tmpdir(), "cuekit-project-config-explicit-"));
 		try {
