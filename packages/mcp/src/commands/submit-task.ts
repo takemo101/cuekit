@@ -1,6 +1,13 @@
 import { resolve } from "node:path";
 import { discoverAgentProfiles, selectAgentProfile } from "@cuekit/agent-profiles";
 import { JobErrorSchema, type TaskSpec, TaskSpecSchema, TeamPositionSchema } from "@cuekit/core";
+import {
+	applySafeAdapterOptions,
+	applySubmitDefaults,
+	type CuekitProjectConfig,
+	loadProjectConfig,
+	shouldForceSafeAdapterOptions,
+} from "@cuekit/project-config";
 import { getSessionById, getTaskTeamById } from "@cuekit/store";
 import { z } from "incur";
 import type { CommandContext } from "../command-context.ts";
@@ -66,15 +73,11 @@ function patchForProfile(
 	profile: NonNullable<ReturnType<typeof selectAgentProfile>>["profile"],
 	reason: string,
 ): { ok: true; specPatch: Partial<TaskSpec> } | { ok: false; output: SubmitTaskOutput } {
-	const agent_kind = input.agent_kind ?? profile.agent_kind;
-	if (!agent_kind) {
-		return { ok: false, output: invalidInput(`role '${profile.id}' does not define agent_kind`) };
-	}
 	return {
 		ok: true,
 		specPatch: {
-			agent_kind,
-			model: input.model ?? profile.model,
+			...(profile.agent_kind ? { agent_kind: profile.agent_kind } : {}),
+			...((input.model ?? profile.model) ? { model: input.model ?? profile.model } : {}),
 			role: profile.id,
 			role_instructions: profile.instructions,
 			role_source: profile.source,
@@ -82,6 +85,14 @@ function patchForProfile(
 			role_selection_reason: reason,
 		},
 	};
+}
+
+function loadSubmitConfig(
+	cwd: string | undefined,
+): { ok: true; config: CuekitProjectConfig } | { ok: false; output: SubmitTaskOutput } {
+	const loaded = loadProjectConfig(cwd ?? process.cwd());
+	if (!loaded.ok) return { ok: false, output: invalidInput(loaded.error) };
+	return { ok: true, config: loaded.config };
 }
 
 function resolveExplicitRole(
@@ -178,17 +189,47 @@ export async function runSubmitTask(
 		return { accepted: false, error: sessionResolution.error };
 	}
 	const session_id = sessionResolution.session_id;
+	const configCwd = input.session_id ? sessionCwd(ctx, session_id) : input.cwd;
+	if (typeof configCwd !== "string" && configCwd !== undefined) return configCwd;
+	const configResult = loadSubmitConfig(configCwd);
+	if (!configResult.ok) return configResult.output;
+	const submitDefaults = applySubmitDefaults(input, configResult.config);
+	input = { ...input, ...(submitDefaults.role ? { role: submitDefaults.role } : {}) };
 	const teamResolution = resolveTeam(ctx, session_id, input);
 	if (!teamResolution.ok) return teamResolution.output;
 	const roleResolution = resolveExplicitRole(ctx, input, session_id);
 	if (!roleResolution.ok) return roleResolution.output;
 	const { session_id: _ignored, team_id, position, ...rawSpec } = input;
-	const unresolvedSpec = {
+	const agent_kind =
+		rawSpec.agent_kind ?? roleResolution.specPatch.agent_kind ?? submitDefaults.agent_kind;
+	const model = rawSpec.model ?? roleResolution.specPatch.model ?? submitDefaults.model;
+	let unresolvedSpec: Partial<TaskSpec> = {
 		...rawSpec,
 		...roleResolution.specPatch,
 		...teamResolution.specPatch,
+		...(agent_kind ? { agent_kind } : {}),
+		...(model ? { model } : {}),
+		...((rawSpec.timeout_ms ?? submitDefaults.timeout_ms)
+			? { timeout_ms: rawSpec.timeout_ms ?? submitDefaults.timeout_ms }
+			: {}),
+		...((rawSpec.priority ?? submitDefaults.priority)
+			? { priority: rawSpec.priority ?? submitDefaults.priority }
+			: {}),
 		...(rawSpec.cwd !== undefined ? { cwd: resolve(rawSpec.cwd) } : {}),
 	};
+	if (
+		agent_kind &&
+		shouldForceSafeAdapterOptions({
+			config: configResult.config,
+			agent_kind,
+			caller_supplied_adapter_options: rawSpec.adapter_options !== undefined,
+			role_from_config: submitDefaults.role_from_config,
+			agent_from_config:
+				rawSpec.agent_kind === undefined && agent_kind === configResult.config.submit?.agent,
+		})
+	) {
+		unresolvedSpec = applySafeAdapterOptions(unresolvedSpec);
+	}
 	const parsedSpec = TaskSpecSchema.safeParse(unresolvedSpec);
 	if (!parsedSpec.success) {
 		return invalidInput(parsedSpec.error.issues.map((issue) => issue.message).join("; "));
