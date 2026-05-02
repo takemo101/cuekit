@@ -104,6 +104,11 @@ cuekit task submit --objective "debug the failing auth tests" \
 
 Explicit `--agent_kind` / `--model` override profile defaults. `role: "auto"` uses deterministic keyword selection and records the selected role plus reason in task status/list output; the TUI detail pane shows role/source/model when present. See [Agent Profiles](docs/guides/agent-profiles.md).
 
+### Project config
+
+Add `.cuekit.yaml` to a repository to define project identity, safe submit defaults, TUI scope, and Task Teams defaults. Start from [`.cuekit.example.yaml`](.cuekit.example.yaml) and see [Project Config](docs/guides/project-config.md).
+
+Project-local config is safe by design: it cannot enable permission bypass, and project-derived role/agent defaults force prompt-safe adapter options unless a caller explicitly supplies `adapter_options`.
 
 Every command accepts `--help`, `--llms` / `--llms-full` (machine-readable manifest for LLM-friendly CLIs), `--schema` (JSON Schema for the command input), and `--format` (toon / json / yaml / md / jsonl) via incur.
 

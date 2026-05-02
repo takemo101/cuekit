@@ -1,0 +1,43 @@
+# Copy this file to .cuekit.yaml and adjust for your project.
+# Project-local config is intentionally safe: it cannot enable permission bypass.
+
+project:
+  # Optional stable human id. cuekit still combines this with the config root
+  # to derive an opaque project_uid, so copied repos do not collide.
+  id: cuekit
+  name: Cuekit
+
+tui:
+  # project = default: use .cuekit.yaml project identity, including legacy
+  # sessions whose project_root matches this config root.
+  # path = ignore project identity and scope to the current path/Git root.
+  scope: project
+
+submit:
+  # Optional defaults for submit_task. Explicit request fields always win.
+  # If role is set, the selected Agent Profile can still provide agent/model.
+  role: worker
+  agent: claude-code
+  model: sonnet
+  timeout_ms: 1800000
+  priority: normal
+
+teams:
+  roles:
+    coordinator: planner
+    worker: worker
+    reviewer: reviewer
+  wait:
+    timeout_ms: 300000
+    poll_interval_ms: 2000
+  # Planned/inactive until cuekit has a delete_team operation.
+  cleanup: keep-team
+
+adapters:
+  claude-code:
+    # prompt is the only project-local permission value. Project config cannot
+    # silently enable bypass; config-derived role/agent defaults force safe
+    # adapter options unless a caller explicitly supplies adapter_options.
+    permissions: prompt
+  opencode:
+    permissions: prompt
