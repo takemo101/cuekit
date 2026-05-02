@@ -8,6 +8,10 @@ export interface CreateSessionInput {
 	worktree_path: string;
 	parent_agent_kind: string;
 	parent_session_ref?: string;
+	config_root?: string;
+	project_id?: string;
+	project_name?: string;
+	project_uid?: string;
 }
 
 export function createSession(db: Database, input: CreateSessionInput): Session {
@@ -15,14 +19,19 @@ export function createSession(db: Database, input: CreateSessionInput): Session 
 	db.prepare(
 		`insert into sessions (
 			id, project_root, worktree_path, parent_agent_kind, parent_session_ref,
+			config_root, project_id, project_name, project_uid,
 			status, created_at, updated_at, ended_at
-		) values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 	).run(
 		input.id,
 		input.project_root,
 		input.worktree_path,
 		input.parent_agent_kind,
 		input.parent_session_ref ?? null,
+		input.config_root ?? null,
+		input.project_id ?? null,
+		input.project_name ?? null,
+		input.project_uid ?? null,
 		"active",
 		now,
 		now,

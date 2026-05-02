@@ -31,6 +31,24 @@ describe("createSession", () => {
 		expect(s.parent_session_ref).toBeNull();
 	});
 
+	it("persists project config identity when provided", () => {
+		const s = createSession(db, {
+			id: "s_config",
+			project_root: "/proj",
+			worktree_path: "/proj/wt",
+			parent_agent_kind: "pi",
+			config_root: "/proj",
+			project_id: "cuekit",
+			project_name: "Cuekit",
+			project_uid: "pc_1234567890abcdef",
+		});
+
+		expect(s.config_root).toBe("/proj");
+		expect(s.project_id).toBe("cuekit");
+		expect(s.project_name).toBe("Cuekit");
+		expect(s.project_uid).toBe("pc_1234567890abcdef");
+	});
+
 	it("persists parent_session_ref when provided", () => {
 		const s = createSession(db, {
 			id: "s2",

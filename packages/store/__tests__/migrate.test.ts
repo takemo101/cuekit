@@ -32,6 +32,23 @@ describe("runMigrations", () => {
 		expect(versions).toContain("007-task-events-delete-cascade.sql");
 		expect(versions).toContain("008-task-role-metadata.sql");
 		expect(versions).toContain("009-task-teams.sql");
+		expect(versions).toContain("010-project-config-identity.sql");
+	});
+
+	it("creates project config identity columns and indexes", () => {
+		const db = new Database(":memory:");
+		runMigrations(db);
+		for (const column of ["config_root", "project_id", "project_name", "project_uid"]) {
+			expect(
+				db.prepare("select name from pragma_table_info('sessions') where name = ?").get(column),
+			).toBeDefined();
+		}
+		const indexes = db
+			.prepare("select name from sqlite_master where type = 'index' and sql is not null")
+			.all() as Array<{ name: string }>;
+		const names = indexes.map((row) => row.name);
+		expect(names).toContain("idx_sessions_project_uid");
+		expect(names).toContain("idx_sessions_config_project");
 	});
 
 	it("creates task team storage", () => {
