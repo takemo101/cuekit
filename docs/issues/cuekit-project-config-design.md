@@ -284,9 +284,104 @@ This keeps the default safe while still allowing intentional global views.
 - Apply `teams.wait` defaults in `wait_team`.
 - Leave `teams.cleanup: delete-empty-team` inactive until a `delete_team` operation exists.
 
-## Open questions
+### Phase 5: Project init command
 
-1. Should cuekit create `.cuekit.yaml` via `cuekit init`, or only read it when users create it manually?
-2. Should unknown keys be hard errors immediately, or warnings for the first release?
-3. Should `project.id` be required when `.cuekit.yaml` exists, or can it be derived from path?
-4. Should config support inheritance from user-level defaults later, such as `~/.cuekit/config.yaml`?
+Add a human-facing `cuekit init` command to scaffold the safe project-local configuration that this design defines.
+
+#### Command name
+
+Use `init`, not `setup`.
+
+- `init` matches the action: initialize the current directory as a cuekit-aware project by creating project-local files.
+- It follows familiar command naming (`npm init`, `git init`, `tsc --init`, `biome init`).
+- `setup` should remain available for broader environment setup in the future, such as MCP registration, dependency checks, or machine-level configuration.
+
+#### Scope
+
+`cuekit init` should be a human CLI command only. Do not add it to MCP operations unless there is a concrete agent workflow that needs to initialize repositories through MCP.
+
+Initial behavior:
+
+1. Create `.cuekit.yaml` in the current directory.
+2. Add `.cuekit/tasks/` to `.gitignore`.
+3. Refuse to overwrite existing files unless explicitly requested.
+4. Print a concise summary of files created or updated.
+
+#### Generated `.cuekit.yaml`
+
+The generated config must be safe by default and equivalent in spirit to `.cuekit.example.yaml`.
+
+Recommended generated fields:
+
+```yaml
+project:
+  id: <directory-name-as-safe-id>
+  name: <directory-name>
+
+tui:
+  scope: project
+
+teams:
+  cleanup: keep-team
+
+adapters:
+  claude-code:
+    permissions: prompt
+  opencode:
+    permissions: prompt
+```
+
+Notes:
+
+- `project.id` should be derived from the current directory name and sanitized to the existing project id pattern.
+- Omit `submit` defaults initially unless the user explicitly asks for them in a future interactive mode. This avoids accidentally changing task routing or model selection.
+- Do not generate `permissions: bypass`; project-local config cannot enable bypass.
+- `teams.cleanup: delete-empty-team` must not be generated while `delete_team` does not exist.
+
+#### `.gitignore` behavior
+
+`cuekit init` should ignore local task artifacts without hiding commit-worthy project config or Agent Profiles.
+
+Add this entry if absent:
+
+```gitignore
+# cuekit local task artifacts
+.cuekit/tasks/
+```
+
+Rules:
+
+- Do not ignore `.cuekit/` as a whole, because `.cuekit/agents/*.md` may be intentional project Agent Profiles.
+- Create `.gitignore` if it does not exist.
+- Preserve existing `.gitignore` content.
+- Do not add duplicate `.cuekit/tasks/` entries.
+- Provide `--no-gitignore` to skip this update.
+
+#### Options
+
+Recommended initial options:
+
+- `--dry-run`: print the files/content that would be written without changing disk.
+- `--force`: overwrite an existing `.cuekit.yaml`.
+- `--no-gitignore`: do not create or modify `.gitignore`.
+
+Future options can include an interactive mode, but the first implementation should be deterministic and scriptable.
+
+#### Error handling
+
+- Existing `.cuekit.yaml` without `--force` should return a clear `invalid_input`-style CLI error and leave files unchanged.
+- Invalid current directory names should fall back to a safe derived id rather than failing.
+- `.gitignore` update failures should fail the command unless `--no-gitignore` is set; partial writes should be avoided where practical.
+
+## Resolved decisions and open questions
+
+Resolved:
+
+1. cuekit should create `.cuekit.yaml` via `cuekit init`; users may still create it manually.
+2. Unknown top-level keys are hard schema errors.
+3. `project.id` is optional; cuekit derives a safe path-based identity when omitted.
+
+Open:
+
+1. Should config support inheritance from user-level defaults later, such as `~/.cuekit/config.yaml`?
+2. Should a future `cuekit init --interactive` ask for submit defaults and team role mappings?
