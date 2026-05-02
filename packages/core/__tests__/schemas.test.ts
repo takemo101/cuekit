@@ -495,8 +495,21 @@ describe("TaskListFilterSchema", () => {
 				status: "running",
 				agent_kind: "claude-code",
 				session_id: "s1",
+				team_id: "tm_1",
+				project_root: "/repo",
+				project_uid: "pc_1234567890abcdef",
+				config_root: "/repo",
+				project_id: "cuekit",
 				cwd: "/repo",
 			}).success,
+		).toBe(true);
+	});
+
+	it("rejects config_root/project_id when not provided as a pair", () => {
+		expect(TaskListFilterSchema.safeParse({ project_id: "cuekit" }).success).toBe(false);
+		expect(TaskListFilterSchema.safeParse({ config_root: "/repo" }).success).toBe(false);
+		expect(
+			TaskListFilterSchema.safeParse({ config_root: "/repo", project_id: "cuekit" }).success,
 		).toBe(true);
 	});
 

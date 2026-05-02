@@ -120,6 +120,9 @@ export const DEFAULT_LIST_TASKS_LIMIT = 100;
 // reordering WHERE fragments can't silently shift positional bindings —
 // the "live mine" pattern flagged by Oracle P2-3.
 export function listTasks(db: Database, filter: TaskListFilter = {}): Task[] {
+	if ((filter.config_root === undefined) !== (filter.project_id === undefined)) {
+		throw new Error("defect: config_root and project_id filters must be provided together");
+	}
 	const conditions: string[] = [];
 	const bindings: Record<string, string | number> = {};
 
@@ -139,7 +142,12 @@ export function listTasks(db: Database, filter: TaskListFilter = {}): Task[] {
 		conditions.push("t.team_id = :team_id");
 		bindings[":team_id"] = filter.team_id;
 	}
-	const joinSession = filter.cwd !== undefined || filter.project_root !== undefined;
+	const joinSession =
+		filter.cwd !== undefined ||
+		filter.project_root !== undefined ||
+		filter.project_uid !== undefined ||
+		filter.config_root !== undefined ||
+		filter.project_id !== undefined;
 	if (filter.cwd !== undefined) {
 		conditions.push("s.worktree_path = :cwd");
 		bindings[":cwd"] = filter.cwd;
@@ -147,6 +155,18 @@ export function listTasks(db: Database, filter: TaskListFilter = {}): Task[] {
 	if (filter.project_root !== undefined) {
 		conditions.push("s.project_root = :project_root");
 		bindings[":project_root"] = filter.project_root;
+	}
+	if (filter.project_uid !== undefined) {
+		conditions.push("s.project_uid = :project_uid");
+		bindings[":project_uid"] = filter.project_uid;
+	}
+	if (filter.config_root !== undefined) {
+		conditions.push("s.config_root = :config_root");
+		bindings[":config_root"] = filter.config_root;
+	}
+	if (filter.project_id !== undefined) {
+		conditions.push("s.project_id = :project_id");
+		bindings[":project_id"] = filter.project_id;
 	}
 
 	// Keyset predicate: rows that come after the cursor in the
