@@ -145,6 +145,7 @@ export function listTasks(db: Database, filter: TaskListFilter = {}): Task[] {
 	const joinSession =
 		filter.cwd !== undefined ||
 		filter.project_root !== undefined ||
+		filter.project_scope !== undefined ||
 		filter.project_uid !== undefined ||
 		filter.config_root !== undefined ||
 		filter.project_id !== undefined;
@@ -155,6 +156,17 @@ export function listTasks(db: Database, filter: TaskListFilter = {}): Task[] {
 	if (filter.project_root !== undefined) {
 		conditions.push("s.project_root = :project_root");
 		bindings[":project_root"] = filter.project_root;
+	}
+	if (filter.project_scope !== undefined) {
+		if (filter.project_scope.project_uid !== undefined) {
+			conditions.push(
+				"(s.project_uid = :project_scope_uid or s.project_root = :project_scope_root)",
+			);
+			bindings[":project_scope_uid"] = filter.project_scope.project_uid;
+		} else {
+			conditions.push("s.project_root = :project_scope_root");
+		}
+		bindings[":project_scope_root"] = filter.project_scope.project_root;
 	}
 	if (filter.project_uid !== undefined) {
 		conditions.push("s.project_uid = :project_uid");

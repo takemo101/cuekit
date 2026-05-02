@@ -9,8 +9,14 @@ import { runListTaskEvents } from "./commands/list-task-events.ts";
 import { runListTasks } from "./commands/list-tasks.ts";
 import { runSteerTask } from "./commands/steer-task.ts";
 
+export interface TuiProjectScope {
+	project_uid?: string;
+	project_root: string;
+}
+
 export interface TuiScopeOptions {
 	projectRoot?: string;
+	projectScope?: TuiProjectScope;
 	all?: boolean;
 }
 
@@ -19,9 +25,13 @@ export function createTuiContext(ctx: CommandContext, scope: TuiScopeOptions = {
 		listTasks: (input: Parameters<typeof runListTasks>[1]) =>
 			runListTasks(ctx, {
 				...input,
-				...(scope.all || scope.projectRoot === undefined
+				...(scope.all
 					? {}
-					: { project_root: scope.projectRoot }),
+					: scope.projectScope !== undefined
+						? { project_scope: scope.projectScope }
+						: scope.projectRoot === undefined
+							? {}
+							: { project_root: scope.projectRoot }),
 			}),
 		getTaskStatus: (taskId: string) => runGetTaskStatus(ctx, { task_id: taskId }),
 		listTaskEvents: (taskId: string) => runListTaskEvents(ctx, { task_id: taskId }),

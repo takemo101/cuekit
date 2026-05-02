@@ -8,6 +8,12 @@ export const TaskListFilterSchema = z
 		session_id: z.string().optional(),
 		team_id: z.string().optional(),
 		project_root: z.string().optional(),
+		project_scope: z
+			.object({
+				project_uid: z.string().optional(),
+				project_root: z.string().min(1),
+			})
+			.optional(),
 		project_uid: z.string().optional(),
 		config_root: z.string().optional(),
 		project_id: z.string().optional(),

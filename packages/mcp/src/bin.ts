@@ -10,6 +10,7 @@ import {
 } from "@cuekit/adapters";
 import { findProjectRoot } from "@cuekit/agent-profiles";
 import { createStderrLogger, parseLogLevel } from "@cuekit/core";
+import { loadProjectConfig } from "@cuekit/project-config";
 import { openDatabase, runMigrations } from "@cuekit/store";
 import { createCli, createMcpCli, createMcpConfigCli } from "./cli.ts";
 import { registerPiMcpServer } from "./pi-mcp-config.ts";
@@ -31,14 +32,20 @@ function closeQuietly(db: Database): void {
 const TUI_PACKAGE_NAME = "@cuekit/tui";
 
 function printTuiHelp(): void {
-	process.stdout.write(`cuekit tui — interactive task cockpit
-
-Usage: cuekit tui [--all]
-
-By default, shows tasks for the current repository/worktree. Use --all to show tasks across all projects.
-
-Keys: ↑/↓ select, r refresh, a attach, s steer, c cancel, d delete, q quit
-`);
+	process.stdout.write(
+		[
+			"cuekit tui — interactive task cockpit",
+			"",
+			"Usage: cuekit tui [--path] [--all]",
+			"",
+			"By default, uses .cuekit.yaml project scope when present, otherwise the current repository/worktree.",
+			"Use --path to ignore .cuekit.yaml identity and scope by the current path/Git root.",
+			"Use --all to show tasks across all projects for this invocation.",
+			"",
+			"Keys: ↑/↓ select, r refresh, a attach, s steer, c cancel, d delete, q quit",
+			"",
+		].join("\n"),
+	);
 }
 
 function installSignalHandlers(db: Database): void {
@@ -122,8 +129,30 @@ async function main(): Promise<void> {
 		if (isTui) {
 			const { runTui } = await import(TUI_PACKAGE_NAME);
 			const all = process.argv.includes("--all");
+			const pathScope = process.argv.includes("--path");
 			const projectRoot = findProjectRoot(process.cwd(), { existsSync, statSync });
-			await runTui(createTuiContext({ db, registry }, { projectRoot, all }));
+			const loadedConfig = all || pathScope ? undefined : loadProjectConfig(process.cwd());
+			if (loadedConfig && !loadedConfig.ok) {
+				throw new Error(loadedConfig.error);
+			}
+			await runTui(
+				createTuiContext(
+					{ db, registry },
+					{
+						all,
+						...(loadedConfig?.ok && loadedConfig.discovery.source === "config"
+							? loadedConfig.config.tui?.scope === "path"
+								? { projectRoot }
+								: {
+										projectScope: {
+											project_uid: loadedConfig.identity.project_uid,
+											project_root: loadedConfig.discovery.configRoot,
+										},
+									}
+							: { projectRoot }),
+					},
+				),
+			);
 			closeQuietly(db);
 			return;
 		}

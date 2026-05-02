@@ -497,6 +497,7 @@ describe("TaskListFilterSchema", () => {
 				session_id: "s1",
 				team_id: "tm_1",
 				project_root: "/repo",
+				project_scope: { project_uid: "pc_1234567890abcdef", project_root: "/repo" },
 				project_uid: "pc_1234567890abcdef",
 				config_root: "/repo",
 				project_id: "cuekit",
