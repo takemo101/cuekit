@@ -1,5 +1,10 @@
 import { describe, expect, it } from "bun:test";
-import { applySubmitDefaults, shouldForceSafeAdapterOptions } from "../src/apply.ts";
+import {
+	applySubmitDefaults,
+	applyTeamRoleDefault,
+	applyTeamWaitDefaults,
+	shouldForceSafeAdapterOptions,
+} from "../src/apply.ts";
 
 describe("applySubmitDefaults", () => {
 	it("lets explicit submit input win over config", () => {
@@ -95,5 +100,36 @@ describe("shouldForceSafeAdapterOptions", () => {
 				agent_from_config: true,
 			}),
 		).toBe(false);
+	});
+});
+
+describe("applyTeamRoleDefault", () => {
+	it("uses position role defaults when role is omitted", () => {
+		expect(
+			applyTeamRoleDefault(
+				{ position: "worker" },
+				{ teams: { roles: { worker: "implementer", coordinator: "lead" } } },
+			),
+		).toEqual({ role: "implementer", role_from_team_config: true });
+	});
+
+	it("does not overwrite explicit role", () => {
+		expect(
+			applyTeamRoleDefault(
+				{ position: "worker", role: "explicit" },
+				{ teams: { roles: { worker: "implementer" } } },
+			),
+		).toEqual({ role: "explicit", role_from_team_config: false });
+	});
+});
+
+describe("applyTeamWaitDefaults", () => {
+	it("fills wait defaults while preserving explicit input", () => {
+		expect(
+			applyTeamWaitDefaults(
+				{ timeout_ms: 5 },
+				{ teams: { wait: { timeout_ms: 100, poll_interval_ms: 2 } } },
+			),
+		).toEqual({ timeout_ms: 5, poll_interval_ms: 2 });
 	});
 });

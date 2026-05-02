@@ -1,5 +1,10 @@
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import { JobErrorSchema, TeamPositionSchema } from "@cuekit/core";
+import {
+	applyTeamRoleDefault,
+	loadProjectConfig,
+	safeAdapterOptions,
+} from "@cuekit/project-config";
 import { getSessionById, getTaskTeamById } from "@cuekit/store";
 import { z } from "incur";
 import type { CommandContext } from "../command-context.ts";
@@ -80,6 +85,8 @@ export async function runSubmitTeamTasks(
 	const session = getSessionById(ctx.db, team.session_id);
 	if (!session) return commandError("session_not_found", `session '${team.session_id}' not found`);
 
+	const loadedConfig = loadProjectConfig(session.worktree_path);
+	if (!loadedConfig.ok) return commandError("invalid_input", loadedConfig.error);
 	const accepted: z.infer<typeof AcceptedTeamTaskSchema>[] = [];
 	const rejected: z.infer<typeof RejectedTeamTaskSchema>[] = [];
 	for (const [index, rawTask] of parsed.data.tasks.entries()) {
@@ -105,8 +112,16 @@ export async function runSubmitTeamTasks(
 			);
 			continue;
 		}
-		const result = await runSubmitTask(ctx, {
+		const roleDefault = applyTeamRoleDefault(task, loadedConfig.config);
+		const effectiveTask = {
 			...task,
+			...(roleDefault.role ? { role: roleDefault.role } : {}),
+			...(roleDefault.role_from_team_config && task.adapter_options === undefined
+				? { adapter_options: safeAdapterOptions() }
+				: {}),
+		};
+		const result = await runSubmitTask(ctx, {
+			...effectiveTask,
 			session_id: team.session_id,
 			team_id: team.id,
 		});

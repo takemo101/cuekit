@@ -64,3 +64,26 @@ export function applySafeAdapterOptions(spec: Partial<TaskSpec>): Partial<TaskSp
 		},
 	};
 }
+
+export type TeamPosition = "coordinator" | "worker" | "reviewer" | "observer";
+
+export function applyTeamRoleDefault(
+	input: { role?: string; position?: TeamPosition },
+	config: CuekitProjectConfig,
+): { role?: string; role_from_team_config: boolean } {
+	if (input.role !== undefined || input.position === undefined) {
+		return { role: input.role, role_from_team_config: false };
+	}
+	const role = config.teams?.roles?.[input.position];
+	return { role, role_from_team_config: role !== undefined };
+}
+
+export function applyTeamWaitDefaults(
+	input: { timeout_ms?: number; poll_interval_ms?: number },
+	config: CuekitProjectConfig,
+): { timeout_ms?: number; poll_interval_ms?: number } {
+	return {
+		timeout_ms: input.timeout_ms ?? config.teams?.wait?.timeout_ms,
+		poll_interval_ms: input.poll_interval_ms ?? config.teams?.wait?.poll_interval_ms,
+	};
+}

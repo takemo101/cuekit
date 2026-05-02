@@ -185,6 +185,91 @@ describe("submit-team-tasks", () => {
 		expect(getTaskById(db, result.accepted[0]?.task_id ?? "")?.team_id).toBe("tm_1");
 	});
 
+	it("team defaults: applies configured roles by position and safe permissions", async () => {
+		const root = mkdtempSync(join(tmpdir(), "cuekit-team-defaults-"));
+		try {
+			mkdirSync(join(root, ".git"), { recursive: true });
+			mkdirSync(join(root, ".cuekit", "agents"), { recursive: true });
+			writeFileSync(
+				join(root, ".cuekit.yaml"),
+				"teams:\n  roles:\n    coordinator: lead\n    worker: implementer\n",
+			);
+			writeFileSync(
+				join(root, ".cuekit", "agents", "lead.md"),
+				"---\nid: lead\ndescription: Lead\nagent_kind: claude-code\n---\nLead instructions",
+			);
+			writeFileSync(
+				join(root, ".cuekit", "agents", "implementer.md"),
+				"---\nid: implementer\ndescription: Implement\nagent_kind: claude-code\n---\nImplement instructions",
+			);
+			createSession(db, {
+				id: "s_team_defaults",
+				project_root: root,
+				worktree_path: root,
+				parent_agent_kind: "pi",
+			});
+			createTaskTeam(db, { id: "tm_defaults", session_id: "s_team_defaults", title: "Team" });
+
+			const result = await runSubmitTeamTasks(ctx, {
+				team_id: "tm_defaults",
+				tasks: [
+					{ objective: "Coordinate", position: "coordinator" },
+					{ objective: "Work", position: "worker" },
+				],
+			});
+
+			expect("accepted" in result).toBe(true);
+			if (!("accepted" in result)) return;
+			expect(result.rejected).toEqual([]);
+			expect(result.accepted.map((item) => item.role)).toEqual(["lead", "implementer"]);
+			for (const item of result.accepted) {
+				const spec = JSON.parse(getTaskById(db, item.task_id)?.spec_json ?? "{}");
+				expect(spec.adapter_options).toEqual({ dangerously_skip_permissions: false });
+			}
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("team defaults: explicit per-task role wins over configured position role", async () => {
+		const root = mkdtempSync(join(tmpdir(), "cuekit-team-defaults-explicit-"));
+		try {
+			mkdirSync(join(root, ".git"), { recursive: true });
+			mkdirSync(join(root, ".cuekit", "agents"), { recursive: true });
+			writeFileSync(join(root, ".cuekit.yaml"), "teams:\n  roles:\n    worker: implementer\n");
+			writeFileSync(
+				join(root, ".cuekit", "agents", "explicit.md"),
+				"---\nid: explicit\ndescription: Explicit\nagent_kind: claude-code\n---\nExplicit instructions",
+			);
+			createSession(db, {
+				id: "s_team_defaults_explicit",
+				project_root: root,
+				worktree_path: root,
+				parent_agent_kind: "pi",
+			});
+			createTaskTeam(db, {
+				id: "tm_defaults_explicit",
+				session_id: "s_team_defaults_explicit",
+				title: "Team",
+			});
+
+			const result = await runSubmitTeamTasks(ctx, {
+				team_id: "tm_defaults_explicit",
+				tasks: [{ objective: "Work", position: "worker", role: "explicit" }],
+			});
+
+			expect("accepted" in result).toBe(true);
+			if (!("accepted" in result)) return;
+			expect(result.accepted[0]?.role).toBe("explicit");
+			const spec = JSON.parse(
+				getTaskById(db, result.accepted[0]?.task_id ?? "")?.spec_json ?? "{}",
+			);
+			expect(spec.adapter_options).toBeUndefined();
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
 	it("keeps accepted tasks when later task input is malformed", async () => {
 		createSession(db, {
 			id: "s1",
@@ -365,6 +450,42 @@ describe("wait-team and cleanup-team", () => {
 		expect(result.status).toBe("completed");
 		expect(result.done).toBe(true);
 		expect(result.tasks.map((task) => task.task_id)).toEqual(["t_done"]);
+	});
+
+	it("team defaults: wait-team uses configured wait defaults and explicit input wins", async () => {
+		const root = mkdtempSync(join(tmpdir(), "cuekit-team-wait-defaults-"));
+		try {
+			writeFileSync(
+				join(root, ".cuekit.yaml"),
+				"teams:\n  wait:\n    timeout_ms: 0\n    poll_interval_ms: 1\n",
+			);
+			createSession(db, {
+				id: "s_wait_defaults",
+				project_root: root,
+				worktree_path: root,
+				parent_agent_kind: "pi",
+			});
+			createTaskTeam(db, { id: "tm_wait_defaults", session_id: "s_wait_defaults", title: "Team" });
+			const submitted = await runSubmitTask(ctx, {
+				objective: "run",
+				agent_kind: "claude-code",
+				session_id: "s_wait_defaults",
+				team_id: "tm_wait_defaults",
+			});
+			expect(submitted.accepted).toBe(true);
+
+			const fromConfig = await runWaitTeam(ctx, { team_id: "tm_wait_defaults" });
+			expect(fromConfig.timed_out).toBe(true);
+
+			const explicit = await runWaitTeam(ctx, {
+				team_id: "tm_wait_defaults",
+				timeout_ms: 1,
+				poll_interval_ms: 1,
+			});
+			expect(explicit.timed_out).toBe(true);
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
 	});
 
 	it("cleanup-team deletes terminal team tasks and keeps the team row", async () => {
