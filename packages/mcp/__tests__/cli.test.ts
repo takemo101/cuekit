@@ -157,6 +157,9 @@ describe("createCli", () => {
 		expect(stdout).toContain("cuekit tui");
 		expect(stdout).toContain("interactive task cockpit");
 		expect(stdout).toContain("a attach");
+		expect(stdout).toContain("--path");
+		expect(stdout).toContain("--all");
+		expect(stdout).toContain(".cuekit.yaml");
 	});
 
 	it("serves tui help before opening the database", async () => {

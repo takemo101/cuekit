@@ -48,6 +48,55 @@ describe("createTuiContext", () => {
 		if ("tasks" in result) expect(result.tasks.map((task) => task.task_id)).toEqual(["t_repo"]);
 	});
 
+	it("uses config project scope with legacy project_root fallback", async () => {
+		const db = new Database(":memory:");
+		db.exec("pragma foreign_keys = ON;");
+		runMigrations(db);
+		const tui = createTuiContext(
+			{ db, registry: new AdapterRegistry() },
+			{ projectScope: { project_uid: "pc_current", project_root: "/repo" } },
+		);
+		createSession(db, {
+			id: "s_current",
+			project_root: "/repo-copy",
+			worktree_path: "/repo-copy",
+			parent_agent_kind: "pi",
+			project_uid: "pc_current",
+		});
+		createSession(db, {
+			id: "s_legacy",
+			project_root: "/repo",
+			worktree_path: "/repo",
+			parent_agent_kind: "pi",
+		});
+		createSession(db, {
+			id: "s_other",
+			project_root: "/other",
+			worktree_path: "/other",
+			parent_agent_kind: "pi",
+			project_uid: "pc_other",
+		});
+		for (const session of ["s_current", "s_legacy", "s_other"] as const) {
+			createTask(db, {
+				id: `t_${session}`,
+				session_id: session,
+				agent_kind: "claude-code",
+				objective: session,
+				status: "completed",
+			});
+		}
+
+		const result = await tui.listTasks({ limit: 100 });
+
+		expect("tasks" in result).toBe(true);
+		if ("tasks" in result) {
+			expect(result.tasks.map((task) => task.task_id).sort()).toEqual([
+				"t_s_current",
+				"t_s_legacy",
+			]);
+		}
+	});
+
 	it("can opt into global task listing", async () => {
 		const db = new Database(":memory:");
 		db.exec("pragma foreign_keys = ON;");
