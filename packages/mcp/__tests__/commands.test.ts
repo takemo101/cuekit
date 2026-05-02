@@ -505,6 +505,80 @@ describe("submit-task", () => {
 		expect(sessions[0]?.parent_agent_kind).toBe("cuekit-cli");
 	});
 
+	it("project config: persists identity when auto-creating a session from cwd", async () => {
+		const root = mkdtempSync(join(tmpdir(), "cuekit-project-config-submit-"));
+		try {
+			const nested = join(root, "packages", "mcp");
+			mkdirSync(nested, { recursive: true });
+			writeFileSync(join(root, ".cuekit.yaml"), "project:\n  id: cuekit\n  name: Cuekit\n");
+
+			const result = await runSubmitTask(ctx, {
+				objective: "Use project config identity",
+				agent_kind: "claude-code",
+				cwd: nested,
+			});
+
+			expect(result.accepted).toBe(true);
+			if (!result.accepted) return;
+			const session = getSessionById(db, result.session_id);
+			expect(session?.config_root).toBe(root);
+			expect(session?.project_id).toBe("cuekit");
+			expect(session?.project_name).toBe("Cuekit");
+			expect(session?.project_uid).toMatch(/^pc_[a-f0-9]{16}$/);
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("project config: malformed config returns invalid_input without creating a session", async () => {
+		const root = mkdtempSync(join(tmpdir(), "cuekit-project-config-bad-"));
+		try {
+			writeFileSync(join(root, ".cuekit.yaml"), "project: [");
+
+			const result = await runSubmitTask(ctx, {
+				objective: "Should fail",
+				agent_kind: "claude-code",
+				cwd: root,
+			});
+
+			expect(result.accepted).toBe(false);
+			if (!result.accepted) {
+				expect(result.error.code).toBe("invalid_input");
+				expect(result.error.message).toContain("Failed to parse");
+			}
+			expect(listSessionsByWorktree(db, root)).toHaveLength(0);
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("project config: explicit session_id does not mutate stored identity", async () => {
+		const root = mkdtempSync(join(tmpdir(), "cuekit-project-config-explicit-"));
+		try {
+			writeFileSync(join(root, ".cuekit.yaml"), "project:\n  id: cuekit\n");
+			createSession(db, {
+				id: "s_explicit",
+				project_root: root,
+				worktree_path: root,
+				parent_agent_kind: "pi",
+			});
+
+			const result = await runSubmitTask(ctx, {
+				objective: "Use explicit session",
+				agent_kind: "claude-code",
+				session_id: "s_explicit",
+				cwd: root,
+			});
+
+			expect(result.accepted).toBe(true);
+			const session = getSessionById(db, "s_explicit");
+			expect(session?.config_root).toBeNull();
+			expect(session?.project_uid).toBeNull();
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
 	it("reuses an existing active session for the same cwd", async () => {
 		createSession(db, {
 			id: "s_existing",

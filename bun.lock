@@ -44,9 +44,19 @@
         "@cuekit/adapters": "workspace:*",
         "@cuekit/agent-profiles": "workspace:*",
         "@cuekit/core": "workspace:*",
+        "@cuekit/project-config": "workspace:*",
         "@cuekit/store": "workspace:*",
         "@cuekit/tui": "workspace:*",
         "incur": "0.4.3",
+      },
+    },
+    "packages/project-config": {
+      "name": "@cuekit/project-config",
+      "version": "0.0.0",
+      "dependencies": {
+        "@cuekit/core": "workspace:*",
+        "yaml": "^2.6.0",
+        "zod": "^4.3.6",
       },
     },
     "packages/store": {
@@ -100,6 +110,8 @@
     "@cuekit/core": ["@cuekit/core@workspace:packages/core"],
 
     "@cuekit/mcp": ["@cuekit/mcp@workspace:packages/mcp"],
+
+    "@cuekit/project-config": ["@cuekit/project-config@workspace:packages/project-config"],
 
     "@cuekit/store": ["@cuekit/store@workspace:packages/store"],
 
