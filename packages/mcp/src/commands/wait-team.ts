@@ -1,5 +1,6 @@
 import { JobErrorSchema, TeamStatusSchema } from "@cuekit/core";
-import { getTaskTeamById, listTasksByTeam } from "@cuekit/store";
+import { applyTeamWaitDefaults, loadProjectConfig } from "@cuekit/project-config";
+import { getSessionById, getTaskTeamById, listTasksByTeam } from "@cuekit/store";
 import { z } from "incur";
 import type { CommandContext } from "../command-context.ts";
 import { aggregateTeamStatus } from "../team-status.ts";
@@ -52,6 +53,25 @@ export async function runWaitTeam(
 			},
 		};
 	}
+	const session = getSessionById(ctx.db, team.session_id);
+	if (!session) {
+		return {
+			team_id: team.id,
+			status: "empty",
+			mode: input.mode ?? "all",
+			done: false,
+			timed_out: false,
+			scope: { team_id: team.id, session_id: team.session_id },
+			tasks: [],
+			error: {
+				code: "session_not_found",
+				message: `session '${team.session_id}' not found`,
+				retryable: false,
+			},
+		};
+	}
+	const loadedConfig = loadProjectConfig(session.worktree_path);
+	const teamWaitDefaults = loadedConfig.ok ? applyTeamWaitDefaults(input, loadedConfig.config) : {};
 	const tasks = listTasksByTeam(ctx.db, team.id);
 	if (tasks.length === 0) {
 		return {
@@ -68,8 +88,8 @@ export async function runWaitTeam(
 		task_ids: tasks.map((task) => task.id),
 		session_id: team.session_id,
 		mode: input.mode,
-		timeout_ms: input.timeout_ms,
-		poll_interval_ms: input.poll_interval_ms,
+		timeout_ms: teamWaitDefaults.timeout_ms,
+		poll_interval_ms: teamWaitDefaults.poll_interval_ms,
 		stop_on_failed: input.stop_on_failed,
 		include_results: input.include_results,
 		include_events: input.include_events,
