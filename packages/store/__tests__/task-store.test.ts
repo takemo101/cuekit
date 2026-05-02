@@ -683,6 +683,38 @@ describe("listTasks (cross-session filter + keyset pagination)", () => {
 		expect(listTasks(db, { agent_kind: "claude-code", limit: 1000 })).toHaveLength(3);
 	});
 
+	it("filters by project config identity", async () => {
+		createSession(db, {
+			id: "s2",
+			project_root: "/copy",
+			worktree_path: "/copy",
+			parent_agent_kind: "pi",
+			config_root: "/copy",
+			project_id: "cuekit",
+			project_uid: "pc_bbbbbbbbbbbbbbbb",
+		});
+		createSession(db, {
+			id: "s3",
+			project_root: "/p",
+			worktree_path: "/p/other",
+			parent_agent_kind: "pi",
+			config_root: "/p",
+			project_id: "cuekit",
+			project_uid: "pc_aaaaaaaaaaaaaaaa",
+		});
+		await seed(2, { session: "s1" });
+		await seed(3, { session: "s2" });
+		await seed(1, { session: "s3" });
+
+		expect(listTasks(db, { project_uid: "pc_aaaaaaaaaaaaaaaa", limit: 1000 })).toHaveLength(1);
+		expect(listTasks(db, { project_uid: "pc_bbbbbbbbbbbbbbbb", limit: 1000 })).toHaveLength(3);
+		expect(listTasks(db, { config_root: "/p", project_id: "cuekit", limit: 1000 })).toHaveLength(1);
+		expect(listTasks(db, { config_root: "/copy", project_id: "cuekit", limit: 1000 })).toHaveLength(
+			3,
+		);
+		expect(() => listTasks(db, { project_id: "cuekit", limit: 1000 })).toThrow(/config_root/);
+	});
+
 	it("filters by session_id", async () => {
 		createSession(db, {
 			id: "s2",
