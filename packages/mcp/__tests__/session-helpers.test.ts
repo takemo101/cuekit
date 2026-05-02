@@ -63,14 +63,19 @@ describe("findProjectRoot", () => {
 
 describe("resolveSessionId", () => {
 	it("returns the existing session_id when provided (trusts caller)", () => {
-		expect(resolveSessionId(db, { session_id: "s_provided" })).toBe("s_provided");
+		expect(resolveSessionId(db, { session_id: "s_provided" })).toEqual({
+			ok: true,
+			session_id: "s_provided",
+		});
 	});
 
 	it("creates a new session with parent_agent_kind 'cuekit-cli'", () => {
 		const tmp = mkdtempSync(join(tmpdir(), "cuekit-helpers-"));
 		try {
-			const id = resolveSessionId(db, { cwd: tmp });
-			const row = db.prepare("select * from sessions where id = ?").get(id) as
+			const result = resolveSessionId(db, { cwd: tmp });
+			expect(result.ok).toBe(true);
+			if (!result.ok) throw new Error(result.error.message);
+			const row = db.prepare("select * from sessions where id = ?").get(result.session_id) as
 				| { parent_agent_kind: string; worktree_path: string }
 				| undefined;
 			expect(row?.parent_agent_kind).toBe("cuekit-cli");
@@ -84,8 +89,10 @@ describe("resolveSessionId", () => {
 		const tmp = mkdtempSync(join(tmpdir(), "cuekit-helpers-"));
 		try {
 			const cwd = relative(process.cwd(), tmp);
-			const id = resolveSessionId(db, { cwd });
-			const row = db.prepare("select * from sessions where id = ?").get(id) as
+			const result = resolveSessionId(db, { cwd });
+			expect(result.ok).toBe(true);
+			if (!result.ok) throw new Error(result.error.message);
+			const row = db.prepare("select * from sessions where id = ?").get(result.session_id) as
 				| { project_root: string; worktree_path: string }
 				| undefined;
 			expect(row?.worktree_path).toBe(resolve(cwd));

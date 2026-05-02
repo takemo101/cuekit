@@ -35,10 +35,14 @@ export function runCreateTeam(ctx: CommandContext, input: CreateTeamInput): Crea
 			},
 		};
 	}
-	const session_id = resolveSessionId(ctx.db, {
+	const sessionResolution = resolveSessionId(ctx.db, {
 		session_id: parsed.data.session_id,
 		cwd: parsed.data.cwd,
 	});
+	if (!sessionResolution.ok) {
+		return { error: sessionResolution.error };
+	}
+	const session_id = sessionResolution.session_id;
 	if (!getSessionById(ctx.db, session_id)) {
 		return {
 			error: {

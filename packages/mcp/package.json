@@ -16,6 +16,7 @@
 	"dependencies": {
 		"@cuekit/adapters": "workspace:*",
 		"@cuekit/core": "workspace:*",
+		"@cuekit/project-config": "workspace:*",
 		"@cuekit/store": "workspace:*",
 		"@cuekit/tui": "workspace:*",
 		"incur": "0.4.3",

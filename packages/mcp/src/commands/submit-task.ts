@@ -170,10 +170,14 @@ export async function runSubmitTask(
 	if (input.position && !input.team_id) {
 		return invalidInput("position requires team_id");
 	}
-	const session_id = resolveSessionId(ctx.db, {
+	const sessionResolution = resolveSessionId(ctx.db, {
 		session_id: input.session_id,
 		cwd: input.cwd,
 	});
+	if (!sessionResolution.ok) {
+		return { accepted: false, error: sessionResolution.error };
+	}
+	const session_id = sessionResolution.session_id;
 	const teamResolution = resolveTeam(ctx, session_id, input);
 	if (!teamResolution.ok) return teamResolution.output;
 	const roleResolution = resolveExplicitRole(ctx, input, session_id);
