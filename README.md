@@ -114,7 +114,7 @@ cuekit init
 
 This creates a safe `.cuekit.yaml` and adds `.cuekit/tasks/` to `.gitignore` for local task artifacts. You can also start from [`.cuekit.example.yaml`](.cuekit.example.yaml). See [Project Config](docs/guides/project-config.md).
 
-Project-local config is safe by design: it cannot enable permission bypass, and project-derived role/agent defaults force prompt-safe adapter options unless a caller explicitly supplies `adapter_options`.
+By default, generated project config uses prompt-safe adapter permissions. Use `cuekit init --unsafe-bypass` only for trusted repositories when you intentionally want project-local adapter defaults to request bypass behavior. Project-derived role/agent defaults still force prompt-safe adapter options unless a caller explicitly supplies `adapter_options`.
 
 Every command accepts `--help`, `--llms` / `--llms-full` (machine-readable manifest for LLM-friendly CLIs), `--schema` (JSON Schema for the command input), and `--format` (toon / json / yaml / md / jsonl) via incur.
 

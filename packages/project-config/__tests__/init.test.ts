@@ -24,17 +24,29 @@ describe("deriveProjectId", () => {
 });
 
 describe("renderProjectConfigTemplate", () => {
-	it("renders safe config without submit defaults or bypass", () => {
+	it("renders safe config without submit defaults or delete-empty-team", () => {
 		const text = renderProjectConfigTemplate({ projectId: "my-app", projectName: "My App" });
 
 		expect(text).toContain("scope: project");
 		expect(text).toContain("permissions: prompt");
-		expect(text).not.toContain("permissions: bypass");
 		expect(text).not.toContain("submit:");
 		expect(text).not.toContain("delete-empty-team");
 		const parsed = CuekitProjectConfigSchema.parse(parse(text));
 		expect(parsed.project?.id).toBe("my-app");
 		expect(parsed.project?.name).toBe("My App");
+	});
+
+	it("renders unsafe bypass adapter permissions when explicitly requested", () => {
+		const text = renderProjectConfigTemplate({
+			projectId: "my-app",
+			projectName: "My App",
+			permissions: "bypass",
+		});
+
+		const parsed = CuekitProjectConfigSchema.parse(parse(text));
+		expect(parsed.adapters?.["claude-code"]?.permissions).toBe("bypass");
+		expect(parsed.adapters?.opencode?.permissions).toBe("bypass");
+		expect(text).not.toContain("delete-empty-team");
 	});
 
 	it("quotes YAML-sensitive generated project values", () => {
@@ -101,6 +113,21 @@ describe("runProjectConfigInit", () => {
 			expect(result.dryRun).toBe(true);
 			expect(result.created).toContain(join(root, ".cuekit.yaml"));
 			expect(() => readFileSync(join(root, ".cuekit.yaml"), "utf8")).toThrow();
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("can write unsafe bypass permissions when explicitly requested", () => {
+		const root = tempDir();
+		try {
+			runProjectConfigInit({ cwd: root, unsafeBypass: true });
+
+			const parsed = CuekitProjectConfigSchema.parse(
+				parse(readFileSync(join(root, ".cuekit.yaml"), "utf8")),
+			);
+			expect(parsed.adapters?.["claude-code"]?.permissions).toBe("bypass");
+			expect(parsed.adapters?.opencode?.permissions).toBe("bypass");
 		} finally {
 			rmSync(root, { recursive: true, force: true });
 		}

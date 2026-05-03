@@ -1,5 +1,5 @@
 # Copy this file to .cuekit.yaml and adjust for your project.
-# Project-local config is intentionally safe: it cannot enable permission bypass.
+# Project-local config should be reviewed before committing. This example uses safe prompt permissions.
 
 project:
   # Optional stable human id. cuekit still combines this with the config root
@@ -35,9 +35,10 @@ teams:
 
 adapters:
   claude-code:
-    # prompt is the only project-local permission value. Project config cannot
-    # silently enable bypass; config-derived role/agent defaults force safe
-    # adapter options unless a caller explicitly supplies adapter_options.
+    # prompt keeps generated/example config safe. Use bypass only for trusted
+    # repositories when you explicitly want adapter permission bypass defaults.
+    # Config-derived role/agent defaults still force safe adapter options unless
+    # a caller explicitly supplies adapter_options.
     permissions: prompt
   opencode:
     permissions: prompt
