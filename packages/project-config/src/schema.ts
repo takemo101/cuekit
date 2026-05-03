@@ -3,7 +3,7 @@ import { z } from "zod";
 export const ProjectIdSchema = z.string().regex(/^[A-Za-z0-9._-]+$/);
 export const TuiScopeSchema = z.enum(["project", "path"]);
 export const TeamCleanupSchema = z.enum(["keep-team", "delete-empty-team"]);
-export const AdapterPermissionSchema = z.enum(["prompt"]);
+export const AdapterPermissionSchema = z.enum(["prompt", "bypass"]);
 
 export const CuekitProjectConfigSchema = z
 	.object({

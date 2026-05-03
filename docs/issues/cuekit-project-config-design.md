@@ -201,11 +201,11 @@ adapters:
 Human-facing permissions values:
 
 - `prompt` -> `adapter_options.dangerously_skip_permissions: false`
-- `bypass` is documented as the desired shape but must not be honored from untrusted project-local config without an explicit trust mechanism.
+- `bypass` is supported for explicit trusted project opt-in, including `cuekit init --unsafe-bypass`.
 
 Security rule:
 
-Project-local `.cuekit.yaml` is usually committed and cloned, so it must not silently enable permission bypass. Until cuekit has a trusted user-level config or an explicit consent/trust store, project config may only make permissions safer (`prompt`). Permission bypass can still be requested explicitly per submit call or via future trusted user config.
+Project-local `.cuekit.yaml` is usually committed and cloned, so regular generated config must not silently enable permission bypass. `permissions: bypass` is allowed only as an explicit trusted-project choice, such as manually editing config or running `cuekit init --unsafe-bypass`. Permission bypass can also be requested explicitly per submit call.
 
 If project-local config selects executable behavior, such as `submit.role`, cuekit should force safe permissions for that submitted task unless the caller or trusted user config explicitly opts into bypass. This prevents a cloned repo from combining project-selected profile instructions with adapter built-in bypass defaults.
 
@@ -335,7 +335,7 @@ Notes:
 
 - `project.id` should be derived from the current directory name and sanitized to the existing project id pattern.
 - Omit `submit` defaults initially unless the user explicitly asks for them in a future interactive mode. This avoids accidentally changing task routing or model selection.
-- Do not generate `permissions: bypass`; project-local config cannot enable bypass.
+- Do not generate `permissions: bypass` unless `cuekit init --unsafe-bypass` is explicitly requested.
 - `teams.cleanup: delete-empty-team` must not be generated while `delete_team` does not exist.
 
 #### `.gitignore` behavior
@@ -364,12 +364,14 @@ Recommended initial options:
 - `--dry-run`: print the files/content that would be written without changing disk.
 - `--force`: overwrite an existing `.cuekit.yaml`.
 - `--no-gitignore`: do not create or modify `.gitignore`.
+- `--unsafe-bypass`: generate `adapters.<agent>.permissions: bypass` for trusted repositories and print a warning.
 
 Future options can include an interactive mode, but the first implementation should be deterministic and scriptable.
 
 #### Error handling
 
 - Existing `.cuekit.yaml` without `--force` should return a clear `invalid_input`-style CLI error and leave files unchanged.
+- `--unsafe-bypass` should be visibly explicit in help and should print a warning when used.
 - Invalid current directory names should fall back to a safe derived id rather than failing.
 - `.gitignore` update failures should fail the command unless `--no-gitignore` is set; partial writes should be avoided where practical.
 
@@ -380,6 +382,7 @@ Resolved:
 1. cuekit should create `.cuekit.yaml` via `cuekit init`; users may still create it manually.
 2. Unknown top-level keys are hard schema errors.
 3. `project.id` is optional; cuekit derives a safe path-based identity when omitted.
+4. `cuekit init --unsafe-bypass` may generate bypass adapter defaults, but regular `cuekit init` remains prompt-safe.
 
 Open:
 

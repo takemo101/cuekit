@@ -67,15 +67,18 @@ Default behavior:
 - adds only `.cuekit/tasks/` to `.gitignore`
 - refuses to overwrite an existing `.cuekit.yaml`
 
-Generated `.cuekit.yaml` is intentionally minimal and safe. It includes project identity, `tui.scope: project`, `teams.cleanup: keep-team`, and prompt-safe adapter permission defaults. It does not generate `submit` defaults, `permissions: bypass`, or `teams.cleanup: delete-empty-team`.
+Generated `.cuekit.yaml` is intentionally minimal. By default it includes project identity, `tui.scope: project`, `teams.cleanup: keep-team`, and prompt-safe adapter permission defaults. It does not generate `submit` defaults or `teams.cleanup: delete-empty-team`.
 
 Options:
 
 ```sh
-cuekit init --dry-run       # preview files without writing
-cuekit init --force         # overwrite existing .cuekit.yaml
-cuekit init --no-gitignore  # do not create or update .gitignore
+cuekit init --dry-run        # preview files without writing
+cuekit init --force          # overwrite existing .cuekit.yaml
+cuekit init --no-gitignore   # do not create or update .gitignore
+cuekit init --unsafe-bypass  # generate adapter permissions: bypass for trusted repos
 ```
+
+`--unsafe-bypass` is an explicit opt-in for trusted repositories. It writes `permissions: bypass` for generated adapter defaults and prints a warning.
 
 The `.gitignore` update ignores task artifacts only:
 
@@ -140,14 +143,13 @@ Explicit per-task `role` always wins.
 
 ## Safety rules
 
-Project-local config cannot silently enable runtime permission bypass.
+Project-local config can affect adapter permissions, so use bypass only in trusted repositories.
 
-- `adapters.<agent>.permissions` only accepts `prompt`.
-- `permissions: bypass` is rejected in `.cuekit.yaml`.
+- `adapters.<agent>.permissions: prompt` forces safe permissions for that adapter unless the caller explicitly supplies `adapter_options`.
+- `adapters.<agent>.permissions: bypass` is allowed for explicit opt-in cases such as `cuekit init --unsafe-bypass`.
 - If `submit.role`, `submit.agent`, or `teams.roles.<position>` selects behavior from project config, cuekit forces `adapter_options.dangerously_skip_permissions = false` unless the caller explicitly supplies `adapter_options`.
-- `adapters.<agent>.permissions: prompt` also forces safe permissions for that adapter unless the caller explicitly supplies `adapter_options`.
 
-This keeps checked-in defaults safe while still allowing an explicit one-off caller override.
+This keeps project-derived executable behavior safe while still allowing intentional project-local adapter defaults or explicit one-off caller overrides.
 
 ## Schema reference
 
@@ -165,4 +167,4 @@ Top-level keys are strict: unknown top-level keys are rejected.
 - `teams.wait.timeout_ms`: integer `>= 0`
 - `teams.wait.poll_interval_ms`: positive integer
 - `teams.cleanup`: currently `keep-team` only in practice; `delete-empty-team` is reserved/planned
-- `adapters.<agent>.permissions`: `prompt`
+- `adapters.<agent>.permissions`: `prompt` or `bypass`

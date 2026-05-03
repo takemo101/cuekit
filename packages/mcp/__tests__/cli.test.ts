@@ -141,6 +141,26 @@ describe("createCli", () => {
 		expect(body.args).toEqual(["--mcp"]);
 	});
 
+	it("serves top-level help with human-only commands", async () => {
+		const proc = Bun.spawn(["bun", "packages/mcp/src/bin.ts", "-h"], {
+			cwd: WORKSPACE_ROOT,
+			env: { ...process.env, CUEKIT_DB_PATH: ":memory:" },
+			stderr: "pipe",
+			stdout: "pipe",
+		});
+		const [exitCode, stdout, stderr] = await Promise.all([
+			proc.exited,
+			new Response(proc.stdout).text(),
+			new Response(proc.stderr).text(),
+		]);
+
+		expect(exitCode).toBe(0);
+		expect(stderr).toBe("");
+		expect(stdout).toContain("cuekit init");
+		expect(stdout).toContain("cuekit tui");
+		expect(stdout).toContain("task");
+	});
+
 	it("serves tui help as a human-only command outside MCP operations", async () => {
 		const proc = Bun.spawn(["bun", "packages/mcp/src/bin.ts", "tui", "--help"], {
 			cwd: WORKSPACE_ROOT,
@@ -267,6 +287,31 @@ describe("createCli", () => {
 			});
 			expect(await forced.exited).toBe(0);
 			expect(readFileSync(`${tmpRoot}/.cuekit.yaml`, "utf8")).not.toContain("existing");
+		} finally {
+			rmSync(tmpRoot, { recursive: true, force: true });
+		}
+	});
+
+	it("init can generate unsafe bypass permissions when explicitly requested", async () => {
+		const tmpRoot = mkdtempSync(`${tmpdir()}/cuekit-init-unsafe-bypass-`);
+		try {
+			const binPath = resolve(WORKSPACE_ROOT, "packages/mcp/src/bin.ts");
+			const proc = Bun.spawn(["bun", binPath, "init", "--unsafe-bypass"], {
+				cwd: tmpRoot,
+				env: { ...process.env },
+				stderr: "pipe",
+				stdout: "pipe",
+			});
+			const [exitCode, stdout, stderr] = await Promise.all([
+				proc.exited,
+				new Response(proc.stdout).text(),
+				new Response(proc.stderr).text(),
+			]);
+
+			expect(exitCode).toBe(0);
+			expect(stderr).toContain("unsafe-bypass");
+			expect(stdout).toContain(".cuekit.yaml");
+			expect(readFileSync(`${tmpRoot}/.cuekit.yaml`, "utf8")).toContain("permissions: bypass");
 		} finally {
 			rmSync(tmpRoot, { recursive: true, force: true });
 		}

@@ -35,12 +35,32 @@ function closeQuietly(db: Database): void {
 
 const TUI_PACKAGE_NAME = "@cuekit/tui";
 
+function printMainHelp(): void {
+	process.stdout.write(
+		[
+			"cuekit — delegation substrate for coding agents",
+			"",
+			"Usage: cuekit <command> [options]",
+			"",
+			"Human-only commands:",
+			"  cuekit init  Create .cuekit.yaml and update .gitignore",
+			"  cuekit tui   Open the interactive task cockpit",
+			"",
+			"Command groups:",
+			"  task, team, adapter, agent, session, tool, mcp",
+			"",
+			"Use 'cuekit init --help' or 'cuekit tui --help' for human-only command help.",
+			"",
+		].join("\n"),
+	);
+}
+
 function printInitHelp(): void {
 	process.stdout.write(
 		[
 			"cuekit init — create safe project-local cuekit config",
 			"",
-			"Usage: cuekit init [--dry-run] [--force] [--no-gitignore]",
+			"Usage: cuekit init [--dry-run] [--force] [--no-gitignore] [--unsafe-bypass]",
 			"",
 			"Creates .cuekit.yaml in the current directory and adds .cuekit/tasks/ to .gitignore.",
 			"",
@@ -48,9 +68,16 @@ function printInitHelp(): void {
 			"  --dry-run       Show what would be written without changing files",
 			"  --force         Overwrite an existing .cuekit.yaml",
 			"  --no-gitignore  Do not create or update .gitignore",
+			"  --unsafe-bypass Generate adapter permissions: bypass (unsafe; explicit opt-in)",
 			"  -h, --help      Show this help",
 			"",
 		].join("\n"),
+	);
+}
+
+function printUnsafeBypassWarning(): void {
+	process.stderr.write(
+		"warning: --unsafe-bypass writes project-local adapter permissions: bypass; only use this for trusted repositories\n",
 	);
 }
 
@@ -128,17 +155,25 @@ async function main(): Promise<void> {
 
 	let db: Database | undefined;
 	try {
+		if (process.argv[2] === "--help" || process.argv[2] === "-h") {
+			printMainHelp();
+			return;
+		}
+
 		const isInit = process.argv[2] === "init";
 		if (isInit && (process.argv.includes("--help") || process.argv.includes("-h"))) {
 			printInitHelp();
 			return;
 		}
 		if (isInit) {
+			const unsafeBypass = process.argv.includes("--unsafe-bypass");
+			if (unsafeBypass) printUnsafeBypassWarning();
 			const result = runProjectConfigInit({
 				cwd: process.cwd(),
 				dryRun: process.argv.includes("--dry-run"),
 				force: process.argv.includes("--force"),
 				gitignore: !process.argv.includes("--no-gitignore"),
+				unsafeBypass,
 			});
 			printInitSummary(result);
 			return;

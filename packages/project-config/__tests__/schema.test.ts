@@ -44,10 +44,12 @@ describe("CuekitProjectConfigSchema", () => {
 		expect(() => CuekitProjectConfigSchema.parse({ tui: { scope: "all" } })).toThrow();
 	});
 
-	it("rejects project-local permission bypass", () => {
-		expect(() =>
-			CuekitProjectConfigSchema.parse({ adapters: { "claude-code": { permissions: "bypass" } } }),
-		).toThrow();
+	it("accepts explicit project-local permission bypass", () => {
+		const parsed = CuekitProjectConfigSchema.parse({
+			adapters: { "claude-code": { permissions: "bypass" } },
+		});
+
+		expect(parsed.adapters?.["claude-code"]?.permissions).toBe("bypass");
 	});
 
 	it("rejects unknown top-level keys", () => {

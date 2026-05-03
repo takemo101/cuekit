@@ -14,16 +14,18 @@ export function deriveProjectId(name: string): string {
 export interface RenderProjectConfigTemplateInput {
 	projectId: string;
 	projectName: string;
+	permissions?: "prompt" | "bypass";
 }
 
 export function renderProjectConfigTemplate(input: RenderProjectConfigTemplateInput): string {
+	const permissions = input.permissions ?? "prompt";
 	const config: CuekitProjectConfig = {
 		project: { id: input.projectId, name: input.projectName },
 		tui: { scope: "project" },
 		teams: { cleanup: "keep-team" },
 		adapters: {
-			"claude-code": { permissions: "prompt" },
-			opencode: { permissions: "prompt" },
+			"claude-code": { permissions },
+			opencode: { permissions },
 		},
 	};
 	return stringify(config);
@@ -41,6 +43,7 @@ export interface ProjectConfigInitOptions {
 	dryRun?: boolean;
 	force?: boolean;
 	gitignore?: boolean;
+	unsafeBypass?: boolean;
 }
 
 export interface ProjectConfigInitResult {
@@ -88,6 +91,7 @@ export function runProjectConfigInit(options: ProjectConfigInitOptions): Project
 	const configText = renderProjectConfigTemplate({
 		projectId: deriveProjectId(projectName),
 		projectName,
+		permissions: options.unsafeBypass ? "bypass" : "prompt",
 	});
 	recordWrite({
 		path: configPath,
