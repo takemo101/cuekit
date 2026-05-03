@@ -102,7 +102,6 @@ import {
 } from "./commands/wait-tasks.ts";
 import { runWaitTeam, WaitTeamInputSchema, WaitTeamOutputSchema } from "./commands/wait-team.ts";
 export interface CuekitOperation<InputSchema extends z.ZodType, OutputSchema extends z.ZodType> {
-	mcpName: string;
 	cliPath: readonly [string, string];
 	description: string;
 	options: InputSchema;
@@ -113,6 +112,11 @@ export interface CuekitOperation<InputSchema extends z.ZodType, OutputSchema ext
 	) => z.infer<OutputSchema> | Promise<z.infer<OutputSchema>>;
 }
 
+export interface CuekitMcpOperation<InputSchema extends z.ZodType, OutputSchema extends z.ZodType>
+	extends CuekitOperation<InputSchema, OutputSchema> {
+	mcpName: string;
+}
+
 function defineOperation<InputSchema extends z.ZodType, OutputSchema extends z.ZodType>(
 	operation: Omit<CuekitOperation<InputSchema, OutputSchema>, "run"> & {
 		run: (
@@ -121,6 +125,20 @@ function defineOperation<InputSchema extends z.ZodType, OutputSchema extends z.Z
 		) => z.infer<OutputSchema> | Promise<z.infer<OutputSchema>>;
 	},
 ): CuekitOperation<InputSchema, OutputSchema> {
+	return {
+		...operation,
+		run: (ctx, options) => operation.run(ctx, options as z.infer<InputSchema>),
+	};
+}
+
+function defineMcpOperation<InputSchema extends z.ZodType, OutputSchema extends z.ZodType>(
+	operation: Omit<CuekitMcpOperation<InputSchema, OutputSchema>, "run"> & {
+		run: (
+			ctx: CommandContext,
+			options: z.infer<InputSchema>,
+		) => z.infer<OutputSchema> | Promise<z.infer<OutputSchema>>;
+	},
+): CuekitMcpOperation<InputSchema, OutputSchema> {
 	return {
 		...operation,
 		run: (ctx, options) => operation.run(ctx, options as z.infer<InputSchema>),
@@ -252,7 +270,7 @@ async function runDelete(
 }
 
 export const CUEKIT_MCP_OPERATIONS = [
-	defineOperation({
+	defineMcpOperation({
 		mcpName: "submit_task",
 		cliPath: ["task", "submit"],
 		description: "Submit one task to an adapter.",
@@ -260,7 +278,7 @@ export const CUEKIT_MCP_OPERATIONS = [
 		output: SubmitTaskOutputSchema,
 		run: runSubmitTask,
 	}),
-	defineOperation({
+	defineMcpOperation({
 		mcpName: "submit_team_tasks",
 		cliPath: ["team", "submit"],
 		description: "Submit multiple tasks into an existing team with best-effort per-task results.",
@@ -268,7 +286,7 @@ export const CUEKIT_MCP_OPERATIONS = [
 		output: SubmitTeamTasksOutputSchema,
 		run: runSubmitTeamTasks,
 	}),
-	defineOperation({
+	defineMcpOperation({
 		mcpName: "create_team",
 		cliPath: ["team", "create"],
 		description: "Create a session-scoped task team.",
@@ -276,7 +294,7 @@ export const CUEKIT_MCP_OPERATIONS = [
 		output: CreateTeamOutputSchema,
 		run: runCreateTeam,
 	}),
-	defineOperation({
+	defineMcpOperation({
 		mcpName: "get_status",
 		cliPath: ["get", "status"],
 		description: "Fetch status for a task or team. Set kind to 'task' or 'team'.",
@@ -284,7 +302,7 @@ export const CUEKIT_MCP_OPERATIONS = [
 		output: GetStatusOutputSchema,
 		run: runGetStatus,
 	}),
-	defineOperation({
+	defineMcpOperation({
 		mcpName: "get_task_result",
 		cliPath: ["task", "result"],
 		description: "Collect the normalized result of a terminal task.",
@@ -292,7 +310,7 @@ export const CUEKIT_MCP_OPERATIONS = [
 		output: GetTaskResultOutputSchema,
 		run: runGetTaskResult,
 	}),
-	defineOperation({
+	defineMcpOperation({
 		mcpName: "wait",
 		cliPath: ["wait", "target"],
 		description: "Wait for tasks or a team. Set kind to 'tasks' or 'team'.",
@@ -300,7 +318,7 @@ export const CUEKIT_MCP_OPERATIONS = [
 		output: WaitOutputSchema,
 		run: runWait,
 	}),
-	defineOperation({
+	defineMcpOperation({
 		mcpName: "cancel_tasks",
 		cliPath: ["task", "cancel"],
 		description: "Cancel one or more active tasks.",
@@ -308,7 +326,7 @@ export const CUEKIT_MCP_OPERATIONS = [
 		output: CancelTasksOutputSchema,
 		run: runCancelTasks,
 	}),
-	defineOperation({
+	defineMcpOperation({
 		mcpName: "list",
 		cliPath: ["list", "resources"],
 		description:
@@ -317,7 +335,7 @@ export const CUEKIT_MCP_OPERATIONS = [
 		output: ListOutputSchema,
 		run: runList,
 	}),
-	defineOperation({
+	defineMcpOperation({
 		mcpName: "report_task_event",
 		cliPath: ["tool", "report"],
 		description: "Append a child-reported task event and apply terminal status reports.",
@@ -325,7 +343,7 @@ export const CUEKIT_MCP_OPERATIONS = [
 		output: ReportTaskEventOutputSchema,
 		run: runReportTaskEvent,
 	}),
-	defineOperation({
+	defineMcpOperation({
 		mcpName: "steer_task",
 		cliPath: ["task", "steer"],
 		description: "Send a steering message to a running task (best-effort).",
@@ -333,7 +351,7 @@ export const CUEKIT_MCP_OPERATIONS = [
 		output: SteerTaskOutputSchema,
 		run: runSteerTask,
 	}),
-	defineOperation({
+	defineMcpOperation({
 		mcpName: "cleanup",
 		cliPath: ["cleanup", "target"],
 		description: "Clean up terminal tasks by task scope or team. Set kind to 'tasks' or 'team'.",
@@ -341,7 +359,7 @@ export const CUEKIT_MCP_OPERATIONS = [
 		output: CleanupOutputSchema,
 		run: runCleanup,
 	}),
-	defineOperation({
+	defineMcpOperation({
 		mcpName: "delete",
 		cliPath: ["delete", "target"],
 		description: "Delete terminal tasks or sessions. Set kind to 'tasks' or 'sessions'.",
@@ -351,9 +369,8 @@ export const CUEKIT_MCP_OPERATIONS = [
 	}),
 ] as const;
 
-export const CUEKIT_OPERATIONS = [
+export const CUEKIT_CLI_OPERATIONS = [
 	defineOperation({
-		mcpName: "submit_task",
 		cliPath: ["task", "submit"],
 		description: "Submit a task to a target adapter.",
 		options: SubmitTaskInputSchema,
@@ -361,7 +378,6 @@ export const CUEKIT_OPERATIONS = [
 		run: runSubmitTask,
 	}),
 	defineOperation({
-		mcpName: "submit_team_tasks",
 		cliPath: ["team", "submit"],
 		description: "Submit multiple tasks into an existing team with best-effort per-task results.",
 		options: SubmitTeamTasksInputSchema,
@@ -369,7 +385,6 @@ export const CUEKIT_OPERATIONS = [
 		run: runSubmitTeamTasks,
 	}),
 	defineOperation({
-		mcpName: "create_team",
 		cliPath: ["team", "create"],
 		description: "Create a session-scoped task team.",
 		options: CreateTeamInputSchema,
@@ -377,7 +392,6 @@ export const CUEKIT_OPERATIONS = [
 		run: runCreateTeam,
 	}),
 	defineOperation({
-		mcpName: "list_teams",
 		cliPath: ["team", "list"],
 		description: "List task teams, optionally filtered by session or cwd.",
 		options: ListTeamsInputSchema,
@@ -385,7 +399,6 @@ export const CUEKIT_OPERATIONS = [
 		run: runListTeams,
 	}),
 	defineOperation({
-		mcpName: "get_team_status",
 		cliPath: ["team", "status"],
 		description: "Fetch aggregate status and member tasks for a task team.",
 		options: GetTeamStatusInputSchema,
@@ -393,7 +406,6 @@ export const CUEKIT_OPERATIONS = [
 		run: runGetTeamStatus,
 	}),
 	defineOperation({
-		mcpName: "get_task_status",
 		cliPath: ["task", "status"],
 		description: "Fetch the current status of a task.",
 		options: GetTaskStatusInputSchema,
@@ -401,7 +413,6 @@ export const CUEKIT_OPERATIONS = [
 		run: runGetTaskStatus,
 	}),
 	defineOperation({
-		mcpName: "get_task_result",
 		cliPath: ["task", "result"],
 		description: "Collect the normalized result of a terminal task.",
 		options: GetTaskResultInputSchema,
@@ -409,7 +420,6 @@ export const CUEKIT_OPERATIONS = [
 		run: runGetTaskResult,
 	}),
 	defineOperation({
-		mcpName: "wait_tasks",
 		cliPath: ["task", "wait"],
 		description: "Wait for one or more tasks to become terminal by polling status.",
 		options: WaitTasksInputSchema,
@@ -417,7 +427,6 @@ export const CUEKIT_OPERATIONS = [
 		run: runWaitTasks,
 	}),
 	defineOperation({
-		mcpName: "wait_team",
 		cliPath: ["team", "wait"],
 		description: "Wait for all or any snapshotted tasks in a team.",
 		options: WaitTeamInputSchema,
@@ -425,7 +434,6 @@ export const CUEKIT_OPERATIONS = [
 		run: runWaitTeam,
 	}),
 	defineOperation({
-		mcpName: "cleanup_team",
 		cliPath: ["team", "cleanup"],
 		description: "Delete terminal tasks in a team while keeping the team row.",
 		options: CleanupTeamInputSchema,
@@ -433,7 +441,6 @@ export const CUEKIT_OPERATIONS = [
 		run: runCleanupTeam,
 	}),
 	defineOperation({
-		mcpName: "cancel_tasks",
 		cliPath: ["task", "cancel"],
 		description: "Cancel one or more active tasks.",
 		options: CancelTasksInputSchema,
@@ -441,7 +448,6 @@ export const CUEKIT_OPERATIONS = [
 		run: runCancelTasks,
 	}),
 	defineOperation({
-		mcpName: "list_tasks",
 		cliPath: ["task", "list"],
 		description: "List tasks, optionally filtered by status / adapter / session / cwd.",
 		options: ListTasksInputSchema,
@@ -449,7 +455,6 @@ export const CUEKIT_OPERATIONS = [
 		run: runListTasks,
 	}),
 	defineOperation({
-		mcpName: "report_task_event",
 		cliPath: ["tool", "report"],
 		description: "Append a child-reported task event and apply terminal status reports.",
 		options: ReportTaskEventInputSchema,
@@ -457,7 +462,6 @@ export const CUEKIT_OPERATIONS = [
 		run: runReportTaskEvent,
 	}),
 	defineOperation({
-		mcpName: "list_task_events",
 		cliPath: ["task", "events"],
 		description: "List durable child-reported events for a task.",
 		options: ListTaskEventsInputSchema,
@@ -465,7 +469,6 @@ export const CUEKIT_OPERATIONS = [
 		run: runListTaskEvents,
 	}),
 	defineOperation({
-		mcpName: "list_adapters",
 		cliPath: ["adapter", "list"],
 		description: "List registered adapters and their capabilities.",
 		options: ListAdaptersInputSchema,
@@ -473,7 +476,6 @@ export const CUEKIT_OPERATIONS = [
 		run: runListAdapters,
 	}),
 	defineOperation({
-		mcpName: "list_agent_profiles",
 		cliPath: ["agent", "list"],
 		description: "List builtin, user, and project agent profiles.",
 		options: ListAgentProfilesInputSchema,
@@ -481,7 +483,6 @@ export const CUEKIT_OPERATIONS = [
 		run: runListAgentProfiles,
 	}),
 	defineOperation({
-		mcpName: "steer_task",
 		cliPath: ["task", "steer"],
 		description: "Send a steering message to a running task (best-effort).",
 		options: SteerTaskInputSchema,
@@ -489,7 +490,6 @@ export const CUEKIT_OPERATIONS = [
 		run: runSteerTask,
 	}),
 	defineOperation({
-		mcpName: "show_mcp_config",
 		cliPath: ["mcp", "config"],
 		description: "Print the MCP-server stanza to paste into a client config.",
 		options: ShowMcpConfigInputSchema,
@@ -497,7 +497,6 @@ export const CUEKIT_OPERATIONS = [
 		run: runShowMcpConfig,
 	}),
 	defineOperation({
-		mcpName: "delete_tasks",
 		cliPath: ["task", "delete"],
 		description:
 			"Delete one or more terminal task rows. Non-terminal tasks must be cancelled first.",
@@ -506,7 +505,6 @@ export const CUEKIT_OPERATIONS = [
 		run: runDeleteTasks,
 	}),
 	defineOperation({
-		mcpName: "cleanup_tasks",
 		cliPath: ["task", "cleanup"],
 		description: "Delete terminal tasks within a session or cwd without deleting the session.",
 		options: CleanupTasksInputSchema,
@@ -514,7 +512,6 @@ export const CUEKIT_OPERATIONS = [
 		run: runCleanupTasks,
 	}),
 	defineOperation({
-		mcpName: "delete_sessions",
 		cliPath: ["session", "delete"],
 		description:
 			"Delete one or more sessions and their tasks. All child tasks in each session must be terminal before deletion.",
