@@ -1,4 +1,4 @@
-import type { z } from "incur";
+import { z } from "incur";
 import type { CommandContext } from "./command-context.ts";
 import {
 	CancelTasksInputSchema,
@@ -126,6 +126,230 @@ function defineOperation<InputSchema extends z.ZodType, OutputSchema extends z.Z
 		run: (ctx, options) => operation.run(ctx, options as z.infer<InputSchema>),
 	};
 }
+
+const GetStatusInputSchema = z
+	.object({
+		kind: z.enum(["task", "team"]).describe("Status target type."),
+		task_id: z.string().min(1).optional().describe("Required when kind is task."),
+		team_id: z.string().min(1).optional().describe("Required when kind is team."),
+	})
+	.passthrough();
+const GetStatusOutputSchema = z.union([GetTaskStatusOutputSchema, GetTeamStatusOutputSchema]);
+
+async function runGetStatus(
+	ctx: CommandContext,
+	input: z.infer<typeof GetStatusInputSchema>,
+): Promise<z.infer<typeof GetStatusOutputSchema>> {
+	if (input.kind === "task") return runGetTaskStatus(ctx, GetTaskStatusInputSchema.parse(input));
+	return runGetTeamStatus(ctx, GetTeamStatusInputSchema.parse(input));
+}
+
+const WaitInputSchema = z
+	.object({
+		kind: z.enum(["tasks", "team"]).describe("Wait target type."),
+		task_ids: z.array(z.string().min(1)).optional().describe("Required when kind is tasks."),
+		team_id: z.string().min(1).optional().describe("Required when kind is team."),
+		session_id: z.string().min(1).optional(),
+		cwd: z.string().min(1).optional(),
+		mode: z.enum(["all", "any"]).optional(),
+		timeout_ms: z.number().int().min(0).optional(),
+		poll_interval_ms: z.number().int().min(1).optional(),
+		stop_on_failed: z.boolean().optional(),
+		include_results: z.boolean().optional(),
+		include_events: z.boolean().optional(),
+		since_event_sequences: z.record(z.string(), z.number().int().min(0)).optional(),
+	})
+	.passthrough();
+const WaitOutputSchema = z.union([WaitTasksOutputSchema, WaitTeamOutputSchema]);
+
+async function runWait(
+	ctx: CommandContext,
+	input: z.infer<typeof WaitInputSchema>,
+): Promise<z.infer<typeof WaitOutputSchema>> {
+	if (input.kind === "tasks") return runWaitTasks(ctx, WaitTasksInputSchema.parse(input));
+	return runWaitTeam(ctx, WaitTeamInputSchema.parse(input));
+}
+
+const ListInputSchema = z
+	.object({
+		kind: z
+			.enum(["tasks", "teams", "events", "adapters", "agent_profiles"])
+			.describe("Resource type to list."),
+		task_id: z.string().min(1).optional().describe("Required when kind is events."),
+		status: z.string().optional().describe("Task status filter when kind is tasks."),
+		agent_kind: z.string().min(1).optional().describe("Adapter filter when kind is tasks."),
+		session_id: z.string().min(1).optional().describe("Session filter for tasks or teams."),
+		cwd: z.string().min(1).optional().describe("Worktree filter for tasks, teams, or profiles."),
+		team_id: z.string().min(1).optional().describe("Team filter when kind is tasks."),
+		position: z.string().optional().describe("Team position filter when kind is tasks."),
+		limit: z.number().int().positive().optional(),
+		cursor: z.string().optional(),
+		include_instructions: z.boolean().optional().describe("Include profile instructions."),
+		role_sources: z.array(z.enum(["builtin", "user", "project"])).optional(),
+	})
+	.passthrough();
+const ListOutputSchema = z.union([
+	ListTasksOutputSchema,
+	ListTeamsOutputSchema,
+	ListTaskEventsOutputSchema,
+	ListAdaptersOutputSchema,
+	ListAgentProfilesOutputSchema,
+]);
+
+async function runList(
+	ctx: CommandContext,
+	input: z.infer<typeof ListInputSchema>,
+): Promise<z.infer<typeof ListOutputSchema>> {
+	switch (input.kind) {
+		case "tasks":
+			return runListTasks(ctx, ListTasksInputSchema.parse(input));
+		case "teams":
+			return runListTeams(ctx, ListTeamsInputSchema.parse(input));
+		case "events":
+			return runListTaskEvents(ctx, ListTaskEventsInputSchema.parse(input));
+		case "adapters":
+			return runListAdapters(ctx, ListAdaptersInputSchema.parse(input));
+		case "agent_profiles":
+			return runListAgentProfiles(ctx, ListAgentProfilesInputSchema.parse(input));
+	}
+}
+
+const CleanupInputSchema = z
+	.object({
+		kind: z.enum(["tasks", "team"]).describe("Cleanup target type."),
+		team_id: z.string().min(1).optional().describe("Required when kind is team."),
+		session_id: z.string().min(1).optional().describe("Task cleanup session scope."),
+		cwd: z.string().min(1).optional().describe("Task cleanup cwd scope."),
+		statuses: z.array(z.string()).optional().describe("Terminal statuses to clean up."),
+		dry_run: z.boolean().optional(),
+	})
+	.passthrough();
+const CleanupOutputSchema = z.union([CleanupTasksOutputSchema, CleanupTeamOutputSchema]);
+
+async function runCleanup(
+	ctx: CommandContext,
+	input: z.infer<typeof CleanupInputSchema>,
+): Promise<z.infer<typeof CleanupOutputSchema>> {
+	if (input.kind === "tasks") return runCleanupTasks(ctx, CleanupTasksInputSchema.parse(input));
+	return runCleanupTeam(ctx, CleanupTeamInputSchema.parse(input));
+}
+
+const DeleteInputSchema = z
+	.object({
+		kind: z.enum(["tasks", "sessions"]).describe("Delete target type."),
+		task_ids: z.array(z.string().min(1)).optional().describe("Required when kind is tasks."),
+		session_ids: z.array(z.string().min(1)).optional().describe("Required when kind is sessions."),
+	})
+	.passthrough();
+const DeleteOutputSchema = z.union([DeleteTasksOutputSchema, DeleteSessionsOutputSchema]);
+
+async function runDelete(
+	ctx: CommandContext,
+	input: z.infer<typeof DeleteInputSchema>,
+): Promise<z.infer<typeof DeleteOutputSchema>> {
+	if (input.kind === "tasks") return runDeleteTasks(ctx, DeleteTasksInputSchema.parse(input));
+	return runDeleteSessions(ctx, DeleteSessionsInputSchema.parse(input));
+}
+
+export const CUEKIT_MCP_OPERATIONS = [
+	defineOperation({
+		mcpName: "submit_task",
+		cliPath: ["task", "submit"],
+		description: "Submit one task to an adapter.",
+		options: SubmitTaskInputSchema,
+		output: SubmitTaskOutputSchema,
+		run: runSubmitTask,
+	}),
+	defineOperation({
+		mcpName: "submit_team_tasks",
+		cliPath: ["team", "submit"],
+		description: "Submit multiple tasks into an existing team with best-effort per-task results.",
+		options: SubmitTeamTasksInputSchema,
+		output: SubmitTeamTasksOutputSchema,
+		run: runSubmitTeamTasks,
+	}),
+	defineOperation({
+		mcpName: "create_team",
+		cliPath: ["team", "create"],
+		description: "Create a session-scoped task team.",
+		options: CreateTeamInputSchema,
+		output: CreateTeamOutputSchema,
+		run: runCreateTeam,
+	}),
+	defineOperation({
+		mcpName: "get_status",
+		cliPath: ["get", "status"],
+		description: "Fetch status for a task or team. Set kind to 'task' or 'team'.",
+		options: GetStatusInputSchema,
+		output: GetStatusOutputSchema,
+		run: runGetStatus,
+	}),
+	defineOperation({
+		mcpName: "get_task_result",
+		cliPath: ["task", "result"],
+		description: "Collect the normalized result of a terminal task.",
+		options: GetTaskResultInputSchema,
+		output: GetTaskResultOutputSchema,
+		run: runGetTaskResult,
+	}),
+	defineOperation({
+		mcpName: "wait",
+		cliPath: ["wait", "target"],
+		description: "Wait for tasks or a team. Set kind to 'tasks' or 'team'.",
+		options: WaitInputSchema,
+		output: WaitOutputSchema,
+		run: runWait,
+	}),
+	defineOperation({
+		mcpName: "cancel_tasks",
+		cliPath: ["task", "cancel"],
+		description: "Cancel one or more active tasks.",
+		options: CancelTasksInputSchema,
+		output: CancelTasksOutputSchema,
+		run: runCancelTasks,
+	}),
+	defineOperation({
+		mcpName: "list",
+		cliPath: ["list", "resources"],
+		description:
+			"List resources. Set kind to 'tasks', 'teams', 'events', 'adapters', or 'agent_profiles'.",
+		options: ListInputSchema,
+		output: ListOutputSchema,
+		run: runList,
+	}),
+	defineOperation({
+		mcpName: "report_task_event",
+		cliPath: ["tool", "report"],
+		description: "Append a child-reported task event and apply terminal status reports.",
+		options: ReportTaskEventInputSchema,
+		output: ReportTaskEventOutputSchema,
+		run: runReportTaskEvent,
+	}),
+	defineOperation({
+		mcpName: "steer_task",
+		cliPath: ["task", "steer"],
+		description: "Send a steering message to a running task (best-effort).",
+		options: SteerTaskInputSchema,
+		output: SteerTaskOutputSchema,
+		run: runSteerTask,
+	}),
+	defineOperation({
+		mcpName: "cleanup",
+		cliPath: ["cleanup", "target"],
+		description: "Clean up terminal tasks by task scope or team. Set kind to 'tasks' or 'team'.",
+		options: CleanupInputSchema,
+		output: CleanupOutputSchema,
+		run: runCleanup,
+	}),
+	defineOperation({
+		mcpName: "delete",
+		cliPath: ["delete", "target"],
+		description: "Delete terminal tasks or sessions. Set kind to 'tasks' or 'sessions'.",
+		options: DeleteInputSchema,
+		output: DeleteOutputSchema,
+		run: runDelete,
+	}),
+] as const;
 
 export const CUEKIT_OPERATIONS = [
 	defineOperation({

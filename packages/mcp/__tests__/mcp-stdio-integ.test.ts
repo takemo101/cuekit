@@ -224,28 +224,39 @@ describe("cuekit --mcp (stdio integration)", () => {
 		const reply = await server.readNext("tools/list reply");
 		const result = reply.result as { tools: Array<{ name: string }> };
 		const names = result.tools.map((t) => t.name).sort();
-		expect(names).toContain("submit_task");
-		expect(names).toContain("get_task_status");
-		expect(names).toContain("get_task_result");
-		expect(names).toContain("cancel_tasks");
-		expect(names).toContain("list_tasks");
-		expect(names).toContain("report_task_event");
-		expect(names).toContain("list_task_events");
-		expect(names).toContain("list_adapters");
-		expect(names).toContain("steer_task");
+		expect(names).toEqual([
+			"cancel_tasks",
+			"cleanup",
+			"create_team",
+			"delete",
+			"get_status",
+			"get_task_result",
+			"list",
+			"report_task_event",
+			"steer_task",
+			"submit_task",
+			"submit_team_tasks",
+			"wait",
+		]);
+		expect(names).not.toContain("show_mcp_config");
+		expect(names).not.toContain("list_adapters");
+		expect(names).not.toContain("list_tasks");
 	});
 
-	it("tools/call list_adapters returns all 3 MVP adapters", async () => {
+	it("tools/call list kind=adapters returns all 3 MVP adapters", async () => {
 		await initialize(server);
 		await server.send({
 			jsonrpc: "2.0",
 			id: 3,
 			method: "tools/call",
-			params: { name: "list_adapters", arguments: {} },
+			params: { name: "list", arguments: { kind: "adapters" } },
 		});
-		const reply = await server.readNext("list_adapters reply");
-		const data = toolCallData(reply.result as ToolCallResult);
-		const adapters = data.adapters as Array<{ agent_kind: string }>;
+		const reply = await server.readNext("list adapters reply");
+		const result = reply.result as ToolCallResult;
+		const text = result.content?.[0]?.text ?? "{}";
+		expect(text).toContain("agent_kind");
+		const textPayload = JSON.parse(text) as { adapters: Array<{ agent_kind: string }> };
+		const adapters = textPayload.adapters;
 		const kinds = adapters.map((a) => a.agent_kind).sort();
 		expect(kinds).toEqual(["claude-code", "opencode", "pi"]);
 	});
@@ -331,12 +342,13 @@ describe("cuekit --mcp (stdio integration)", () => {
 			id: 7,
 			method: "tools/call",
 			params: {
-				name: "get_task_status",
-				arguments: { task_id: "t_mcp" },
+				name: "get_status",
+				arguments: { kind: "task", task_id: "t_mcp" },
 			},
 		});
-		const statusReply = await server.readNext("get_task_status reply");
-		const statusData = toolCallData(statusReply.result as ToolCallResult) as { status?: string };
+		const statusReply = await server.readNext("get_status reply");
+		const statusResult = statusReply.result as ToolCallResult;
+		const statusData = JSON.parse(statusResult.content?.[0]?.text ?? "{}") as { status?: string };
 		expect(statusData.status).toBe("completed");
 
 		await server.send({
@@ -344,12 +356,13 @@ describe("cuekit --mcp (stdio integration)", () => {
 			id: 8,
 			method: "tools/call",
 			params: {
-				name: "list_task_events",
-				arguments: { task_id: "t_mcp" },
+				name: "list",
+				arguments: { kind: "events", task_id: "t_mcp" },
 			},
 		});
-		const listReply = await server.readNext("list_task_events reply");
-		const listData = toolCallData(listReply.result as ToolCallResult) as {
+		const listReply = await server.readNext("list events reply");
+		const listResult = listReply.result as ToolCallResult;
+		const listData = JSON.parse(listResult.content?.[0]?.text ?? "{}") as {
 			events?: Array<{ type: string; message: string | null }>;
 		};
 		expect(listData.events).toEqual([

@@ -20,8 +20,8 @@ import {
 	runMigrations,
 	updateTaskChildTokenHash,
 } from "@cuekit/store";
-import { createCli } from "../src/cli.ts";
-import { CUEKIT_OPERATIONS } from "../src/operations.ts";
+import { createCli, createMcpCli } from "../src/cli.ts";
+import { CUEKIT_MCP_OPERATIONS, CUEKIT_OPERATIONS } from "../src/operations.ts";
 
 const WORKSPACE_ROOT = resolve(import.meta.dir, "..", "..", "..");
 
@@ -34,7 +34,7 @@ function makeCliHarness() {
 	registry.register(
 		createClaudeCodeAdapter(db, panes, { launchCommandOverride: () => "sleep 60" }),
 	);
-	return { cli: createCli({ db, registry }), db };
+	return { cli: createCli({ db, registry }), db, registry };
 }
 
 function makeCli() {
@@ -43,7 +43,7 @@ function makeCli() {
 
 describe("createCli", () => {
 	it("defines unique MCP names and future CLI paths for every operation", () => {
-		const mcpNames = CUEKIT_OPERATIONS.map((operation) => operation.mcpName);
+		const mcpNames = CUEKIT_MCP_OPERATIONS.map((operation) => operation.mcpName);
 		const cliPaths = CUEKIT_OPERATIONS.map((operation) => operation.cliPath.join(" "));
 
 		expect(new Set(mcpNames).size).toBe(mcpNames.length);
@@ -54,15 +54,32 @@ describe("createCli", () => {
 		expect(cliPaths).toContain("tool report");
 		expect(cliPaths).toContain("session delete");
 		expect(cliPaths).toContain("mcp config");
-		expect(mcpNames).toContain("wait_tasks");
-		expect(mcpNames).toContain("cancel_tasks");
-		expect(mcpNames).toContain("delete_tasks");
-		expect(mcpNames).toContain("delete_sessions");
-		expect(mcpNames).toContain("cleanup_tasks");
-		expect(mcpNames).not.toContain("wait_task");
-		expect(mcpNames).not.toContain("cancel_task");
-		expect(mcpNames).not.toContain("delete_task");
-		expect(mcpNames).not.toContain("delete_session");
+		expect(mcpNames).toEqual([
+			"submit_task",
+			"submit_team_tasks",
+			"create_team",
+			"get_status",
+			"get_task_result",
+			"wait",
+			"cancel_tasks",
+			"list",
+			"report_task_event",
+			"steer_task",
+			"cleanup",
+			"delete",
+		]);
+		expect(mcpNames).not.toContain("show_mcp_config");
+		expect(mcpNames).not.toContain("list_adapters");
+		expect(mcpNames).not.toContain("list_agent_profiles");
+		expect(mcpNames).not.toContain("list_tasks");
+		expect(mcpNames).not.toContain("list_teams");
+		expect(mcpNames).not.toContain("list_task_events");
+		expect(mcpNames).not.toContain("wait_tasks");
+		expect(mcpNames).not.toContain("wait_team");
+		expect(mcpNames).not.toContain("cleanup_tasks");
+		expect(mcpNames).not.toContain("cleanup_team");
+		expect(mcpNames).not.toContain("delete_tasks");
+		expect(mcpNames).not.toContain("delete_sessions");
 		expect(mcpNames).not.toContain("tui");
 		expect(mcpNames).not.toContain("init");
 		expect(cliPaths).toContain("task wait");
@@ -74,6 +91,25 @@ describe("createCli", () => {
 
 	it("builds an incur CLI without throwing", () => {
 		expect(makeCli()).toBeDefined();
+	});
+
+	it("serves grouped MCP tools and hides human setup helpers", async () => {
+		const { db, registry } = makeCliHarness();
+		const mcp = createMcpCli({ db, registry });
+
+		const adaptersRes = await mcp.fetch(new Request("http://localhost/list?kind=adapters"));
+		expect(adaptersRes.ok).toBe(true);
+		const adaptersBody = (await adaptersRes.json()) as {
+			ok: boolean;
+			data: { adapters: Array<{ agent_kind: string }> };
+		};
+		expect(adaptersBody.ok).toBe(true);
+		expect(adaptersBody.data.adapters.map((a) => a.agent_kind)).toContain("claude-code");
+
+		for (const hidden of ["show_mcp_config", "list_adapters", "list_tasks", "wait_tasks"]) {
+			const res = await mcp.fetch(new Request(`http://localhost/${hidden}`));
+			expect(res.ok).toBe(false);
+		}
 	});
 
 	it("serves adapter list through grouped cli.fetch paths", async () => {
