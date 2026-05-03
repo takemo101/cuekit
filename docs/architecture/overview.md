@@ -111,7 +111,7 @@ MCP/CLI Surface → Adapters → Core
   - `cuekit adapter list`
   - `cuekit session delete`
   - `cuekit mcp config`
-- MCP tool name は protocol-facing contract として flat snake_case を維持する (`submit_task`, `get_task_status`, ...)
+- MCP は AI が迷いにくい grouped tools を公開する (`get_status`, `wait`, `list`, `cleanup`, `delete` など)。`show_mcp_config` は CLI-only。
 
 ## cuekit の立ち位置
 

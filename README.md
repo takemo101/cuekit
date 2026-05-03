@@ -1,6 +1,6 @@
 # cuekit
 
-Protocol and adapter foundation for orchestrating coding agents. A single schema-backed control surface powers grouped human CLI commands such as `cuekit task submit ...` and flat MCP tools such as `submit_task`.
+Protocol and adapter foundation for orchestrating coding agents. A single schema-backed control surface powers grouped human CLI commands such as `cuekit task submit ...` and a compact grouped MCP tool surface for AI callers.
 
 ## Shape
 
@@ -18,8 +18,8 @@ Protocol and adapter foundation for orchestrating coding agents. A single schema
 
 | Supported | Deferred |
 |---|---|
-| `submit_task` / `get_task_status` / `get_task_result` / `cancel_task` | Workflow engine, kanban, swarm OS |
-| `list_tasks` / `list_adapters` | Distributed worker pools, DAG scheduling |
+| `submit_task` / `get_status` / `get_task_result` / `wait` / `cancel_tasks` | Workflow engine, kanban, swarm OS |
+| grouped `list` / `cleanup` / `delete` MCP tools | Distributed worker pools, DAG scheduling |
 | `steer_task` (best-effort, adapter-dependent) | Remote tenancy / auth model |
 | tmux attach for every running task | Cost accounting, long-term memory |
 
@@ -148,9 +148,9 @@ Start the stdio MCP server:
 cuekit --mcp
 ```
 
-Agents that speak MCP can list the `submit_task` / `get_task_status` / `get_task_result` / `wait_tasks` / `cancel_task` / `list_tasks` / `report_task_event` / `list_task_events` / `list_adapters` / `steer_task` / `delete_task` / `delete_session` / `show_mcp_config` tools and call them over stdio. Use `cuekit mcp config` to print a client configuration snippet.
+Agents that speak MCP can list the compact grouped tool surface: `submit_task`, `submit_team_tasks`, `create_team`, `get_status`, `get_task_result`, `wait`, `cancel_tasks`, `list`, `report_task_event`, `steer_task`, `cleanup`, and `delete`. Use `cuekit mcp config` from the human CLI to print a client configuration snippet; setup helpers are not exposed as MCP tools.
 
-`wait_tasks` is the parent-side polling primitive for asynchronous delegation. It replaces the previous `wait_task` tool — single-task waits use `task_ids: [task_id]`. Submit one or more child tasks, then wait with `mode: "all"` for all terminal states or `mode: "any"` for the first terminal state. Waiting is scoped by `session_id` or the current/explicit `cwd` so a parent does not accidentally observe another project's tasks; a wait timeout only stops waiting and does not cancel child work.
+`wait` is the parent-side polling primitive for asynchronous delegation. Use `kind: "tasks"` with `task_ids: [task_id]` for one or more tasks, or `kind: "team"` with `team_id` for a team snapshot. Submit one or more child tasks, then wait with `mode: "all"` for all terminal states or `mode: "any"` for the first terminal state. Waiting is scoped by `session_id` or the current/explicit `cwd` so a parent does not accidentally observe another project's tasks; a wait timeout only stops waiting and does not cancel child work.
 
 ## State
 
