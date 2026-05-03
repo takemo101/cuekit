@@ -106,7 +106,13 @@ Explicit `--agent_kind` / `--model` override profile defaults. `role: "auto"` us
 
 ### Project config
 
-Add `.cuekit.yaml` to a repository to define project identity, safe submit defaults, TUI scope, and Task Teams defaults. Start from [`.cuekit.example.yaml`](.cuekit.example.yaml) and see [Project Config](docs/guides/project-config.md).
+Add `.cuekit.yaml` to a repository to define project identity, safe submit defaults, TUI scope, and Task Teams defaults. The recommended starting point is:
+
+```sh
+cuekit init
+```
+
+This creates a safe `.cuekit.yaml` and adds `.cuekit/tasks/` to `.gitignore` for local task artifacts. You can also start from [`.cuekit.example.yaml`](.cuekit.example.yaml). See [Project Config](docs/guides/project-config.md).
 
 Project-local config is safe by design: it cannot enable permission bypass, and project-derived role/agent defaults force prompt-safe adapter options unless a caller explicitly supplies `adapter_options`.
 
