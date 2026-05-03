@@ -24,10 +24,12 @@ submit:
 
 teams:
   roles:
+    # Default Agent Profile role per team position.
     coordinator: planner
     worker: worker
     reviewer: reviewer
   wait:
+    # Defaults for wait_team unless request fields override them.
     timeout_ms: 300000
     poll_interval_ms: 2000
   # Planned/inactive until cuekit has a delete_team operation.

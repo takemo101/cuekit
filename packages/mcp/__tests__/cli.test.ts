@@ -203,7 +203,10 @@ describe("createCli", () => {
 			expect(exitCode).toBe(0);
 			expect(stderr).toBe("");
 			expect(stdout).toContain(".cuekit.yaml");
-			expect(readFileSync(`${tmpRoot}/.cuekit.yaml`, "utf8")).toContain("scope: project");
+			const configText = readFileSync(`${tmpRoot}/.cuekit.yaml`, "utf8");
+			expect(configText).toContain("scope: project");
+			expect(configText).toContain("submit:");
+			expect(configText).toContain("role: worker");
 			expect(readFileSync(`${tmpRoot}/.gitignore`, "utf8")).toContain(".cuekit/tasks/");
 		} finally {
 			rmSync(tmpRoot, { recursive: true, force: true });
