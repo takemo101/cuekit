@@ -32,9 +32,12 @@ project:
   name: Cuekit
 
 tui:
+  # project = use .cuekit.yaml project identity for the TUI default scope.
   scope: project
 
 submit:
+  # Defaults for submit_task. Explicit request fields always win.
+  # If role is set, the selected Agent Profile can still provide agent/model.
   role: worker
   agent: claude-code
   model: sonnet
@@ -43,16 +46,20 @@ submit:
 
 teams:
   roles:
+    # Default Agent Profile role per team position.
     coordinator: planner
     worker: worker
     reviewer: reviewer
   wait:
+    # Defaults for wait_team unless request fields override them.
     timeout_ms: 300000
     poll_interval_ms: 2000
+  # Planned/inactive until cuekit has a delete_team operation.
   cleanup: keep-team
 
 adapters:
   claude-code:
+    # prompt keeps generated config safe. Use bypass only for trusted repos.
     permissions: prompt
 ```
 
@@ -67,7 +74,7 @@ Default behavior:
 - adds only `.cuekit/tasks/` to `.gitignore`
 - refuses to overwrite an existing `.cuekit.yaml`
 
-Generated `.cuekit.yaml` is intentionally minimal. By default it includes project identity, `tui.scope: project`, `teams.cleanup: keep-team`, and prompt-safe adapter permission defaults. It does not generate `submit` defaults or `teams.cleanup: delete-empty-team`.
+Generated `.cuekit.yaml` is a commented starting point. By default it includes project identity, `tui.scope: project`, `submit_task` defaults, Task Teams role/wait/cleanup defaults, and prompt-safe adapter permission defaults. It does not generate `teams.cleanup: delete-empty-team`.
 
 Options:
 

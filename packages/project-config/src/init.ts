@@ -1,7 +1,6 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { stringify } from "yaml";
-import type { CuekitProjectConfig } from "./schema.ts";
 
 export const CUEKIT_GITIGNORE_ENTRY = ".cuekit/tasks/";
 const CUEKIT_GITIGNORE_COMMENT = "# cuekit local task artifacts";
@@ -19,16 +18,44 @@ export interface RenderProjectConfigTemplateInput {
 
 export function renderProjectConfigTemplate(input: RenderProjectConfigTemplateInput): string {
 	const permissions = input.permissions ?? "prompt";
-	const config: CuekitProjectConfig = {
+	const project = stringify({
 		project: { id: input.projectId, name: input.projectName },
-		tui: { scope: "project" },
-		teams: { cleanup: "keep-team" },
-		adapters: {
-			"claude-code": { permissions },
-			opencode: { permissions },
-		},
-	};
-	return stringify(config);
+	}).trimEnd();
+	return `${project}
+
+# Scope TUI views to this project by default.
+tui:
+  scope: project
+
+submit:
+  # Defaults for submit_task. Explicit request fields always win.
+  # If role is set, the selected Agent Profile can still provide agent/model.
+  role: worker
+  agent: claude-code
+  model: sonnet
+  timeout_ms: 1800000
+  priority: normal
+
+teams:
+  roles:
+    # Default Agent Profile role per team position.
+    coordinator: planner
+    worker: worker
+    reviewer: reviewer
+  wait:
+    # Defaults for wait_team unless request fields override them.
+    timeout_ms: 300000
+    poll_interval_ms: 2000
+  # Planned/inactive until cuekit has a delete_team operation.
+  cleanup: keep-team
+
+adapters:
+  claude-code:
+    # prompt keeps generated config safe. Use --unsafe-bypass only for trusted repos.
+    permissions: ${permissions}
+  opencode:
+    permissions: ${permissions}
+`;
 }
 
 export function applyCuekitGitignoreEntry(current: string): string {

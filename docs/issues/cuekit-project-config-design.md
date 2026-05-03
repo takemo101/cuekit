@@ -318,10 +318,30 @@ project:
   id: <directory-name-as-safe-id>
   name: <directory-name>
 
+# Scope TUI views to this project by default.
 tui:
   scope: project
 
+submit:
+  # Defaults for submit_task. Explicit request fields always win.
+  # If role is set, the selected Agent Profile can still provide agent/model.
+  role: worker
+  agent: claude-code
+  model: sonnet
+  timeout_ms: 1800000
+  priority: normal
+
 teams:
+  roles:
+    # Default Agent Profile role per team position.
+    coordinator: planner
+    worker: worker
+    reviewer: reviewer
+  wait:
+    # Defaults for wait_team unless request fields override them.
+    timeout_ms: 300000
+    poll_interval_ms: 2000
+  # Planned/inactive until cuekit has a delete_team operation.
   cleanup: keep-team
 
 adapters:
@@ -334,7 +354,8 @@ adapters:
 Notes:
 
 - `project.id` should be derived from the current directory name and sanitized to the existing project id pattern.
-- Omit `submit` defaults initially unless the user explicitly asks for them in a future interactive mode. This avoids accidentally changing task routing or model selection.
+- Include commented `submit` defaults to make the default role/agent/model/timeout behavior discoverable; explicit submit request fields still win.
+- Include commented Task Teams role and wait defaults so initialized projects are ready for coordinator/worker/reviewer teams.
 - Do not generate `permissions: bypass` unless `cuekit init --unsafe-bypass` is explicitly requested.
 - `teams.cleanup: delete-empty-team` must not be generated while `delete_team` does not exist.
 
