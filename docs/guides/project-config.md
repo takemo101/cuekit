@@ -2,7 +2,13 @@
 
 cuekit can read a project-local `.cuekit.yaml` to give a repository a stable identity and safe defaults for the TUI, `submit_task`, and Task Teams.
 
-Start from the example:
+Initialize a project with:
+
+```sh
+cuekit init
+```
+
+This creates a safe `.cuekit.yaml` and creates or updates `.gitignore` with `.cuekit/tasks/` for local task artifacts. You can also copy `.cuekit.example.yaml` manually when you want a fuller commented starting point:
 
 ```sh
 cp .cuekit.example.yaml .cuekit.yaml
@@ -49,6 +55,36 @@ adapters:
   claude-code:
     permissions: prompt
 ```
+
+## `cuekit init`
+
+`cuekit init` is a human CLI command for creating project-local cuekit files. It is not an MCP tool.
+
+Default behavior:
+
+- creates `.cuekit.yaml` in the current directory
+- creates or updates `.gitignore`
+- adds only `.cuekit/tasks/` to `.gitignore`
+- refuses to overwrite an existing `.cuekit.yaml`
+
+Generated `.cuekit.yaml` is intentionally minimal and safe. It includes project identity, `tui.scope: project`, `teams.cleanup: keep-team`, and prompt-safe adapter permission defaults. It does not generate `submit` defaults, `permissions: bypass`, or `teams.cleanup: delete-empty-team`.
+
+Options:
+
+```sh
+cuekit init --dry-run       # preview files without writing
+cuekit init --force         # overwrite existing .cuekit.yaml
+cuekit init --no-gitignore  # do not create or update .gitignore
+```
+
+The `.gitignore` update ignores task artifacts only:
+
+```gitignore
+# cuekit local task artifacts
+.cuekit/tasks/
+```
+
+Do not ignore `.cuekit/` as a whole if you want to commit project Agent Profiles such as `.cuekit/agents/reviewer.md`.
 
 ## TUI scope
 
