@@ -10,7 +10,11 @@ import {
 } from "@cuekit/adapters";
 import { findProjectRoot } from "@cuekit/agent-profiles";
 import { createStderrLogger, parseLogLevel } from "@cuekit/core";
-import { loadProjectConfig } from "@cuekit/project-config";
+import {
+	loadProjectConfig,
+	type ProjectConfigInitResult,
+	runProjectConfigInit,
+} from "@cuekit/project-config";
 import { openDatabase, runMigrations } from "@cuekit/store";
 import { createCli, createMcpCli, createMcpConfigCli } from "./cli.ts";
 import { registerPiMcpServer } from "./pi-mcp-config.ts";
@@ -30,6 +34,36 @@ function closeQuietly(db: Database): void {
 }
 
 const TUI_PACKAGE_NAME = "@cuekit/tui";
+
+function printInitHelp(): void {
+	process.stdout.write(
+		[
+			"cuekit init — create safe project-local cuekit config",
+			"",
+			"Usage: cuekit init [--dry-run] [--force] [--no-gitignore]",
+			"",
+			"Creates .cuekit.yaml in the current directory and adds .cuekit/tasks/ to .gitignore.",
+			"",
+			"Options:",
+			"  --dry-run       Show what would be written without changing files",
+			"  --force         Overwrite an existing .cuekit.yaml",
+			"  --no-gitignore  Do not create or update .gitignore",
+			"  -h, --help      Show this help",
+			"",
+		].join("\n"),
+	);
+}
+
+function printInitSummary(result: ProjectConfigInitResult): void {
+	const prefix = result.dryRun ? "dry-run: " : "";
+	const lines = [
+		`${prefix}cuekit init ${result.dryRun ? "would update" : "updated"} ${result.cwd}`,
+	];
+	for (const path of result.created) lines.push(`${prefix}created ${path}`);
+	for (const path of result.updated) lines.push(`${prefix}updated ${path}`);
+	for (const path of result.skipped) lines.push(`${prefix}skipped ${path}`);
+	process.stdout.write(`${lines.join("\n")}\n`);
+}
 
 function printTuiHelp(): void {
 	process.stdout.write(
@@ -94,6 +128,22 @@ async function main(): Promise<void> {
 
 	let db: Database | undefined;
 	try {
+		const isInit = process.argv[2] === "init";
+		if (isInit && (process.argv.includes("--help") || process.argv.includes("-h"))) {
+			printInitHelp();
+			return;
+		}
+		if (isInit) {
+			const result = runProjectConfigInit({
+				cwd: process.cwd(),
+				dryRun: process.argv.includes("--dry-run"),
+				force: process.argv.includes("--force"),
+				gitignore: !process.argv.includes("--no-gitignore"),
+			});
+			printInitSummary(result);
+			return;
+		}
+
 		const isTui = process.argv[2] === "tui";
 		if (isTui && (process.argv.includes("--help") || process.argv.includes("-h"))) {
 			printTuiHelp();
