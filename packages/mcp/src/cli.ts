@@ -1,9 +1,11 @@
 import { Cli } from "incur";
 import pkg from "../package.json" with { type: "json" };
 import type { CommandContext } from "./command-context.ts";
-import { CUEKIT_MCP_OPERATIONS, CUEKIT_OPERATIONS } from "./operations.ts";
+import { CUEKIT_CLI_OPERATIONS, CUEKIT_MCP_OPERATIONS } from "./operations.ts";
 
-type CuekitOperation = (typeof CUEKIT_OPERATIONS)[number] | (typeof CUEKIT_MCP_OPERATIONS)[number];
+type CuekitOperation =
+	| (typeof CUEKIT_CLI_OPERATIONS)[number]
+	| (typeof CUEKIT_MCP_OPERATIONS)[number];
 
 function registerOperation(
 	cli: ReturnType<typeof Cli.create>,
@@ -30,7 +32,7 @@ export function createCli(ctx: CommandContext) {
 	});
 	const groups = new Map<string, ReturnType<typeof Cli.create>>();
 
-	for (const operation of CUEKIT_OPERATIONS) {
+	for (const operation of CUEKIT_CLI_OPERATIONS) {
 		const [group, leaf] = operation.cliPath;
 		let groupCli = groups.get(group);
 		if (!groupCli) {
@@ -73,8 +75,10 @@ export function createMcpConfigCli(ctx: CommandContext) {
 		version: pkg.version,
 		description: "cuekit — delegation substrate for coding agents.",
 	});
-	const operation = CUEKIT_OPERATIONS.find((entry) => entry.mcpName === "show_mcp_config");
-	if (!operation) throw new Error("missing show_mcp_config operation");
+	const operation = CUEKIT_CLI_OPERATIONS.find(
+		(entry) => entry.cliPath[0] === "mcp" && entry.cliPath[1] === "config",
+	);
+	if (!operation) throw new Error("missing mcp config operation");
 	registerOperation(cli, "config", ctx, operation);
 	return cli;
 }

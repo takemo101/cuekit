@@ -21,7 +21,7 @@ import {
 	updateTaskChildTokenHash,
 } from "@cuekit/store";
 import { createCli, createMcpCli } from "../src/cli.ts";
-import { CUEKIT_MCP_OPERATIONS, CUEKIT_OPERATIONS } from "../src/operations.ts";
+import { CUEKIT_CLI_OPERATIONS, CUEKIT_MCP_OPERATIONS } from "../src/operations.ts";
 
 const WORKSPACE_ROOT = resolve(import.meta.dir, "..", "..", "..");
 
@@ -44,10 +44,11 @@ function makeCli() {
 describe("createCli", () => {
 	it("defines unique MCP names and future CLI paths for every operation", () => {
 		const mcpNames = CUEKIT_MCP_OPERATIONS.map((operation) => operation.mcpName);
-		const cliPaths = CUEKIT_OPERATIONS.map((operation) => operation.cliPath.join(" "));
+		const cliPaths = CUEKIT_CLI_OPERATIONS.map((operation) => operation.cliPath.join(" "));
 
 		expect(new Set(mcpNames).size).toBe(mcpNames.length);
 		expect(new Set(cliPaths).size).toBe(cliPaths.length);
+		expect(CUEKIT_CLI_OPERATIONS.every((operation) => !("mcpName" in operation))).toBe(true);
 		expect(cliPaths).toContain("task submit");
 		expect(cliPaths).toContain("task events");
 		expect(cliPaths).toContain("adapter list");
