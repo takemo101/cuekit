@@ -64,10 +64,12 @@ describe("createCli", () => {
 		expect(mcpNames).not.toContain("delete_task");
 		expect(mcpNames).not.toContain("delete_session");
 		expect(mcpNames).not.toContain("tui");
+		expect(mcpNames).not.toContain("init");
 		expect(cliPaths).toContain("task wait");
 		expect(cliPaths).toContain("task cleanup");
 		expect(cliPaths).not.toContain("task wait-one");
 		expect(cliPaths).not.toContain("tui");
+		expect(cliPaths).not.toContain("init");
 	});
 
 	it("builds an incur CLI without throwing", () => {
@@ -160,6 +162,132 @@ describe("createCli", () => {
 		expect(stdout).toContain("--path");
 		expect(stdout).toContain("--all");
 		expect(stdout).toContain(".cuekit.yaml");
+	});
+
+	it("serves init as a human-only command before opening the database", async () => {
+		const tmpRoot = mkdtempSync(`${tmpdir()}/cuekit-init-cli-`);
+		try {
+			const binPath = resolve(WORKSPACE_ROOT, "packages/mcp/src/bin.ts");
+			const proc = Bun.spawn(["bun", binPath, "init"], {
+				cwd: tmpRoot,
+				env: { ...process.env, CUEKIT_DB_PATH: "/nonexistent-dir/cuekit/state.db" },
+				stderr: "pipe",
+				stdout: "pipe",
+			});
+			const [exitCode, stdout, stderr] = await Promise.all([
+				proc.exited,
+				new Response(proc.stdout).text(),
+				new Response(proc.stderr).text(),
+			]);
+
+			expect(exitCode).toBe(0);
+			expect(stderr).toBe("");
+			expect(stdout).toContain(".cuekit.yaml");
+			expect(readFileSync(`${tmpRoot}/.cuekit.yaml`, "utf8")).toContain("scope: project");
+			expect(readFileSync(`${tmpRoot}/.gitignore`, "utf8")).toContain(".cuekit/tasks/");
+		} finally {
+			rmSync(tmpRoot, { recursive: true, force: true });
+		}
+	});
+
+	it("serves init help before opening the database", async () => {
+		const tmpRoot = mkdtempSync(`${tmpdir()}/cuekit-init-help-`);
+		try {
+			const binPath = resolve(WORKSPACE_ROOT, "packages/mcp/src/bin.ts");
+			const proc = Bun.spawn(["bun", binPath, "init", "--help"], {
+				cwd: tmpRoot,
+				env: { ...process.env, CUEKIT_DB_PATH: "/nonexistent-dir/cuekit/state.db" },
+				stderr: "pipe",
+				stdout: "pipe",
+			});
+			const [exitCode, stdout, stderr] = await Promise.all([
+				proc.exited,
+				new Response(proc.stdout).text(),
+				new Response(proc.stderr).text(),
+			]);
+
+			expect(exitCode).toBe(0);
+			expect(stderr).toBe("");
+			expect(stdout).toContain("cuekit init");
+			expect(stdout).toContain("--dry-run");
+		} finally {
+			rmSync(tmpRoot, { recursive: true, force: true });
+		}
+	});
+
+	it("init dry-run writes no files", async () => {
+		const tmpRoot = mkdtempSync(`${tmpdir()}/cuekit-init-dry-run-`);
+		try {
+			const binPath = resolve(WORKSPACE_ROOT, "packages/mcp/src/bin.ts");
+			const proc = Bun.spawn(["bun", binPath, "init", "--dry-run"], {
+				cwd: tmpRoot,
+				env: { ...process.env },
+				stderr: "pipe",
+				stdout: "pipe",
+			});
+			const [exitCode, stdout, stderr] = await Promise.all([
+				proc.exited,
+				new Response(proc.stdout).text(),
+				new Response(proc.stderr).text(),
+			]);
+
+			expect(exitCode).toBe(0);
+			expect(stderr).toBe("");
+			expect(stdout).toContain("dry-run");
+			expect(() => readFileSync(`${tmpRoot}/.cuekit.yaml`, "utf8")).toThrow();
+		} finally {
+			rmSync(tmpRoot, { recursive: true, force: true });
+		}
+	});
+
+	it("init refuses existing config unless forced", async () => {
+		const tmpRoot = mkdtempSync(`${tmpdir()}/cuekit-init-force-`);
+		try {
+			const binPath = resolve(WORKSPACE_ROOT, "packages/mcp/src/bin.ts");
+			writeFileSync(`${tmpRoot}/.cuekit.yaml`, "project:\n  id: existing\n");
+
+			const refused = Bun.spawn(["bun", binPath, "init"], {
+				cwd: tmpRoot,
+				env: { ...process.env },
+				stderr: "pipe",
+				stdout: "pipe",
+			});
+			const [refusedCode, refusedErr] = await Promise.all([
+				refused.exited,
+				new Response(refused.stderr).text(),
+			]);
+			expect(refusedCode).toBe(1);
+			expect(refusedErr).toContain("already exists");
+
+			const forced = Bun.spawn(["bun", binPath, "init", "--force"], {
+				cwd: tmpRoot,
+				env: { ...process.env },
+				stderr: "pipe",
+				stdout: "pipe",
+			});
+			expect(await forced.exited).toBe(0);
+			expect(readFileSync(`${tmpRoot}/.cuekit.yaml`, "utf8")).not.toContain("existing");
+		} finally {
+			rmSync(tmpRoot, { recursive: true, force: true });
+		}
+	});
+
+	it("init can skip gitignore updates", async () => {
+		const tmpRoot = mkdtempSync(`${tmpdir()}/cuekit-init-no-gitignore-`);
+		try {
+			const binPath = resolve(WORKSPACE_ROOT, "packages/mcp/src/bin.ts");
+			const proc = Bun.spawn(["bun", binPath, "init", "--no-gitignore"], {
+				cwd: tmpRoot,
+				env: { ...process.env },
+				stderr: "pipe",
+				stdout: "pipe",
+			});
+			expect(await proc.exited).toBe(0);
+			expect(readFileSync(`${tmpRoot}/.cuekit.yaml`, "utf8")).toContain("scope: project");
+			expect(() => readFileSync(`${tmpRoot}/.gitignore`, "utf8")).toThrow();
+		} finally {
+			rmSync(tmpRoot, { recursive: true, force: true });
+		}
 	});
 
 	it("serves tui help before opening the database", async () => {
