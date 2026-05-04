@@ -18,9 +18,14 @@ export interface PiAdapterOptions {
 	cuekitHomeDir?: string;
 }
 
+const PI_REPORTING_GUIDANCE = `Pi adapter guidance:
+- This task is running under cuekit in a managed pane. Do not stop after only saying the answer.
+- For single-shot objectives, after completing the requested work, run: cuekit tool report --type completed --message "<short summary>".
+- If you cannot complete the task, run cuekit tool report with --type failed or --type blocked instead.`;
+
 export function buildPiLaunchCommand(spec: TaskSpec, piBin = "pi"): string {
 	const command = shellQuote(piBin);
-	const prompt = shellQuote(renderTaskSpecPrompt(spec));
+	const prompt = shellQuote(`${renderTaskSpecPrompt(spec)}\n\n${PI_REPORTING_GUIDANCE}`);
 	return adapterRunModeFor(spec) === "batch" ? `${command} -p ${prompt}` : `${command} ${prompt}`;
 }
 

@@ -46,6 +46,8 @@ const ESC = String.fromCharCode(27);
 const BEL = String.fromCharCode(7);
 const ANSI_CSI_RE = new RegExp(`${ESC}\\[[0-?]*[ -/]*[@-~]`, "g");
 const ANSI_OSC_RE = new RegExp(`${ESC}\\][^${BEL}]*(?:${BEL}|${ESC}\\\\)`, "g");
+const ANSI_STRING_RE = new RegExp(`${ESC}[PX^_][\\s\\S]*?${ESC}\\\\`, "g");
+const ANSI_ST_RE = new RegExp(`${ESC}\\\\`, "g");
 
 function stripControlCharacters(value: string): string {
 	return Array.from(value)
@@ -57,7 +59,13 @@ function stripControlCharacters(value: string): string {
 }
 
 export function sanitizeTerminalText(value: string): string {
-	return stripControlCharacters(value.replace(ANSI_OSC_RE, "").replace(ANSI_CSI_RE, "")).trimEnd();
+	return stripControlCharacters(
+		value
+			.replace(ANSI_STRING_RE, "")
+			.replace(ANSI_OSC_RE, "")
+			.replace(ANSI_CSI_RE, "")
+			.replace(ANSI_ST_RE, ""),
+	).trimEnd();
 }
 
 function isLowValueTranscriptLine(line: string): boolean {

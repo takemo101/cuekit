@@ -181,6 +181,14 @@ describe("tui data helpers", () => {
 		);
 	});
 
+	it("strips DCS and application passthrough sequences from transcript text", () => {
+		expect(
+			sanitizeTerminalText("before\u001bPtmux;\u001b_Gi=31337;AAAA\u001b\\\u001b\\after"),
+		).toBe("beforeafter");
+		expect(sanitizeTerminalText("before\u001b_Gi=31337,s=1;AAAA\u001b\\after")).toBe("beforeafter");
+		expect(sanitizeTerminalText("before\u001bPtmux;\u0007LEAK\u001b\\after")).toBe("beforeafter");
+	});
+
 	it("strips DEL and C1 terminal control bytes from transcript text", () => {
 		expect(sanitizeTerminalText("\u009b31mred\u009dtitle\u007f text")).toBe("31mredtitle text");
 	});
