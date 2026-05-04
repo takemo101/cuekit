@@ -4,12 +4,26 @@ import { z } from "incur";
 import type { CommandContext } from "../command-context.ts";
 import { resolveSessionId } from "../session-helpers.ts";
 
+const TeamMetadataSchema = z.record(z.string(), z.unknown());
+
+const CliJsonTeamMetadataSchema = z.string().transform((raw, ctx) => {
+	try {
+		return TeamMetadataSchema.parse(JSON.parse(raw));
+	} catch (err) {
+		ctx.addIssue({
+			code: "custom",
+			message: `metadata must be a JSON object: ${err instanceof Error ? err.message : String(err)}`,
+		});
+		return z.NEVER;
+	}
+});
+
 export const CreateTeamInputSchema = z.object({
 	session_id: z.string().min(1).optional(),
 	cwd: z.string().min(1).optional(),
 	title: z.string().min(1),
 	objective: z.string().min(1).optional(),
-	metadata: z.record(z.string(), z.unknown()).optional(),
+	metadata: z.union([TeamMetadataSchema, CliJsonTeamMetadataSchema]).optional(),
 });
 
 export type CreateTeamInput = z.infer<typeof CreateTeamInputSchema>;
