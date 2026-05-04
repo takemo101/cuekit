@@ -6,7 +6,7 @@ Protocol and adapter foundation for orchestrating coding agents. A single schema
 
 - `@cuekit/core` — protocol types, Zod schemas, and lifecycle helpers. No runtime dependencies; pure TypeScript.
 - `@cuekit/store` — SQLite-backed persistence at `~/.cuekit/state.db` with migrations and typed row decoding.
-- `@cuekit/adapters` — runtime bindings. v0 ships a `tmux`-pane backend with adapters for claude-code (working spike), pi, and opencode (stubs).
+- `@cuekit/adapters` — runtime bindings. v0 ships a `tmux`-pane backend with adapters for claude-code (working spike), pi, and opencode (stubs). A jcode REPL adapter is designed for the same attach/steer workflow; see [`docs/issues/cuekit-jcode-repl-adapter-design.md`](docs/issues/cuekit-jcode-repl-adapter-design.md).
 - `@cuekit/mcp` — control surface. The `cuekit` binary.
 
 ## Requirements
