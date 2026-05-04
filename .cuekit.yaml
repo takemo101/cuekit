@@ -9,18 +9,14 @@ tui:
 submit:
   # Defaults for submit_task. Explicit request fields always win.
   # If role is set, the selected Agent Profile can still provide agent/model.
-  role: worker
   agent: claude-code
   # Runtime submit calls can pass timeout_ms: null to opt out for one long-running task.
   timeout_ms: 1800000
   priority: normal
 
 teams:
-  roles:
-    # Default Agent Profile role per team position.
-    coordinator: planner
-    worker: worker
-    reviewer: reviewer
+  # Role defaults are intentionally omitted: built-in roles carry model defaults,
+  # which would leak into pi/opencode strategy slots that should not pin models.
   wait:
     # Defaults for wait_team unless request fields override them.
     timeout_ms: 300000
@@ -44,11 +40,9 @@ strategies:
     recommended_team:
       coordinator:
         position: coordinator
-        role: planner
         agent: pi
       worker:
         position: worker
-        role: worker
         agent: pi
       reviewer:
         position: reviewer
@@ -78,7 +72,6 @@ strategies:
     recommended_team:
       coordinator:
         position: coordinator
-        role: planner
         agent: pi
       investigator:
         position: worker
@@ -88,7 +81,6 @@ strategies:
         objective: "Reproduce the bug, identify the root cause, and report the minimal fix target."
       implementer:
         position: worker
-        role: worker
         agent: claude-code
         model: sonnet
         objective: "Implement the smallest safe fix and add regression coverage."
@@ -100,7 +92,6 @@ strategies:
         objective: "Review root cause, regression test, fix scope, and side effects."
       opencode-reviewer:
         position: reviewer
-        role: reviewer
         agent: opencode
         objective: "When multi-angle review is useful, provide an independent review focused on edge cases, API compatibility, and maintainability."
     guardrails:
@@ -128,11 +119,9 @@ strategies:
     recommended_team:
       coordinator:
         position: coordinator
-        role: planner
         agent: pi
       implementer:
         position: worker
-        role: worker
         agent: claude-code
         model: sonnet
       reviewer:
@@ -142,7 +131,6 @@ strategies:
         model: sonnet
       opencode-reviewer:
         position: reviewer
-        role: reviewer
         agent: opencode
         objective: "When multi-angle review is useful, provide an independent review focused on architecture fit, user-facing behavior, and test gaps."
     guardrails:
@@ -170,11 +158,9 @@ strategies:
     recommended_team:
       coordinator:
         position: coordinator
-        role: planner
         agent: pi
       implementer:
         position: worker
-        role: worker
         agent: claude-code
         model: sonnet
       reviewer:
@@ -207,7 +193,6 @@ strategies:
     recommended_team:
       coordinator:
         position: coordinator
-        role: planner
         agent: pi
       reviewer:
         position: reviewer
@@ -222,7 +207,6 @@ strategies:
         objective: "Map relevant files and compare implementation to docs/architecture and active design notes."
       opencode-reviewer:
         position: reviewer
-        role: reviewer
         agent: opencode
         objective: "When multi-angle review is useful, provide an independent review focused on cross-cutting architecture risks and follow-up issue quality."
     guardrails:
@@ -247,11 +231,9 @@ strategies:
     recommended_team:
       coordinator:
         position: coordinator
-        role: planner
         agent: pi
       worker:
         position: worker
-        role: worker
         agent: pi
       reviewer:
         position: reviewer
@@ -260,7 +242,6 @@ strategies:
         model: sonnet
       opencode-reviewer:
         position: reviewer
-        role: reviewer
         agent: opencode
         objective: "When multi-angle review is useful, provide an independent review focused on dogfood UX gaps and workflow friction."
     guardrails:
