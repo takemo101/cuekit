@@ -193,6 +193,61 @@ describe("team commands", () => {
 		expect(result.run_summary.open_attention?.[0]?.task_id).toBe("t_review");
 	});
 
+	it("get-team-status team run summaries prefer durable events over transcript noise", () => {
+		const root = mkdtempSync(join(tmpdir(), "cuekit-team-summary-events-"));
+		try {
+			const transcriptPath = join(root, "transcript.txt");
+			writeFileSync(
+				transcriptPath,
+				"\u001b[2J\u001b[HOpenTUI repaint noise\nassistant> partial noisy transcript tail\n",
+			);
+			createSession(db, {
+				id: "s_event_first_summary",
+				project_root: root,
+				worktree_path: root,
+				parent_agent_kind: "pi",
+			});
+			createTaskTeam(db, {
+				id: "tm_event_first_summary",
+				session_id: "s_event_first_summary",
+				title: "Team",
+			});
+			createTask(db, {
+				id: "t_event_first_summary",
+				session_id: "s_event_first_summary",
+				agent_kind: "pi",
+				team_id: "tm_event_first_summary",
+				team_position: "coordinator",
+				objective: "coordinate",
+				status: "completed",
+			});
+			db.query("update tasks set transcript_ref = ?, summary = ? where id = ?").run(
+				transcriptPath,
+				"noisy summary fallback",
+				"t_event_first_summary",
+			);
+			appendTaskEvent(db, {
+				id: "e_event_first_summary",
+				task_id: "t_event_first_summary",
+				type: "completed",
+				message: "Durable coordinator final report",
+			});
+
+			const result = runGetTeamStatus(ctx, { team_id: "tm_event_first_summary" });
+
+			expect("team_id" in result).toBe(true);
+			if (!("team_id" in result)) return;
+			expect(result.run_summary.latest_terminal_message).toBe("Durable coordinator final report");
+			expect(result.run_summary.positions.coordinator[0]?.message).toBe(
+				"Durable coordinator final report",
+			);
+			expect(result.run_summary.latest_terminal_message).not.toContain("OpenTUI");
+			expect(result.run_summary.latest_terminal_message).not.toContain("noisy summary");
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
 	it("get-team-status returns empty team status", () => {
 		createSession(db, {
 			id: "s1",
