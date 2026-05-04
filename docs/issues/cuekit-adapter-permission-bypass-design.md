@@ -4,10 +4,12 @@
 
 `claude-code` and `opencode` tasks run inside cuekit-managed tmux panes. Both runtimes can stop at permission prompts, leaving the parent orchestrator with a running task that needs manual intervention.
 
-Both CLIs expose an explicit dangerous bypass flag:
+Both CLIs expose an explicit dangerous bypass flag for the modes cuekit uses for unattended work:
 
 - Claude Code: `--dangerously-skip-permissions`
-- OpenCode: `opencode run --dangerously-skip-permissions`
+- OpenCode batch mode: `opencode run --dangerously-skip-permissions`
+
+OpenCode's top-level TUI help does not advertise `--dangerously-skip-permissions`, so cuekit applies OpenCode permission bypass only when `adapter_options.mode: "batch"` selects `opencode run`.
 
 ## Goal
 
@@ -62,9 +64,9 @@ Opt-out:
 claude --model 'sonnet' '<prompt>'
 ```
 
-### OpenCode
+### OpenCode batch mode
 
-Default:
+Default with `adapter_options.mode: "batch"`:
 
 ```sh
 opencode run --dangerously-skip-permissions --model 'provider/model' -- '<prompt>'

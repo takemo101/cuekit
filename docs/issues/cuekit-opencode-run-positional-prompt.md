@@ -1,8 +1,10 @@
-# Bug: OpenCode adapter must pass prompt as positional `run` message
+# Bug: OpenCode batch mode must pass prompt as positional `run` message
 
 ## Problem
 
-The OpenCode adapter used `opencode run --prompt '<prompt>'`. Current OpenCode `run` accepts the prompt as positional `message..`; using `--prompt` prints help and exits with code 1.
+OpenCode batch mode uses `opencode run`. An earlier OpenCode adapter shape used `opencode run --prompt '<prompt>'`. Current OpenCode `run` accepts the prompt as positional `message..`; using `--prompt` prints help and exits with code 1.
+
+The default `opencode` adapter mode is now the interactive TUI entrypoint (`opencode --prompt '<prompt>'`). This note applies only to `adapter_options.mode: "batch"`, where cuekit intentionally uses `opencode run`.
 
 ## Evidence
 
@@ -16,7 +18,7 @@ opencode run --dangerously-skip-permissions 'hi'
 
 ## Fix
 
-Generate:
+For batch mode, generate:
 
 ```bash
 opencode run --dangerously-skip-permissions -- '<rendered prompt>'
