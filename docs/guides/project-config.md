@@ -204,6 +204,28 @@ Strategy fields:
 
 Strategy recommendations are lower precedence than explicit request fields and higher precedence than broad `teams` / `submit` defaults. Strategy-derived executable behavior follows cuekit's safety rules: it must not silently enable permission bypass unless the caller explicitly supplies adapter options.
 
+### MCP discovery
+
+MCP callers discover strategies through the grouped `list` tool instead of a separate flat strategy-list tool:
+
+```json
+{ "kind": "strategies", "cwd": "/path/to/repo" }
+```
+
+To inspect one strategy, pass `strategy`. To include the rendered coordinator prompt, also pass `include_prompt` and optionally `objective`:
+
+```json
+{
+  "kind": "strategies",
+  "cwd": "/path/to/repo",
+  "strategy": "feature",
+  "include_prompt": true,
+  "objective": "Add grouped strategy discovery"
+}
+```
+
+For reliable project resolution, pass `cwd` explicitly; when omitted, strategy discovery uses the MCP server process working directory.
+
 ## Safety rules
 
 Project-local config can affect adapter permissions, so use bypass only in trusted repositories.
