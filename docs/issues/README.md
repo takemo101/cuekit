@@ -18,6 +18,7 @@ Current focused work on outstanding issues:
 - [`cuekit-adapter-permission-bypass-design.md`](cuekit-adapter-permission-bypass-design.md) — default permission bypass behavior for unattended child agents.
 - [`cuekit-delete-session-tmux-leak.md`](cuekit-delete-session-tmux-leak.md) — tmux cleanup bug report and fix context.
 - [`cuekit-opencode-run-positional-prompt.md`](cuekit-opencode-run-positional-prompt.md) — OpenCode `run` prompt must be positional and protected by `--`.
+- [`cuekit-jcode-repl-adapter-design.md`](cuekit-jcode-repl-adapter-design.md) — planned `jcode` adapter using `jcode repl` for tmux attach and steering support.
 - [`cuekit-task-teams-design.md`](cuekit-task-teams-design.md) — lightweight session-scoped task teams for multi-task coding workflows.
 - [`cuekit-project-config-design.md`](cuekit-project-config-design.md) — proposed `.cuekit.yaml` project identity and defaults configuration.
 
