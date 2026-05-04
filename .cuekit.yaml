@@ -1,0 +1,289 @@
+project:
+  id: cuekit
+  name: cuekit
+
+# Scope TUI views to this project by default.
+tui:
+  scope: project
+
+submit:
+  # Defaults for submit_task. Explicit request fields always win.
+  # If role is set, the selected Agent Profile can still provide agent/model.
+  role: worker
+  agent: claude-code
+  model: sonnet
+  # Runtime submit calls can pass timeout_ms: null to opt out for one long-running task.
+  timeout_ms: 1800000
+  priority: normal
+
+teams:
+  roles:
+    # Default Agent Profile role per team position.
+    coordinator: planner
+    worker: worker
+    reviewer: reviewer
+  wait:
+    # Defaults for wait_team unless request fields override them.
+    timeout_ms: 300000
+    poll_interval_ms: 2000
+  # Planned/inactive until cuekit has a delete_team operation.
+  cleanup: keep-team
+
+adapters:
+  claude-code:
+    # prompt keeps generated config safe. Use --unsafe-bypass only for trusted repos.
+    permissions: bypass
+  opencode:
+    permissions: bypass
+
+strategies:
+  docs-polish:
+    description: "Small README/docs improvements"
+    intent: "Make minimal docs-only changes and verify meaning is preserved."
+    recommended_team:
+      coordinator:
+        position: coordinator
+        role: planner
+        agent: pi
+        model: openai-codex/gpt-5.5
+      worker:
+        position: worker
+        role: worker
+        agent: pi
+      reviewer:
+        position: reviewer
+        role: reviewer
+        agent: claude-code
+        model: sonnet
+    guardrails:
+      - "Keep changes limited to README/docs unless the parent explicitly expands scope."
+      - "Preserve existing design decisions and terminology."
+      - "Do not commit, push, or create PRs unless explicitly requested."
+    success_criteria:
+      - "Diff is limited to documentation files."
+      - "Meaning is preserved or clarified."
+      - "Reviewer confirms no unrelated edits."
+    checks:
+      - "git diff --check"
+      - "bun run check"
+    autonomy:
+      allow_additional_workers: true
+      allow_parallel_reviewers: false
+      require_reviewer: true
+      allow_skip_checks: false
+
+  bugfix:
+    description: "Root-cause bugfix with regression coverage"
+    intent: "Identify the root cause, add or update regression coverage, and fix the bug with the smallest safe change."
+    recommended_team:
+      coordinator:
+        position: coordinator
+        role: planner
+        agent: pi
+        model: openai-codex/gpt-5.5
+      investigator:
+        position: worker
+        role: scout
+        agent: claude-code
+        model: sonnet
+        objective: "Reproduce the bug, identify the root cause, and report the minimal fix target."
+      implementer:
+        position: worker
+        role: worker
+        agent: claude-code
+        model: sonnet
+        objective: "Implement the smallest safe fix and add regression coverage."
+      reviewer:
+        position: reviewer
+        role: reviewer
+        agent: claude-code
+        model: sonnet
+        objective: "Review root cause, regression test, fix scope, and side effects."
+      opencode-reviewer:
+        position: reviewer
+        role: reviewer
+        agent: opencode
+        objective: "When multi-angle review is useful, provide an independent review focused on edge cases, API compatibility, and maintainability."
+    guardrails:
+      - "Confirm the root cause before changing production code."
+      - "Prefer a failing regression test before the fix."
+      - "Keep the fix minimal and avoid unrelated refactors."
+      - "Do not silently loosen adapter/config safety behavior."
+    success_criteria:
+      - "The regression test fails before the fix and passes after it, when practical."
+      - "The root cause is explained in the final report."
+      - "Reviewer finds no blocking side effects."
+    checks:
+      - "bun test"
+      - "bun run typecheck"
+      - "bun run check"
+    autonomy:
+      allow_additional_workers: true
+      allow_parallel_reviewers: true
+      require_reviewer: true
+      allow_skip_checks: false
+
+  feature:
+    description: "Small-to-medium feature implementation"
+    intent: "Implement a focused feature in small reviewed slices while preserving cuekit's Swarm-lite architecture."
+    recommended_team:
+      coordinator:
+        position: coordinator
+        role: planner
+        agent: pi
+        model: openai-codex/gpt-5.5
+      implementer:
+        position: worker
+        role: worker
+        agent: claude-code
+        model: sonnet
+      reviewer:
+        position: reviewer
+        role: reviewer
+        agent: claude-code
+        model: sonnet
+      opencode-reviewer:
+        position: reviewer
+        role: reviewer
+        agent: opencode
+        objective: "When multi-angle review is useful, provide an independent review focused on architecture fit, user-facing behavior, and test gaps."
+    guardrails:
+      - "Check relevant docs/issues/design notes before implementing."
+      - "Prefer TDD for behavior changes."
+      - "Keep slices small enough to review independently."
+      - "Do not turn cuekit into a rigid scheduler/workflow engine."
+    success_criteria:
+      - "Feature behavior is covered by focused tests."
+      - "Docs or examples are updated when user-visible behavior changes."
+      - "Reviewer confirms architecture and safety expectations."
+    checks:
+      - "bun test"
+      - "bun run typecheck"
+      - "bun run check"
+    autonomy:
+      allow_additional_workers: true
+      allow_parallel_reviewers: true
+      require_reviewer: true
+      allow_skip_checks: false
+
+  refactor:
+    description: "Safe refactoring without behavior changes"
+    intent: "Improve code structure, boundaries, naming, or duplication without changing observable behavior."
+    recommended_team:
+      coordinator:
+        position: coordinator
+        role: planner
+        agent: pi
+        model: openai-codex/gpt-5.5
+      implementer:
+        position: worker
+        role: worker
+        agent: claude-code
+        model: sonnet
+      reviewer:
+        position: reviewer
+        role: reviewer
+        agent: claude-code
+        model: sonnet
+    guardrails:
+      - "No intentional behavior changes."
+      - "Keep diffs focused and reversible."
+      - "Preserve public API and command/MCP surface unless explicitly requested."
+      - "Avoid broad rewrites without a focused failing test or design note."
+    success_criteria:
+      - "Existing tests continue to pass."
+      - "Reviewer confirms behavior is unchanged."
+      - "The refactor improves a named maintainability concern."
+    checks:
+      - "bun test"
+      - "bun run typecheck"
+      - "bun run check"
+    autonomy:
+      allow_additional_workers: true
+      allow_parallel_reviewers: false
+      require_reviewer: true
+      allow_skip_checks: false
+
+  architecture-review:
+    description: "Review implementation against architecture/design docs"
+    intent: "Inspect whether code matches cuekit architecture, design notes, and safety constraints; propose focused follow-ups."
+    recommended_team:
+      coordinator:
+        position: coordinator
+        role: planner
+        agent: pi
+        model: openai-codex/gpt-5.5
+      reviewer:
+        position: reviewer
+        role: reviewer
+        agent: claude-code
+        model: sonnet
+      scout:
+        position: worker
+        role: scout
+        agent: claude-code
+        model: sonnet
+        objective: "Map relevant files and compare implementation to docs/architecture and active design notes."
+      opencode-reviewer:
+        position: reviewer
+        role: reviewer
+        agent: opencode
+        objective: "When multi-angle review is useful, provide an independent review focused on cross-cutting architecture risks and follow-up issue quality."
+    guardrails:
+      - "Prefer evidence with file paths and concrete examples."
+      - "Separate confirmed issues from speculative improvements."
+      - "Create focused follow-up issues rather than broad rewrites."
+    success_criteria:
+      - "Findings are traceable to architecture/design docs or explicit project constraints."
+      - "Each proposed fix is small enough for an AI worker to implement."
+      - "No code changes unless explicitly requested."
+    checks:
+      - "bun run check"
+    autonomy:
+      allow_additional_workers: true
+      allow_parallel_reviewers: true
+      require_reviewer: false
+      allow_skip_checks: true
+
+  dogfood:
+    description: "Dogfood cuekit Task Teams, MCP tools, adapters, or TUI"
+    intent: "Use cuekit itself to validate a workflow or feature, capture UX gaps, and make only a tiny safe improvement if appropriate."
+    recommended_team:
+      coordinator:
+        position: coordinator
+        role: planner
+        agent: pi
+        model: openai-codex/gpt-5.5
+      worker:
+        position: worker
+        role: worker
+        agent: pi
+      reviewer:
+        position: reviewer
+        role: reviewer
+        agent: claude-code
+        model: sonnet
+      opencode-reviewer:
+        position: reviewer
+        role: reviewer
+        agent: opencode
+        objective: "When multi-angle review is useful, provide an independent review focused on dogfood UX gaps and workflow friction."
+    guardrails:
+      - "Actually use cuekit tools rather than only reasoning about them."
+      - "Use wait with follow_new_tasks for coordinator-led teams."
+      - "Inspect get_team_result before final reporting."
+      - "Cleanup terminal tasks and delete empty dogfood teams."
+      - "Capture UX gaps as focused follow-up issues."
+    success_criteria:
+      - "Coordinator, worker, and reviewer events appear in the team result timeline when review is required."
+      - "Any code/docs change is minimal and reviewed."
+      - "Dogfood artifacts are cleaned up or explicitly documented."
+    checks:
+      - "bun test"
+      - "bun run typecheck"
+      - "bun run check"
+    autonomy:
+      allow_additional_workers: true
+      allow_parallel_reviewers: true
+      require_reviewer: true
+      allow_skip_checks: false
