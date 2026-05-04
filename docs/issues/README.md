@@ -19,6 +19,7 @@ Current focused work on outstanding issues:
 - [`cuekit-delete-session-tmux-leak.md`](cuekit-delete-session-tmux-leak.md) — tmux cleanup bug report and fix context.
 - [`cuekit-opencode-run-positional-prompt.md`](cuekit-opencode-run-positional-prompt.md) — OpenCode `run` prompt must be positional and protected by `--`.
 - [`cuekit-jcode-repl-adapter-design.md`](cuekit-jcode-repl-adapter-design.md) — planned `jcode` adapter using `jcode repl` for tmux attach and steering support.
+- [`cuekit-adapter-run-modes-design.md`](cuekit-adapter-run-modes-design.md) — shared interactive/default and batch/non-interactive adapter mode design.
 - [`cuekit-task-teams-design.md`](cuekit-task-teams-design.md) — lightweight session-scoped task teams for multi-task coding workflows.
 - [`cuekit-project-config-design.md`](cuekit-project-config-design.md) — proposed `.cuekit.yaml` project identity and defaults configuration.
 
