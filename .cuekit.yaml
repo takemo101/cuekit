@@ -11,7 +11,6 @@ submit:
   # If role is set, the selected Agent Profile can still provide agent/model.
   role: worker
   agent: claude-code
-  model: sonnet
   # Runtime submit calls can pass timeout_ms: null to opt out for one long-running task.
   timeout_ms: 1800000
   priority: normal
@@ -37,6 +36,8 @@ adapters:
     permissions: bypass
 
 strategies:
+  # Coordinator slots use pi. Configure pi itself to default to openai-codex/gpt-5.5;
+  # cuekit currently cannot pass model fields to the pi adapter.
   docs-polish:
     description: "Small README/docs improvements"
     intent: "Make minimal docs-only changes and verify meaning is preserved."
@@ -45,7 +46,6 @@ strategies:
         position: coordinator
         role: planner
         agent: pi
-        model: openai-codex/gpt-5.5
       worker:
         position: worker
         role: worker
@@ -80,7 +80,6 @@ strategies:
         position: coordinator
         role: planner
         agent: pi
-        model: openai-codex/gpt-5.5
       investigator:
         position: worker
         role: scout
@@ -131,7 +130,6 @@ strategies:
         position: coordinator
         role: planner
         agent: pi
-        model: openai-codex/gpt-5.5
       implementer:
         position: worker
         role: worker
@@ -174,7 +172,6 @@ strategies:
         position: coordinator
         role: planner
         agent: pi
-        model: openai-codex/gpt-5.5
       implementer:
         position: worker
         role: worker
@@ -212,7 +209,6 @@ strategies:
         position: coordinator
         role: planner
         agent: pi
-        model: openai-codex/gpt-5.5
       reviewer:
         position: reviewer
         role: reviewer
@@ -253,7 +249,6 @@ strategies:
         position: coordinator
         role: planner
         agent: pi
-        model: openai-codex/gpt-5.5
       worker:
         position: worker
         role: worker
