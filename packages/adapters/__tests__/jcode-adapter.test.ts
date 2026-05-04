@@ -4,7 +4,12 @@ import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createSession, runMigrations } from "@cuekit/store";
-import { buildJcodeReplLaunchCommand, createJcodeAdapter } from "../src/jcode-adapter.ts";
+import {
+	buildJcodeLaunchCommand,
+	buildJcodeReplLaunchCommand,
+	buildJcodeRunLaunchCommand,
+	createJcodeAdapter,
+} from "../src/jcode-adapter.ts";
 import { PaneBackend } from "../src/pane-backend.ts";
 import { FakeTmuxRunner, hasTmux } from "../src/testing.ts";
 
@@ -38,6 +43,8 @@ describe("createJcodeAdapter", () => {
 		expect(caps.supports_model_selection).toBe(true);
 		expect(caps.supports_artifacts).toBe(true);
 		expect(caps.supports_live_progress).toBe(false);
+		expect(caps.default_mode).toBe("interactive");
+		expect(caps.supported_modes).toEqual(["interactive", "batch"]);
 	});
 
 	it("accepts custom model names", async () => {
@@ -73,6 +80,27 @@ describe("createJcodeAdapter", () => {
 		expect(view.agent_kind).toBe("jcode");
 		expect(view.status).toBe("running");
 		expect(view.attach_hint).toContain("cuekit-task-");
+	});
+});
+
+describe("buildJcodeLaunchCommand", () => {
+	it("uses REPL mode by default", () => {
+		const launch = buildJcodeLaunchCommand({ agent_kind: "jcode", objective: "x" });
+
+		expect(launch).toContain("repl --no-update");
+		expect(launch).not.toContain("jcode' run");
+	});
+
+	it("uses run mode for batch tasks", () => {
+		const launch = buildJcodeLaunchCommand({
+			agent_kind: "jcode",
+			objective: "x",
+			adapter_options: { mode: "batch" },
+		});
+
+		expect(launch).toStartWith("'jcode' run --no-update -- '");
+		expect(launch).not.toContain("mkfifo");
+		expect(launch).not.toContain("cat < /dev/tty");
 	});
 });
 
@@ -177,6 +205,35 @@ describe("buildJcodeReplLaunchCommand", () => {
 		} finally {
 			rmSync(dir, { recursive: true, force: true });
 		}
+	});
+});
+
+describe("buildJcodeRunLaunchCommand", () => {
+	it("uses jcode run without FIFO feeder", () => {
+		const launch = buildJcodeRunLaunchCommand({ agent_kind: "jcode", objective: "x" });
+
+		expect(launch).toStartWith("'jcode' run --no-update -- '");
+		expect(launch).not.toContain("mkfifo");
+		expect(launch).not.toContain("cat < /dev/tty");
+		expect(launch).toContain("Jcode adapter guidance:");
+	});
+
+	it("protects option-looking prompts with an option terminator", () => {
+		const launch = buildJcodeRunLaunchCommand({ agent_kind: "jcode", objective: "--help" });
+
+		expect(launch).toContain(" -- '--help");
+	});
+
+	it("preserves model and provider profile flags", () => {
+		const launch = buildJcodeRunLaunchCommand({
+			agent_kind: "jcode",
+			objective: "x",
+			model: "custom model",
+			adapter_options: { provider_profile: "work profile" },
+		});
+
+		expect(launch).toContain("--provider-profile 'work profile'");
+		expect(launch).toContain("--model 'custom model'");
 	});
 });
 

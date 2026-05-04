@@ -1,5 +1,6 @@
 import type { Database } from "bun:sqlite";
 import type { Logger, TaskSpec } from "@cuekit/core";
+import { adapterRunModeFor } from "./adapter-options.ts";
 import type { AgentAdapter } from "./agent-adapter.ts";
 import { createPaneAdapter } from "./pane-adapter.ts";
 import type { PaneBackend } from "./pane-backend.ts";
@@ -14,6 +15,10 @@ export interface JcodeAdapterOptions {
 }
 
 export interface BuildJcodeReplLaunchCommandOptions {
+	jcodeBin?: string;
+}
+
+export interface BuildJcodeLaunchCommandOptions {
 	jcodeBin?: string;
 }
 
@@ -74,6 +79,31 @@ export function buildJcodeReplLaunchCommand(
 	].join(" ");
 }
 
+export function buildJcodeRunLaunchCommand(
+	spec: TaskSpec,
+	options: BuildJcodeLaunchCommandOptions = {},
+): string {
+	const parts = [shellQuote(options.jcodeBin ?? "jcode"), "run", "--no-update"];
+	const providerProfile = providerProfileFor(spec);
+	if (providerProfile) {
+		parts.push("--provider-profile", shellQuote(providerProfile));
+	}
+	if (spec.model) {
+		parts.push("--model", shellQuote(spec.model));
+	}
+	parts.push("--", shellQuote(renderJcodePrompt(spec)));
+	return parts.join(" ");
+}
+
+export function buildJcodeLaunchCommand(
+	spec: TaskSpec,
+	options: BuildJcodeLaunchCommandOptions = {},
+): string {
+	return adapterRunModeFor(spec) === "batch"
+		? buildJcodeRunLaunchCommand(spec, options)
+		: buildJcodeReplLaunchCommand(spec, options);
+}
+
 export function createJcodeAdapter(
 	db: Database,
 	panes: PaneBackend,
@@ -81,7 +111,7 @@ export function createJcodeAdapter(
 ): AgentAdapter {
 	const builder =
 		options.launchCommandOverride ??
-		((spec: TaskSpec) => buildJcodeReplLaunchCommand(spec, { jcodeBin: options.jcodeBin }));
+		((spec: TaskSpec) => buildJcodeLaunchCommand(spec, { jcodeBin: options.jcodeBin }));
 
 	return createPaneAdapter(
 		{
@@ -93,6 +123,8 @@ export function createJcodeAdapter(
 				supports_model_selection: true,
 				supports_artifacts: true,
 				supports_live_progress: false,
+				default_mode: "interactive",
+				supported_modes: ["interactive", "batch"],
 			},
 			buildLaunchCommand: builder,
 		},

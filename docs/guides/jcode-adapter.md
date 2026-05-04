@@ -1,8 +1,10 @@
 # jcode Adapter Guide
 
-cuekit's `jcode` adapter runs `jcode repl` inside the existing tmux pane backend. This gives the same high-level operator workflow as the other pane adapters: submit a task, attach to the live tmux pane, steer the task, and inspect the captured transcript.
+cuekit's `jcode` adapter runs `jcode repl` inside the existing tmux pane backend by default. This gives the same high-level operator workflow as the other pane adapters: submit a task, attach to the live tmux pane, steer the task, and inspect the captured transcript.
 
-The adapter intentionally uses REPL mode rather than `jcode run`. `jcode run` is single-shot and exits after one message; `jcode repl` can stay alive long enough for cuekit `steer_task` / CLI steering to send follow-up input.
+The default interactive mode intentionally uses REPL mode rather than `jcode run`. `jcode run` is single-shot and exits after one message; `jcode repl` can stay alive long enough for cuekit `steer_task` / CLI steering to send follow-up input.
+
+For short unattended jobs, callers can opt into non-interactive batch mode with `adapter_options.mode: "batch"`. Batch mode launches `jcode run --no-update <prompt>` in the pane. It is attachable for streaming output/transcript capture, but it is not steerable.
 
 ## Prerequisites
 
@@ -77,6 +79,24 @@ Expected observations in the attached pane:
 
 This verifies the jcode adapter's FIFO feeder is still reading from the pane tty after the initial prompt.
 
+## Batch mode smoke test
+
+Use batch mode when the task should answer once and exit:
+
+```sh
+cuekit task submit \
+  --agent_kind jcode \
+  --adapter_options '{"mode":"batch"}' \
+  --objective "Say hello, then report completed and exit."
+```
+
+Expected observations:
+
+- The launched command is `jcode run --no-update ...` rather than `jcode repl`.
+- `cuekit task status --task_id <task_id>` reports `metadata.adapter_mode: batch`.
+- `supports_steering` is false for the batch task.
+- The pane/transcript remain useful for output inspection until cleanup.
+
 ## Transcript and task result checks
 
 cuekit captures the pane transcript at:
@@ -139,5 +159,5 @@ If necessary, inspect `~/.jcode/active_pids` and remove markers for PIDs that ar
 ## Notes
 
 - The `jcode` adapter supports model selection through `--model`.
-- To select a named jcode provider profile, submit with `adapter_options.provider_profile`. cuekit translates a non-empty string value to `jcode repl --provider-profile <name>`.
+- To select a named jcode provider profile, submit with `adapter_options.provider_profile`. cuekit translates a non-empty string value to `--provider-profile <name>` in both interactive and batch modes.
 - The adapter does not currently implement cuekit permission-bypass semantics. Do not assume `adapter_options.dangerously_skip_permissions` affects jcode.
