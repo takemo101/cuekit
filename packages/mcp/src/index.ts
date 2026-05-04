@@ -6,5 +6,6 @@ export * from "./commands/get-task-status.ts";
 export * from "./commands/list-adapters.ts";
 export * from "./commands/list-tasks.ts";
 export * from "./commands/steer-task.ts";
+export * from "./commands/steer-team.ts";
 export * from "./commands/submit-task.ts";
 export * from "./session-helpers.ts";

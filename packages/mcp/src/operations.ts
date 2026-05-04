@@ -88,6 +88,11 @@ import {
 	SteerTaskOutputSchema,
 } from "./commands/steer-task.ts";
 import {
+	runSteerTeam,
+	SteerTeamInputSchema,
+	SteerTeamOutputSchema,
+} from "./commands/steer-team.ts";
+import {
 	runSubmitTask,
 	SubmitTaskInputSchema,
 	SubmitTaskOutputSchema,
@@ -398,6 +403,15 @@ export const CUEKIT_MCP_OPERATIONS = [
 		run: runSteerTask,
 	}),
 	defineMcpOperation({
+		mcpName: "steer_team",
+		cliPath: ["team", "steer"],
+		description:
+			"Send one steering message to every currently non-terminal task in a team (best-effort).",
+		options: SteerTeamInputSchema,
+		output: SteerTeamOutputSchema,
+		run: runSteerTeam,
+	}),
+	defineMcpOperation({
 		mcpName: "cleanup",
 		cliPath: ["cleanup", "target"],
 		description: "Clean up terminal tasks by task scope or team. Set kind to 'tasks' or 'team'.",
@@ -534,6 +548,14 @@ export const CUEKIT_CLI_OPERATIONS = [
 		options: SteerTaskInputSchema,
 		output: SteerTaskOutputSchema,
 		run: runSteerTask,
+	}),
+	defineOperation({
+		cliPath: ["team", "steer"],
+		description:
+			"Send one steering message to every currently non-terminal task in a team (best-effort).",
+		options: SteerTeamInputSchema,
+		output: SteerTeamOutputSchema,
+		run: runSteerTeam,
 	}),
 	defineOperation({
 		cliPath: ["mcp", "config"],

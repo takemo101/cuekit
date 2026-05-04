@@ -40,6 +40,7 @@ import { runListTeams } from "../src/commands/list-teams.ts";
 import { runReportTaskEvent } from "../src/commands/report-task-event.ts";
 import { runShowMcpConfig } from "../src/commands/show-mcp-config.ts";
 import { runSteerTask } from "../src/commands/steer-task.ts";
+import { runSteerTeam } from "../src/commands/steer-team.ts";
 import { runSubmitTask } from "../src/commands/submit-task.ts";
 import { runSubmitTeamTasks } from "../src/commands/submit-team-tasks.ts";
 import { runWaitTasks } from "../src/commands/wait-tasks.ts";
@@ -1882,6 +1883,69 @@ describe("steer-task", () => {
 	it("returns task_not_found for unknown id", async () => {
 		const ack = await runSteerTask(ctx, { task_id: "t_nope", message: "..." });
 		expect(ack.ok).toBe(false);
+	});
+});
+
+describe("steer-team", () => {
+	it("steers every non-terminal task in a team and skips terminal tasks", async () => {
+		createSession(db, {
+			id: "s_team_steer",
+			project_root: "/p",
+			worktree_path: "/w",
+			parent_agent_kind: "pi",
+		});
+		createTaskTeam(db, { id: "tm_steer", session_id: "s_team_steer", title: "Team" });
+
+		const active = await runSubmitTask(ctx, {
+			objective: "active",
+			agent_kind: "claude-code",
+			session_id: "s_team_steer",
+			team_id: "tm_steer",
+		});
+		const needsInput = await runSubmitTask(ctx, {
+			objective: "needs input",
+			agent_kind: "claude-code",
+			session_id: "s_team_steer",
+			team_id: "tm_steer",
+		});
+		const terminal = createTask(db, {
+			id: "t_terminal",
+			session_id: "s_team_steer",
+			team_id: "tm_steer",
+			agent_kind: "claude-code",
+			objective: "done",
+			status: "completed",
+			spec: { objective: "done", agent_kind: "claude-code" },
+		});
+		if (!active.accepted || !needsInput.accepted) throw new Error("setup failed");
+		// Simulate a non-terminal task that still accepts steering.
+		db.query("update tasks set status = 'input_required' where id = ?").run(needsInput.task_id);
+
+		const before = runner.calls.length;
+		const ack = await runSteerTeam(ctx, {
+			team_id: "tm_steer",
+			message: "Please converge on the new team-level steer behavior.",
+		});
+
+		expect(ack.ok).toBe(true);
+		if (!ack.ok) throw new Error("expected team steer to succeed");
+		expect(ack.team_id).toBe("tm_steer");
+		expect(ack.steered.map((item) => item.task_id).sort()).toEqual(
+			[active.task_id, needsInput.task_id].sort(),
+		);
+		expect(ack.skipped).toEqual([
+			{ task_id: terminal.id, status: "completed", reason: "terminal" },
+		]);
+		expect(ack.failed).toEqual([]);
+		const sendCalls = runner.calls.slice(before).filter((c) => c[0] === "send-keys");
+		expect(sendCalls).toHaveLength(4);
+	});
+
+	it("returns team_not_found for unknown team", async () => {
+		const ack = await runSteerTeam(ctx, { team_id: "tm_nope", message: "..." });
+		expect(ack.ok).toBe(false);
+		if (ack.ok) throw new Error("expected team steer to fail");
+		expect(ack.error.code).toBe("team_not_found");
 	});
 });
 
