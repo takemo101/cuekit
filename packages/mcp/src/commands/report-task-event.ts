@@ -50,8 +50,12 @@ export const ReportTaskEventOutputSchema = z.discriminatedUnion("ok", [
 
 export type ReportTaskEventOutput = z.infer<typeof ReportTaskEventOutputSchema>;
 
-function error(code: JobError["code"], message: string): ReportTaskEventOutput {
-	return { ok: false, error: { code, message, retryable: false } };
+function error(
+	code: JobError["code"],
+	message: string,
+	details?: Record<string, unknown>,
+): ReportTaskEventOutput {
+	return { ok: false, error: { code, message, retryable: false, ...(details ? { details } : {}) } };
 }
 
 function sha256TokenHash(rawToken: string): string {
@@ -83,14 +87,25 @@ export async function runReportTaskEvent(
 	input: ReportTaskEventInput,
 ): Promise<ReportTaskEventOutput> {
 	const task_id = input.task_id ?? process.env.CUEKIT_TASK_ID;
+	const task_id_source = input.task_id ? "input.task_id" : "env:CUEKIT_TASK_ID";
 	const child_token = input.child_token ?? process.env.CUEKIT_CHILD_TOKEN;
+	const child_token_source = input.child_token ? "input.child_token" : "env:CUEKIT_CHILD_TOKEN";
 	if (!task_id) return error("invalid_input", "task_id is required (or set CUEKIT_TASK_ID)");
 	if (!child_token) {
 		return error("invalid_input", "child_token is required (or set CUEKIT_CHILD_TOKEN)");
 	}
 
 	const task = getTaskById(ctx.db, task_id);
-	if (!task) return error("task_not_found", `task '${task_id}' not found`);
+	if (!task) {
+		return error("task_not_found", `task '${task_id}' not found`, {
+			task_id,
+			task_id_source,
+			child_token_source,
+			has_child_token: true,
+			db_path: ctx.db.filename,
+			cwd: process.cwd(),
+		});
+	}
 	if (!task.child_token_hash) {
 		return error("permission_denied", `task '${task_id}' has no child reporting token`);
 	}
