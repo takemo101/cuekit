@@ -187,7 +187,11 @@ bun run fix           # Biome auto-fix
 
 Tests use `FakeTmuxRunner` (exported from `@cuekit/adapters`) so the default run does not require `tmux`. A small integration suite in `@cuekit/adapters` exercises real tmux when available and skips otherwise.
 
-### Manual smoke test with real `claude`
+### Manual smoke tests
+
+See [`docs/guides/jcode-adapter.md`](docs/guides/jcode-adapter.md) for a real-runtime `jcode repl` smoke test covering submit, tmux attach, steering, transcript capture, and cleanup.
+
+#### Real `claude`
 
 The automated suite stubs the child runtime with `sleep` so it never calls Anthropic. To verify the adapter end-to-end against the real `claude` CLI:
 

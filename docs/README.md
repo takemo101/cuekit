@@ -16,6 +16,7 @@ Stable documentation and design notes for completed features:
 - [Agent profiles design](issues/cuekit-agent-profiles-design.md) — role-based task submission framework
 - [Agent profiles guide](guides/agent-profiles.md) — end-user documentation and usage examples
 - [Project config guide](guides/project-config.md) — `.cuekit.yaml` identity, defaults, scopes, and safety rules
+- [jcode adapter guide](guides/jcode-adapter.md) — real-runtime smoke test for the `jcode repl` tmux adapter
 - [TUI task cockpit design](issues/cuekit-tui-task-cockpit-design.md) — human-facing OpenTUI interface
 - [TUI package separation design](issues/cuekit-tui-package-separation-design.md) — implementation architecture
 
