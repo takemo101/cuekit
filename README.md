@@ -163,6 +163,16 @@ When a bounded wait times out, call `get_status` for the task or team. If a task
 
 ## Execution model
 
+Built-in pane adapters default to interactive mode. The child starts in a dedicated tmux pane with an initial prompt, so cuekit can attach, steer, and capture transcripts while the runtime stays alive. For short single-shot jobs, opt into non-interactive batch mode per task:
+
+```sh
+cuekit task submit --objective "review this diff once and exit" \
+                  --agent_kind claude-code \
+                  --adapter_options '{"mode":"batch"}'
+```
+
+Batch tasks still run in a pane and can be attached for streaming output, but task status reports `metadata.adapter_mode: "batch"` and `supports_steering: false`; `steer_task` rejects them with `steering_unsupported`. Adapter list output reports default capabilities, while task status reports the actual mode selected for that task.
+
 Every task runs in its own dedicated tmux session (not headless), so:
 
 1. The orchestrator can submit / cancel / steer programmatically via tmux commands.
