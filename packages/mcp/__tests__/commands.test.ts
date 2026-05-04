@@ -44,6 +44,7 @@ import { runSubmitTask } from "../src/commands/submit-task.ts";
 import { runSubmitTeamTasks } from "../src/commands/submit-team-tasks.ts";
 import { runWaitTasks } from "../src/commands/wait-tasks.ts";
 import { runWaitTeam } from "../src/commands/wait-team.ts";
+import { applyMcpWaitSafetyBounds, MCP_SAFE_WAIT_TIMEOUT_MS } from "../src/operations.ts";
 
 let db: Database;
 let runner: FakeTmuxRunner;
@@ -1460,6 +1461,64 @@ describe("list-task-events", () => {
 		const result = await runListTaskEvents(ctx, { task_id: "missing" });
 		expect("error" in result).toBe(true);
 		if ("error" in result) expect(result.error.code).toBe("task_not_found");
+	});
+});
+
+describe("wait safety bounds", () => {
+	it("caps grouped MCP wait timeout values before dispatch", () => {
+		const bounded = applyMcpWaitSafetyBounds(ctx, {
+			kind: "tasks",
+			task_ids: ["t_1"],
+			timeout_ms: MCP_SAFE_WAIT_TIMEOUT_MS + 1,
+		});
+
+		expect(bounded.timeout_ms).toBe(MCP_SAFE_WAIT_TIMEOUT_MS);
+	});
+
+	it("keeps short grouped MCP wait timeout values unchanged", () => {
+		const bounded = applyMcpWaitSafetyBounds(ctx, {
+			kind: "tasks",
+			task_ids: ["t_1"],
+			timeout_ms: 1000,
+		});
+
+		expect(bounded.timeout_ms).toBe(1000);
+	});
+
+	it("sets a safe grouped MCP wait timeout when omitted", () => {
+		const bounded = applyMcpWaitSafetyBounds(ctx, {
+			kind: "team",
+			team_id: "tm_1",
+		});
+
+		expect(bounded.timeout_ms).toBe(MCP_SAFE_WAIT_TIMEOUT_MS);
+	});
+
+	it("preserves shorter project-config team wait defaults", () => {
+		const root = mkdtempSync(join(tmpdir(), "cuekit-mcp-wait-bounds-"));
+		try {
+			writeFileSync(join(root, ".cuekit.yaml"), "teams:\n  wait:\n    timeout_ms: 0\n");
+			createSession(db, {
+				id: "s_mcp_wait_bounds",
+				project_root: root,
+				worktree_path: root,
+				parent_agent_kind: "pi",
+			});
+			createTaskTeam(db, {
+				id: "tm_mcp_wait_bounds",
+				session_id: "s_mcp_wait_bounds",
+				title: "Team",
+			});
+
+			const bounded = applyMcpWaitSafetyBounds(ctx, {
+				kind: "team",
+				team_id: "tm_mcp_wait_bounds",
+			});
+
+			expect(bounded.timeout_ms).toBeUndefined();
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
 	});
 });
 

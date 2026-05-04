@@ -1,3 +1,5 @@
+import { applyTeamWaitDefaults, loadProjectConfig } from "@cuekit/project-config";
+import { getSessionById, getTaskTeamById } from "@cuekit/store";
 import { z } from "incur";
 import type { CommandContext } from "./command-context.ts";
 import {
@@ -180,12 +182,55 @@ const WaitInputSchema = z
 	.passthrough();
 const WaitOutputSchema = z.union([WaitTasksOutputSchema, WaitTeamOutputSchema]);
 
+export const MCP_SAFE_WAIT_TIMEOUT_MS = 45_000;
+
+export function applyMcpWaitSafetyBounds(
+	ctx: CommandContext,
+	input: z.infer<typeof WaitInputSchema>,
+): z.infer<typeof WaitInputSchema> {
+	if (input.timeout_ms !== undefined) {
+		return input.timeout_ms <= MCP_SAFE_WAIT_TIMEOUT_MS
+			? input
+			: { ...input, timeout_ms: MCP_SAFE_WAIT_TIMEOUT_MS };
+	}
+
+	if (input.kind === "team" && input.team_id) {
+		const team = getTaskTeamById(ctx.db, input.team_id);
+		const session = team ? getSessionById(ctx.db, team.session_id) : undefined;
+		if (session) {
+			const loadedConfig = loadProjectConfig(session.worktree_path);
+			const defaults = loadedConfig.ok ? applyTeamWaitDefaults(input, loadedConfig.config) : {};
+			if (defaults.timeout_ms !== undefined && defaults.timeout_ms <= MCP_SAFE_WAIT_TIMEOUT_MS) {
+				return input;
+			}
+		}
+	}
+
+	return { ...input, timeout_ms: MCP_SAFE_WAIT_TIMEOUT_MS };
+}
+
+function withMcpWaitSafetyHint<Output extends z.infer<typeof WaitOutputSchema>>(
+	output: Output,
+	capApplied: boolean,
+): Output {
+	if (!output.timed_out || !capApplied) return output;
+	return {
+		...output,
+		next_action_hint: `${output.next_action_hint ?? "Wait timed out."} MCP wait requests are capped at ${MCP_SAFE_WAIT_TIMEOUT_MS}ms to avoid client request timeouts; call wait again to continue polling.`,
+	};
+}
+
 async function runWait(
 	ctx: CommandContext,
 	input: z.infer<typeof WaitInputSchema>,
 ): Promise<z.infer<typeof WaitOutputSchema>> {
-	if (input.kind === "tasks") return runWaitTasks(ctx, WaitTasksInputSchema.parse(input));
-	return runWaitTeam(ctx, WaitTeamInputSchema.parse(input));
+	const boundedInput = applyMcpWaitSafetyBounds(ctx, input);
+	const capApplied = boundedInput.timeout_ms !== input.timeout_ms;
+	const output =
+		boundedInput.kind === "tasks"
+			? await runWaitTasks(ctx, WaitTasksInputSchema.parse(boundedInput))
+			: await runWaitTeam(ctx, WaitTeamInputSchema.parse(boundedInput));
+	return withMcpWaitSafetyHint(output, capApplied);
 }
 
 const ListInputSchema = z
@@ -314,7 +359,7 @@ export const CUEKIT_MCP_OPERATIONS = [
 		mcpName: "wait",
 		cliPath: ["wait", "target"],
 		description:
-			"Wait for tasks or a team. Set kind to 'tasks' or 'team'. Prefer short bounded waits and poll again rather than one very long MCP request.",
+			"Wait for tasks or a team. Set kind to 'tasks' or 'team'. Long MCP waits are capped to avoid client request timeouts; call wait again to continue polling.",
 		options: WaitInputSchema,
 		output: WaitOutputSchema,
 		run: runWait,
