@@ -33,7 +33,7 @@ Fields:
 
 - `id` — profile id used by `submit_task.role`; `auto` is reserved and invalid as a profile id.
 - `description` — human-readable summary; required after builtin/user/project merge.
-- `agent_kind` — default runtime adapter, e.g. `claude-code`, `opencode`, or `pi`.
+- `agent_kind` — default runtime adapter, e.g. `claude-code`, `opencode`, `jcode`, or `pi`.
 - `model` — default model for adapters that support model selection.
 - `tags` — optional list or comma-separated tags.
 - `instructions_mode` — `replace` (default) or `append` when overriding a lower-scope profile.
@@ -65,7 +65,7 @@ cuekit operates with two profile schemas:
 |-------|------|---------|-------------|---------|-------|
 | `id` | string | required | required | — | Profile identifier; must not be `"auto"` (reserved). Immutable across scopes. |
 | `description` | string | optional | required | — | Human-readable summary. Required after merge; if missing from all scopes, merge fails. |
-| `agent_kind` | string | optional | optional | — | Runtime adapter, e.g., `claude-code`, `opencode`, `pi`. If omitted, resolved value comes from lower scope. |
+| `agent_kind` | string | optional | optional | — | Runtime adapter, e.g., `claude-code`, `opencode`, `jcode`, `pi`. If omitted, resolved value comes from lower scope. |
 | `model` | string | optional | optional | — | Default model for adapters supporting model selection. If omitted, resolved value comes from lower scope. |
 | `tags` | string[] | optional | present | `[]` after resolution | Searchable labels. Shallow-merged from file; project tags do not extend user tags. |
 | `instructions` | string | defaults to `""` | required | `""` → required | Body text becomes instructions. A non-empty body replaces lower-scope instructions by default; set `instructions_mode: append` to extend lower-scope instructions. Required to be non-empty after merge. |
