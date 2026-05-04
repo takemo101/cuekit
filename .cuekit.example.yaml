@@ -44,3 +44,7 @@ adapters:
     permissions: prompt
   opencode:
     permissions: prompt
+
+# Per-task adapter_options can opt into non-interactive batch mode:
+#   {"mode":"batch"}
+# Batch mode remains attachable for output/transcript inspection, but is not steerable.

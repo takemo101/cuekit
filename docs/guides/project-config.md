@@ -158,6 +158,41 @@ Project-local config can affect adapter permissions, so use bypass only in trust
 
 This keeps project-derived executable behavior safe while still allowing intentional project-local adapter defaults or explicit one-off caller overrides.
 
+## Adapter run modes
+
+Built-in pane adapters default to `interactive` mode. Interactive tasks are attachable and steerable when the runtime supports it.
+
+For a short one-shot task, callers can opt into non-interactive batch mode with explicit per-task adapter options:
+
+```json
+{
+  "agent_kind": "claude-code",
+  "objective": "Review the staged diff once and report findings.",
+  "adapter_options": {
+    "mode": "batch"
+  }
+}
+```
+
+Batch mode still runs in a tmux pane, so attach/transcript inspection remains useful. It is not steerable: task status reports `metadata.adapter_mode: "batch"` and `supports_steering: false`, and `steer_task` returns `steering_unsupported`.
+
+Task Teams can mix modes per task. For example, keep a worker interactive but make a bounded reviewer batch-only:
+
+```json
+{
+  "tasks": [
+    { "position": "worker", "objective": "Implement the change." },
+    {
+      "position": "reviewer",
+      "objective": "Review the final diff once and report issues.",
+      "adapter_options": { "mode": "batch" }
+    }
+  ]
+}
+```
+
+`adapter list` reports each adapter's default capabilities. `task status` reports the actual mode selected for that task.
+
 ## Schema reference
 
 Top-level keys are strict: unknown top-level keys are rejected.
