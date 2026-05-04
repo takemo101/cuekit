@@ -30,8 +30,12 @@ describe("renderTaskSpecPrompt", () => {
 
 		expect(prompt).toContain("This team context is supplemental");
 		expect(prompt).toContain("You are the coordinator for cuekit team tm_1: Launch.");
-		expect(prompt).toContain("get_team_status");
-		expect(prompt).toContain("submit follow-up team tasks");
+		expect(prompt).toContain("submit workers");
+		expect(prompt).toContain("wait with bounded polling");
+		expect(prompt).toContain("request reviewer tasks");
+		expect(prompt).toContain("steer_task or steer_team");
+		expect(prompt).toContain("report a final team summary");
+		expect(prompt).not.toContain("automatically schedules");
 		expect(prompt.indexOf("Team context:")).toBeLessThan(
 			prompt.indexOf("Child reporting contract:"),
 		);
