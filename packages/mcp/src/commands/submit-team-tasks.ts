@@ -125,6 +125,21 @@ export async function runSubmitTeamTasks(
 				? { adapter_options: safeAdapterOptions() }
 				: {}),
 		};
+		if (
+			effectiveTask.agent_kind === undefined &&
+			effectiveTask.role === undefined &&
+			loadedConfig.config.submit?.agent === undefined &&
+			loadedConfig.config.submit?.role === undefined
+		) {
+			rejected.push(
+				taskError(
+					index,
+					"invalid_input",
+					`tasks[${index}].agent_kind: required when neither role nor project submit.agent is configured`,
+				),
+			);
+			continue;
+		}
 		const result = await runSubmitTask(ctx, {
 			...effectiveTask,
 			session_id: team.session_id,
