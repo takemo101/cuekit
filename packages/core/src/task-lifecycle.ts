@@ -34,7 +34,7 @@ export function canCancelTask(status: TaskStatus): LifecycleCheck {
 			ok: false,
 			error: {
 				code: "invalid_state",
-				message: `task is already in terminal state '${status}', cannot cancel`,
+				message: `task is already in terminal state '${status}'`,
 				retryable: false,
 			},
 		};

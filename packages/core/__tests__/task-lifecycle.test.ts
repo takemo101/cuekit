@@ -68,6 +68,7 @@ describe("canCancelTask", () => {
 		expect(result.ok).toBe(false);
 		if (!result.ok) {
 			expect(result.error.code).toBe("invalid_state");
+			expect(result.error.message).toBe("task is already in terminal state 'completed'");
 		}
 	});
 
