@@ -1,5 +1,5 @@
 import { isTerminalTaskStatus, JobErrorSchema, TaskResultSchema } from "@cuekit/core";
-import { getTaskById } from "@cuekit/store";
+import { getTaskById, listTaskEvents } from "@cuekit/store";
 import { z } from "incur";
 import type { CommandContext } from "../command-context.ts";
 
@@ -15,6 +15,18 @@ export const GetTaskResultOutputSchema = z.union([
 ]);
 
 export type GetTaskResultOutput = z.infer<typeof GetTaskResultOutputSchema>;
+
+function terminalReportSummary(ctx: CommandContext, taskId: string): string | undefined {
+	return (
+		listTaskEvents(ctx.db, taskId)
+			.filter(
+				(event) =>
+					(event.type === "completed" || event.type === "failed" || event.type === "blocked") &&
+					event.message,
+			)
+			.at(-1)?.message ?? undefined
+	);
+}
 
 export async function runGetTaskResult(
 	ctx: CommandContext,
@@ -58,5 +70,6 @@ export async function runGetTaskResult(
 	}
 	const result = await adapterRes.value.collect(input.task_id);
 	if (!result.ok) return { error: result.error };
-	return result.value;
+	const summary = result.value.summary || terminalReportSummary(ctx, input.task_id);
+	return summary ? { ...result.value, summary } : result.value;
 }

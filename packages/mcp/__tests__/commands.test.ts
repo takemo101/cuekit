@@ -1126,6 +1126,31 @@ describe("get-task-result", () => {
 		if ("task_id" in result) expect(result.status).toBe("cancelled");
 	});
 
+	it("uses terminal child report message as summary fallback", async () => {
+		const submit = await runSubmitTask(ctx, {
+			objective: "x",
+			agent_kind: "claude-code",
+			cwd: "/tmp",
+		});
+		if (!submit.accepted) throw new Error("setup failed");
+		updateTaskChildTokenHash(
+			db,
+			submit.task_id,
+			"sha256:3a6eb0790f39ac87c94f3856b2dd2c5d110e6811602261a9a923d3bb23adc8b7",
+		);
+		await runReportTaskEvent(ctx, {
+			task_id: submit.task_id,
+			child_token: "data",
+			type: "completed",
+			message: "Implemented the refactor",
+		});
+
+		const result = await runGetTaskResult(ctx, { task_id: submit.task_id });
+
+		expect("task_id" in result).toBe(true);
+		if ("task_id" in result) expect(result.summary).toBe("Implemented the refactor");
+	});
+
 	it("refreshes a non-terminal task before collect so timeout_ms is enforced", async () => {
 		const submit = await runSubmitTask(ctx, {
 			objective: "x",
