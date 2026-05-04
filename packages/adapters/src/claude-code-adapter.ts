@@ -1,6 +1,6 @@
 import type { Database } from "bun:sqlite";
 import type { Logger, TaskSpec } from "@cuekit/core";
-import { shouldDangerouslySkipPermissions } from "./adapter-options.ts";
+import { adapterRunModeFor, shouldDangerouslySkipPermissions } from "./adapter-options.ts";
 import type { AgentAdapter } from "./agent-adapter.ts";
 import { createPaneAdapter } from "./pane-adapter.ts";
 import type { PaneBackend } from "./pane-backend.ts";
@@ -32,11 +32,12 @@ export interface BuildClaudeCodeLaunchCommandOptions {
 // tmux or claude itself. The output is a single shell-command string (tmux
 // new-session receives it as its final positional argument).
 //
-// Shape:    <claudeBin> [--dangerously-skip-permissions] [--model <model>] '<shell-quoted objective>'
+// Shape:    <claudeBin> [--dangerously-skip-permissions] [--model <model>] [-p] '<shell-quoted objective>'
 // Example:  claude --dangerously-skip-permissions --model sonnet 'Implement retry logic'
 //
-// Interactive mode (no -p / --print) — the pane stays attached to a TTY so
-// `tmux attach-session` can foreground the live child.
+// Interactive mode is the default (no -p / --print) — the pane stays attached
+// to a TTY so `tmux attach-session` can foreground the live child. Batch mode
+// uses Claude Code's verified `-p` non-interactive flag.
 export function buildClaudeCodeLaunchCommand(
 	spec: TaskSpec,
 	options: BuildClaudeCodeLaunchCommandOptions = {},
@@ -48,6 +49,9 @@ export function buildClaudeCodeLaunchCommand(
 	}
 	if (spec.model) {
 		parts.push("--model", shellQuote(spec.model));
+	}
+	if (adapterRunModeFor(spec) === "batch") {
+		parts.push("-p");
 	}
 	parts.push(shellQuote(renderTaskSpecPrompt(spec)));
 	return parts.join(" ");
@@ -77,6 +81,8 @@ export function createClaudeCodeAdapter(
 				available_models: availableModels,
 				supports_artifacts: true,
 				supports_live_progress: false,
+				default_mode: "interactive",
+				supported_modes: ["interactive", "batch"],
 			},
 			buildLaunchCommand: builder,
 		},

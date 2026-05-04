@@ -40,6 +40,8 @@ describe("capabilities()", () => {
 		expect(caps.supports_attach).toBe(true);
 		expect(caps.supports_model_selection).toBe(true);
 		expect(caps.available_models).toContain("sonnet");
+		expect(caps.default_mode).toBe("interactive");
+		expect(caps.supported_modes).toEqual(["interactive", "batch"]);
 	});
 
 	it("respects a custom availableModels option (round-trip)", () => {
