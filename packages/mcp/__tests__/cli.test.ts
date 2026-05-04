@@ -603,6 +603,46 @@ describe("createCli", () => {
 		}
 	});
 
+	it("serves strategy show with a positional strategy name", async () => {
+		const tmpRoot = mkdtempSync(`${tmpdir()}/cuekit-strategy-show-cli-`);
+		try {
+			writeFileSync(
+				`${tmpRoot}/.cuekit.yaml`,
+				"strategies:\n  docs-polish:\n    description: Docs polish\n    checks:\n      - bun run check\n",
+			);
+			const proc = Bun.spawn(
+				[
+					"bun",
+					`${WORKSPACE_ROOT}/packages/mcp/src/bin.ts`,
+					"strategy",
+					"show",
+					"docs-polish",
+					"--format",
+					"json",
+				],
+				{
+					cwd: tmpRoot,
+					env: { ...process.env, CUEKIT_DB_PATH: `${tmpRoot}/state.db` },
+					stderr: "pipe",
+					stdout: "pipe",
+				},
+			);
+			const [exitCode, stdout, stderr] = await Promise.all([
+				proc.exited,
+				new Response(proc.stdout).text(),
+				new Response(proc.stderr).text(),
+			]);
+
+			expect(exitCode).toBe(0);
+			expect(stderr).toBe("");
+			const body = JSON.parse(stdout) as { strategy?: { name?: string; checks?: string[] } };
+			expect(body.strategy?.name).toBe("docs-polish");
+			expect(body.strategy?.checks).toEqual(["bun run check"]);
+		} finally {
+			rmSync(tmpRoot, { recursive: true, force: true });
+		}
+	});
+
 	it("parses JSON arrays for team submit tasks", async () => {
 		const tmpRoot = mkdtempSync(`${tmpdir()}/cuekit-team-submit-json-`);
 		try {
