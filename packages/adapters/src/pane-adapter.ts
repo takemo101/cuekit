@@ -33,6 +33,7 @@ import {
 	updateTaskRefs,
 	updateTaskStatus,
 } from "@cuekit/store";
+import { adapterRunModeFor, supportsSteeringForMode } from "./adapter-options.ts";
 import { type AdapterSubmitInput, type AgentAdapter, generateTaskId } from "./agent-adapter.ts";
 import type { PaneBackend } from "./pane-backend.ts";
 import { normalizeTaskResult } from "./result-normalizer.ts";
@@ -116,14 +117,18 @@ function readExitCodeSentinel(exitCodePath: string): number | null {
 	}
 }
 
-function timeoutMsFor(task: Task): number | null {
+function taskSpecFor(task: Task): TaskSpec | null {
 	if (!task.spec_json) return null;
 	try {
-		const spec = TaskSpecSchema.parse(JSON.parse(task.spec_json));
-		return spec.timeout_ms ?? null;
+		return TaskSpecSchema.parse(JSON.parse(task.spec_json));
 	} catch {
 		return null;
 	}
+}
+
+function timeoutMsFor(task: Task): number | null {
+	const spec = taskSpecFor(task);
+	return spec?.timeout_ms ?? null;
 }
 
 function hasTimedOut(task: Task, nowMs = Date.now()): boolean {
@@ -163,6 +168,11 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 	const logger = deps.logger ?? silentLogger;
 	const onPaneDisappeared = config.onPaneDisappeared ?? defaultOnPaneDisappeared;
 	const cuekitHomeDir = deps.cuekitHomeDir ?? join(homedir(), ".cuekit");
+	const defaultCapabilities: AdapterCapabilities = {
+		...config.capabilities,
+		default_mode: config.capabilities.default_mode ?? "interactive",
+		supported_modes: config.capabilities.supported_modes ?? ["interactive"],
+	};
 
 	// Ensures a task exists AND is managed by this adapter. Prevents one adapter
 	// from operating on another adapter's tasks even though they share the DB.
@@ -209,7 +219,7 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 		kind: config.kind,
 
 		capabilities(): AdapterCapabilities {
-			return config.capabilities;
+			return defaultCapabilities;
 		},
 
 		async submit(input: AdapterSubmitInput) {
@@ -225,7 +235,7 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 			}
 			// Hybrid model validation: if the adapter declared available_models or
 			// supports_model_selection: false, fail fast before spawning anything.
-			const specCheck = validateSpecAgainstCapabilities(input.spec, config.capabilities);
+			const specCheck = validateSpecAgainstCapabilities(input.spec, defaultCapabilities);
 			if (!specCheck.ok) {
 				return { ok: false, error: specCheck.error };
 			}
@@ -434,7 +444,11 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 					}
 				}
 			}
-			const caps = config.capabilities;
+			const caps = defaultCapabilities;
+			const mode = adapterRunModeFor(
+				taskSpecFor(live) ?? { agent_kind: config.kind, objective: live.objective },
+			);
+			const supportsSteering = caps.supports_steering && supportsSteeringForMode(mode);
 			return {
 				task_id,
 				agent_kind: config.kind,
@@ -447,7 +461,7 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 				started_at: live.started_at ?? undefined,
 				completed_at: live.completed_at ?? undefined,
 				native_task_id: live.native_task_ref ?? undefined,
-				supports_steering: caps.supports_steering,
+				supports_steering: supportsSteering,
 				supports_attach: caps.supports_attach,
 				attach_hint: isTerminalTaskStatus(live.status)
 					? undefined
@@ -455,6 +469,7 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 						? panes.computeAttachHint(task_id)
 						: undefined,
 				metadata: {
+					adapter_mode: mode,
 					tmux_session_name: panes.sessionNameFor(task_id),
 					...(live.native_task_ref ? { tmux_pane_id: live.native_task_ref } : {}),
 				},
@@ -465,7 +480,10 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 			const owned = ownTask(message.task_id);
 			if (!owned.ok) return { ok: false, error: owned.error };
 
-			if (!config.capabilities.supports_steering) {
+			const mode = adapterRunModeFor(
+				taskSpecFor(owned.task) ?? { agent_kind: config.kind, objective: owned.task.objective },
+			);
+			if (!defaultCapabilities.supports_steering || !supportsSteeringForMode(mode)) {
 				return {
 					ok: false,
 					error: {

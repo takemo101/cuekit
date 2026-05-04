@@ -71,9 +71,11 @@ describe.each(CASES)("AgentAdapter contract — $kind", (testCase) => {
 		adapter = testCase.make(db, panes);
 	});
 
-	it("kind() matches capabilities().agent_kind", () => {
+	it("kind() matches capabilities().agent_kind and advertises run modes", () => {
 		expect(adapter.kind).toBe(testCase.kind);
 		expect(adapter.capabilities().agent_kind).toBe(testCase.kind);
+		expect(adapter.capabilities().default_mode).toBe("interactive");
+		expect(adapter.capabilities().supported_modes).toEqual(["interactive"]);
 	});
 
 	it("submit returns AdapterResult — accepted task with task_id", async () => {
@@ -120,7 +122,56 @@ describe.each(CASES)("AgentAdapter contract — $kind", (testCase) => {
 		expect(view.attach_hint).toBeDefined();
 		expect(view.attach_hint).toContain(`cuekit-task-${result.value.task_id}`);
 		expect(view.started_at).toBeDefined();
+		expect(view.metadata?.adapter_mode).toBe("interactive");
 		expect(view.metadata?.tmux_session_name).toBe(`cuekit-task-${result.value.task_id}`);
+	});
+
+	it("status reflects batch mode and disables steering", async () => {
+		const result = await adapter.submit({
+			spec: {
+				agent_kind: testCase.kind,
+				objective: "batch lifecycle",
+				adapter_options: { mode: "batch" },
+			},
+			session_id: "s1",
+		});
+		if (!result.ok) throw new Error(`submit failed: ${result.error.message}`);
+		const view = await adapter.status(result.value.task_id);
+		expect(view.metadata?.adapter_mode).toBe("batch");
+		expect(view.supports_steering).toBe(false);
+		expect(view.supports_attach).toBe(true);
+	});
+
+	it("invalid adapter mode falls back to interactive", async () => {
+		const result = await adapter.submit({
+			spec: {
+				agent_kind: testCase.kind,
+				objective: "invalid mode lifecycle",
+				adapter_options: { mode: "definitely-not-a-mode" },
+			},
+			session_id: "s1",
+		});
+		if (!result.ok) throw new Error(`submit failed: ${result.error.message}`);
+		const view = await adapter.status(result.value.task_id);
+		expect(view.metadata?.adapter_mode).toBe("interactive");
+		expect(view.supports_steering).toBe(adapter.capabilities().supports_steering);
+	});
+
+	it("steer rejects batch tasks as unsupported", async () => {
+		const result = await adapter.submit({
+			spec: {
+				agent_kind: testCase.kind,
+				objective: "batch steering",
+				adapter_options: { mode: "batch" },
+			},
+			session_id: "s1",
+		});
+		if (!result.ok) throw new Error(`submit failed: ${result.error.message}`);
+		const ack = await adapter.steer({ task_id: result.value.task_id, message: "later" });
+		expect(ack.ok).toBe(false);
+		if (!ack.ok) {
+			expect(ack.error.code).toBe("steering_unsupported");
+		}
 	});
 
 	it("status returns task_not_found for an unknown id (genuine absence)", async () => {
