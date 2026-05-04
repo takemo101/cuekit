@@ -22,6 +22,7 @@ Current focused work on outstanding issues:
 - [`cuekit-adapter-run-modes-design.md`](cuekit-adapter-run-modes-design.md) — shared interactive/default and batch/non-interactive adapter mode design.
 - [`cuekit-task-teams-design.md`](cuekit-task-teams-design.md) — lightweight session-scoped task teams for multi-task coding workflows.
 - [`cuekit-project-config-design.md`](cuekit-project-config-design.md) — proposed `.cuekit.yaml` project identity and defaults configuration.
+- [`cuekit-team-strategies-design.md`](cuekit-team-strategies-design.md) — draft design for project-local strategy profiles that guide coordinator-led teams without becoming rigid workflows.
 
 ## When to Add Here
 
