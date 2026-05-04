@@ -55,6 +55,7 @@ export function metadataEntries(
 	const role = detail?.status.role ?? task.role;
 	const model = detail?.status.model ?? task.model;
 	const roleSource = detail?.status.role_source ?? task.role_source;
+	const adapterMode = detail?.status.metadata?.adapter_mode;
 	const teamId = detail?.status.team_id ?? task.team_id;
 	const position = detail?.status.position ?? task.position;
 	const entries: MetadataEntry[] = [
@@ -69,6 +70,13 @@ export function metadataEntries(
 	}
 	if (model) {
 		entries.push({ label: "model", value: model, color: theme.cyan });
+	}
+	if (typeof adapterMode === "string" && adapterMode.length > 0) {
+		entries.push({
+			label: "mode",
+			value: adapterMode,
+			color: adapterMode === "batch" ? theme.yellow : theme.cyan,
+		});
 	}
 	if (teamId) {
 		entries.push({ label: "team", value: teamId, color: theme.purple });

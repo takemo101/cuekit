@@ -14,9 +14,32 @@ const task: TaskSummary = {
 	updated_at,
 };
 
-describe("TUI team metadata", () => {
+describe("TUI task metadata", () => {
 	it("shows compact team metadata in task rows", () => {
 		expect(taskRow(task, false)).toContain("w@3456");
+	});
+
+	it("shows adapter mode metadata in task detail", () => {
+		const detail = {
+			status: {
+				task_id: task.task_id,
+				agent_kind: task.agent_kind,
+				status: task.status,
+				created_at: updated_at,
+				updated_at,
+				metadata: { adapter_mode: "batch" },
+			} satisfies TaskStatusView,
+			events: [],
+			transcriptTail: [],
+		};
+
+		const entries = metadataEntries(task, detail);
+
+		expect(entries).toContainEqual({
+			label: "mode",
+			value: "batch",
+			color: expect.any(String),
+		});
 	});
 
 	it("shows team metadata in task detail", () => {
