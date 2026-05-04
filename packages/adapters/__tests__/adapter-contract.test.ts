@@ -75,7 +75,7 @@ describe.each(CASES)("AgentAdapter contract — $kind", (testCase) => {
 		expect(adapter.kind).toBe(testCase.kind);
 		expect(adapter.capabilities().agent_kind).toBe(testCase.kind);
 		expect(adapter.capabilities().default_mode).toBe("interactive");
-		expect(adapter.capabilities().supported_modes).toEqual(["interactive"]);
+		expect(adapter.capabilities().supported_modes).toContain("interactive");
 	});
 
 	it("submit returns AdapterResult — accepted task with task_id", async () => {

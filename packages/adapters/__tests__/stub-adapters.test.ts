@@ -6,7 +6,7 @@ import { dirname, join } from "node:path";
 import { createSession, runMigrations } from "@cuekit/store";
 import { buildOpenCodeLaunchCommand, createOpenCodeAdapter } from "../src/opencode-adapter.ts";
 import { PaneBackend } from "../src/pane-backend.ts";
-import { createPiAdapter } from "../src/pi-adapter.ts";
+import { buildPiLaunchCommand, createPiAdapter } from "../src/pi-adapter.ts";
 import { FakeTmuxRunner } from "../src/testing.ts";
 
 let db: Database;
@@ -36,6 +36,43 @@ describe("createPiAdapter (truthful stub)", () => {
 		expect(caps.supports_attach).toBe(true);
 		expect(caps.supports_steering).toBe(true);
 		expect(caps.supports_live_progress).toBe(false);
+		expect(caps.default_mode).toBe("interactive");
+		expect(caps.supported_modes).toEqual(["interactive", "batch"]);
+	});
+
+	it("builds an interactive command by default", () => {
+		const command = buildPiLaunchCommand({ agent_kind: "pi", objective: "investigate" });
+		expect(command).toStartWith("'pi' '");
+		expect(command).toContain("investigate");
+		expect(command).not.toContain(" -p ");
+	});
+
+	it("builds a non-interactive command in batch mode", () => {
+		const command = buildPiLaunchCommand({
+			agent_kind: "pi",
+			objective: "investigate",
+			adapter_options: { mode: "batch" },
+		});
+		expect(command).toStartWith("'pi' -p '");
+		expect(command).toContain("investigate");
+	});
+
+	it("falls back to interactive mode for invalid mode values", () => {
+		const command = buildPiLaunchCommand({
+			agent_kind: "pi",
+			objective: "investigate",
+			adapter_options: { mode: "non-interactive" },
+		});
+		expect(command).toStartWith("'pi' '");
+		expect(command).not.toContain(" -p ");
+	});
+
+	it("shell-quotes a custom pi binary", () => {
+		const command = buildPiLaunchCommand(
+			{ agent_kind: "pi", objective: "investigate" },
+			"custom pi",
+		);
+		expect(command).toStartWith("'custom pi' '");
 	});
 
 	it("rejects spec.model because supports_model_selection is false", async () => {
