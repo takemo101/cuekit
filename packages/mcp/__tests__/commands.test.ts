@@ -42,6 +42,7 @@ import { runListTasks } from "../src/commands/list-tasks.ts";
 import { runListTeams } from "../src/commands/list-teams.ts";
 import { runReportTaskEvent } from "../src/commands/report-task-event.ts";
 import { runShowMcpConfig } from "../src/commands/show-mcp-config.ts";
+import { runStartTeamStrategy } from "../src/commands/start-team-strategy.ts";
 import { runSteerTask } from "../src/commands/steer-task.ts";
 import { runSteerTeam } from "../src/commands/steer-team.ts";
 import { runSubmitTask } from "../src/commands/submit-task.ts";
@@ -1088,6 +1089,112 @@ describe("strategy commands", () => {
 
 			expect("error" in result).toBe(true);
 			if ("error" in result) expect(result.error.code).toBe("strategy_not_found");
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+});
+
+describe("start team strategy", () => {
+	it("creates a team and submits one coordinator with rendered strategy guidance", async () => {
+		const root = mkdtempSync(join(tmpdir(), "cuekit-start-strategy-"));
+		try {
+			writeFileSync(
+				join(root, ".cuekit.yaml"),
+				`project:
+  id: strategy-test
+strategies:
+  docs-polish:
+    description: Docs polish
+    intent: Keep docs-only.
+    recommended_team:
+      coordinator:
+        position: coordinator
+        role: planner
+        agent: claude-code
+        model: sonnet
+      reviewer:
+        position: reviewer
+        role: reviewer
+        agent: claude-code
+    checks:
+      - git diff --check
+`,
+			);
+
+			const result = await runStartTeamStrategy(ctx, {
+				cwd: root,
+				strategy: "docs-polish",
+				objective: "Polish README wait guidance",
+			});
+
+			expect(result.accepted).toBe(true);
+			if (!result.accepted) return;
+			expect(result.team_id).toMatch(/^tm_/);
+			expect(result.coordinator_task_id).toMatch(/^t_/);
+			expect(result.agent_kind).toBe("claude-code");
+			expect(result.role).toBe("planner");
+			expect(result.model).toBe("sonnet");
+			const task = getTaskById(db, result.coordinator_task_id);
+			expect(task?.team_id).toBe(result.team_id);
+			expect(task?.team_position).toBe("coordinator");
+			const spec = JSON.parse(task?.spec_json ?? "{}");
+			expect(spec.team_context?.position).toBe("coordinator");
+			expect(spec.context).toContain("Team strategy: docs-polish");
+			expect(spec.context).toContain("Checks:");
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("lets explicit coordinator agent and model override strategy recommendations", async () => {
+		const root = mkdtempSync(join(tmpdir(), "cuekit-start-strategy-override-"));
+		try {
+			writeFileSync(
+				join(root, ".cuekit.yaml"),
+				`strategies:
+  docs-polish:
+    recommended_team:
+      coordinator:
+        position: coordinator
+        role: planner
+        agent: pi
+        model: k2p5
+`,
+			);
+
+			const result = await runStartTeamStrategy(ctx, {
+				cwd: root,
+				strategy: "docs-polish",
+				objective: "Polish README",
+				coordinator: { agent_kind: "claude-code", model: "sonnet", role: "planner" },
+			});
+
+			expect(result.accepted).toBe(true);
+			if (!result.accepted) return;
+			expect(result.agent_kind).toBe("claude-code");
+			expect(result.model).toBe("sonnet");
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("returns strategy_not_found for missing start strategies", async () => {
+		const root = mkdtempSync(join(tmpdir(), "cuekit-start-strategy-missing-"));
+		try {
+			writeFileSync(
+				join(root, ".cuekit.yaml"),
+				"strategies:\n  docs-polish:\n    description: Docs\n",
+			);
+
+			const result = await runStartTeamStrategy(ctx, {
+				cwd: root,
+				strategy: "missing",
+				objective: "x",
+			});
+
+			expect(result.accepted).toBe(false);
+			if (!result.accepted) expect(result.error.code).toBe("strategy_not_found");
 		} finally {
 			rmSync(root, { recursive: true, force: true });
 		}

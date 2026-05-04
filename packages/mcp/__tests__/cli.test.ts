@@ -56,6 +56,7 @@ describe("createCli", () => {
 		expect(cliPaths).toContain("team steer");
 		expect(cliPaths).toContain("team result");
 		expect(cliPaths).toContain("team delete");
+		expect(cliPaths).toContain("team start");
 		expect(cliPaths).toContain("strategy list");
 		expect(cliPaths).toContain("strategy show");
 		expect(cliPaths).toContain("session delete");

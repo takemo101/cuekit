@@ -98,6 +98,11 @@ import {
 	ShowMcpConfigOutputSchema,
 } from "./commands/show-mcp-config.ts";
 import {
+	runStartTeamStrategy,
+	StartTeamStrategyInputSchema,
+	StartTeamStrategyOutputSchema,
+} from "./commands/start-team-strategy.ts";
+import {
 	runSteerTask,
 	SteerTaskInputSchema,
 	SteerTaskOutputSchema,
@@ -536,6 +541,13 @@ export const CUEKIT_CLI_OPERATIONS = [
 		options: GetTeamStatusInputSchema,
 		output: GetTeamStatusOutputSchema,
 		run: runGetTeamStatus,
+	}),
+	defineOperation({
+		cliPath: ["team", "start"],
+		description: "Create a coordinator-led team from a project Team Strategy.",
+		options: StartTeamStrategyInputSchema,
+		output: StartTeamStrategyOutputSchema,
+		run: runStartTeamStrategy,
 	}),
 	defineOperation({
 		cliPath: ["team", "result"],
