@@ -52,6 +52,13 @@ describe("createPiAdapter (truthful stub)", () => {
 		expect(command).not.toContain(" -p ");
 	});
 
+	it("adds pi-specific reporting guidance", () => {
+		const command = buildPiLaunchCommand({ agent_kind: "pi", objective: "investigate" });
+		expect(command).toContain("Pi adapter guidance:");
+		expect(command).toContain("Do not stop after only saying the answer");
+		expect(command).toContain("cuekit tool report --type completed");
+	});
+
 	it("builds a non-interactive command in batch mode", () => {
 		const command = buildPiLaunchCommand({
 			agent_kind: "pi",
