@@ -176,8 +176,8 @@ describe("team commands", () => {
 
 		expect("team_id" in result).toBe(true);
 		if (!("team_id" in result)) return;
-		expect(result.run_summary.completed_reports).toBe(1);
-		expect(result.run_summary.latest_completed_message).toBe(
+		expect(result.run_summary.terminal_reports).toBe(1);
+		expect(result.run_summary.latest_terminal_message).toBe(
 			"Coordinator proposed the small safe extraction",
 		);
 		expect(result.run_summary.positions.coordinator[0]?.message).toBe(

@@ -18,8 +18,8 @@ export const TeamRunSummaryEntrySchema = z.object({
 });
 
 export const TeamRunSummarySchema = z.object({
-	completed_reports: z.number().int().nonnegative(),
-	latest_completed_message: z.string().optional(),
+	terminal_reports: z.number().int().nonnegative(),
+	latest_terminal_message: z.string().optional(),
 	positions: z.record(TeamPositionSchema, z.array(TeamRunSummaryEntrySchema)),
 	open_attention: z
 		.array(
@@ -56,15 +56,15 @@ function taskPosition(task: Task): (typeof POSITIONS)[number] | undefined {
 
 export function emptyTeamRunSummary(): TeamRunSummary {
 	return {
-		completed_reports: 0,
+		terminal_reports: 0,
 		positions: emptyPositions(),
 	};
 }
 
 export function buildTeamRunSummary(ctx: CommandContext, tasks: Task[]): TeamRunSummary {
 	const positions = emptyPositions();
-	let completedReports = 0;
-	let latestCompletedMessage: string | undefined;
+	let terminalReports = 0;
+	let latestTerminalMessage: string | undefined;
 	const openAttention: NonNullable<TeamRunSummary["open_attention"]> = [];
 
 	for (const task of tasks) {
@@ -82,8 +82,8 @@ export function buildTeamRunSummary(ctx: CommandContext, tasks: Task[]): TeamRun
 			};
 			if (position) positions[position].push(entry);
 			if (TERMINAL_REPORT_TYPES.has(event.type)) {
-				completedReports += 1;
-				latestCompletedMessage = event.message;
+				terminalReports += 1;
+				latestTerminalMessage = event.message;
 			}
 		}
 		if (
@@ -101,13 +101,15 @@ export function buildTeamRunSummary(ctx: CommandContext, tasks: Task[]): TeamRun
 	}
 
 	for (const position of POSITIONS) {
-		positions[position] = positions[position].slice(-MAX_ENTRIES_PER_POSITION);
+		positions[position] = positions[position]
+			.toSorted((a, b) => a.created_at.localeCompare(b.created_at))
+			.slice(-MAX_ENTRIES_PER_POSITION);
 	}
 
 	return {
-		completed_reports: completedReports,
-		...(latestCompletedMessage
-			? { latest_completed_message: truncateMessage(latestCompletedMessage) }
+		terminal_reports: terminalReports,
+		...(latestTerminalMessage
+			? { latest_terminal_message: truncateMessage(latestTerminalMessage) }
 			: {}),
 		positions,
 		...(openAttention.length > 0 ? { open_attention: openAttention } : {}),
