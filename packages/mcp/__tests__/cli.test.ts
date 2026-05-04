@@ -10,7 +10,7 @@ import {
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { AdapterRegistry, createClaudeCodeAdapter, PaneBackend } from "@cuekit/adapters";
 import { FakeTmuxRunner } from "@cuekit/adapters/testing";
 import {
@@ -120,6 +120,161 @@ describe("createCli", () => {
 		for (const hidden of ["show_mcp_config", "list_adapters", "list_tasks", "wait_tasks"]) {
 			const res = await mcp.fetch(new Request(`http://localhost/${hidden}`));
 			expect(res.ok).toBe(false);
+		}
+	});
+
+	it("serves strategy discovery through the grouped MCP list tool", async () => {
+		const root = mkdtempSync(join(tmpdir(), "cuekit-mcp-strategies-"));
+		try {
+			writeFileSync(
+				join(root, ".cuekit.yaml"),
+				`strategies:
+  refactor:
+    description: Safe refactoring
+    intent: Improve structure without behavior changes.
+    checks:
+      - bun test
+`,
+			);
+			const { db, registry } = makeCliHarness();
+			const mcp = createMcpCli({ db, registry });
+
+			const res = await mcp.fetch(
+				new Request(`http://localhost/list?kind=strategies&cwd=${encodeURIComponent(root)}`),
+			);
+
+			expect(res.ok).toBe(true);
+			const body = (await res.json()) as {
+				ok: boolean;
+				data: {
+					strategies: Array<{
+						name: string;
+						description?: string;
+						intent?: string;
+						checks?: string[];
+					}>;
+				};
+			};
+			expect(body.ok).toBe(true);
+			expect(body.data.strategies).toEqual([
+				{
+					name: "refactor",
+					description: "Safe refactoring",
+					intent: "Improve structure without behavior changes.",
+					checks: ["bun test"],
+				},
+			]);
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("serves strategy detail and rendered prompts through the grouped MCP list tool", async () => {
+		const root = mkdtempSync(join(tmpdir(), "cuekit-mcp-strategy-detail-"));
+		try {
+			writeFileSync(
+				join(root, ".cuekit.yaml"),
+				`strategies:
+  feature:
+    description: Feature work
+    intent: Add behavior safely.
+    checks:
+      - bun test
+`,
+			);
+			const { db, registry } = makeCliHarness();
+			const mcp = createMcpCli({ db, registry });
+
+			const res = await mcp.fetch(
+				new Request("http://localhost/list", {
+					method: "POST",
+					headers: { "content-type": "application/json" },
+					body: JSON.stringify({
+						kind: "strategies",
+						cwd: root,
+						strategy: "feature",
+						include_prompt: true,
+						objective: "Add grouped discovery",
+					}),
+				}),
+			);
+
+			expect(res.ok).toBe(true);
+			const body = (await res.json()) as {
+				ok: boolean;
+				data: { strategy: { name: string; rendered_prompt?: string } };
+			};
+			expect(body.ok).toBe(true);
+			expect(body.data.strategy.name).toBe("feature");
+			expect(body.data.strategy.rendered_prompt).toContain("Team strategy: feature");
+			expect(body.data.strategy.rendered_prompt).toContain("Add grouped discovery");
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("surfaces strategy lookup errors through the grouped MCP list tool", async () => {
+		const root = mkdtempSync(join(tmpdir(), "cuekit-mcp-strategy-errors-"));
+		try {
+			writeFileSync(
+				join(root, ".cuekit.yaml"),
+				"strategies:\n  feature:\n    description: Feature\n",
+			);
+			const { db, registry } = makeCliHarness();
+			const mcp = createMcpCli({ db, registry });
+
+			const res = await mcp.fetch(
+				new Request("http://localhost/list", {
+					method: "POST",
+					headers: { "content-type": "application/json" },
+					body: JSON.stringify({ kind: "strategies", cwd: root, strategy: "missing" }),
+				}),
+			);
+
+			expect(res.ok).toBe(true);
+			const body = (await res.json()) as {
+				ok: boolean;
+				data: { error: { code: string; message: string } };
+			};
+			expect(body.ok).toBe(true);
+			expect(body.data.error.code).toBe("strategy_not_found");
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("serves empty and invalid strategy config results through the grouped MCP list tool", async () => {
+		const emptyRoot = mkdtempSync(join(tmpdir(), "cuekit-mcp-strategy-empty-"));
+		const invalidRoot = mkdtempSync(join(tmpdir(), "cuekit-mcp-strategy-invalid-"));
+		try {
+			writeFileSync(
+				join(invalidRoot, ".cuekit.yaml"),
+				"strategies:\n  bad:\n    validation:\n      - bun test\n",
+			);
+			const { db, registry } = makeCliHarness();
+			const mcp = createMcpCli({ db, registry });
+
+			const emptyRes = await mcp.fetch(
+				new Request(`http://localhost/list?kind=strategies&cwd=${encodeURIComponent(emptyRoot)}`),
+			);
+			expect(emptyRes.ok).toBe(true);
+			const emptyBody = (await emptyRes.json()) as { ok: boolean; data: { strategies: unknown[] } };
+			expect(emptyBody.ok).toBe(true);
+			expect(emptyBody.data.strategies).toEqual([]);
+
+			const invalidRes = await mcp.fetch(
+				new Request(`http://localhost/list?kind=strategies&cwd=${encodeURIComponent(invalidRoot)}`),
+			);
+			expect(invalidRes.ok).toBe(true);
+			const invalidBody = (await invalidRes.json()) as {
+				ok: boolean;
+				data: { error: { code: string; message: string } };
+			};
+			expect(invalidBody.ok).toBe(true);
+			expect(invalidBody.data.error.code).toBe("invalid_project_config");
+		} finally {
+			rmSync(emptyRoot, { recursive: true, force: true });
+			rmSync(invalidRoot, { recursive: true, force: true });
 		}
 	});
 
