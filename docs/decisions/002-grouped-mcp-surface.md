@@ -31,5 +31,6 @@ Backward compatibility is intentionally not preserved while cuekit is in prototy
 
 - AI callers see fewer tools and choose by `kind` inside grouped tools.
 - AI callers should use short bounded `wait` calls and poll again instead of issuing one long MCP request.
+- On wait timeout, AI callers should inspect `get_status`; if `attention_hint` is present, they can use `steer_task` to ask the child to report progress or finish, then inspect `list({ kind: "events", task_id })`.
 - CLI setup remains available through `cuekit mcp config`.
 - Historical docs/specs may mention the older flat MCP names, but current README/architecture/tests should describe the grouped surface.
