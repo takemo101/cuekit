@@ -159,7 +159,7 @@ Notes:
 - The public API field is `position`; the store column may use `team_position` for clarity.
 - Valid positions are `coordinator`, `worker`, `reviewer`, and `observer`.
 - `position` should normally be present only when `team_id` is present. If a caller provides `position` without `team_id`, return `invalid_input`.
-- Deleting a team, if supported later, should set task `team_id` and `team_position` to null or require the team to be empty. Phase 1 does not need `delete_team`.
+- Deleting a team requires the team to be empty. Use `cleanup_team` / task deletion first, then `team delete` or grouped `delete({ kind: "team" })`.
 - Task deletion naturally removes that task from aggregate team status.
 
 ## Team Positions

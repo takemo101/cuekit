@@ -29,6 +29,7 @@ import { runCleanupTeam } from "../src/commands/cleanup-team.ts";
 import { runCreateTeam } from "../src/commands/create-team.ts";
 import { runDeleteSessions } from "../src/commands/delete-session.ts";
 import { runDeleteTasks } from "../src/commands/delete-task.ts";
+import { runDeleteTeam } from "../src/commands/delete-team.ts";
 import { runGetTaskResult } from "../src/commands/get-task-result.ts";
 import { runGetTaskStatus } from "../src/commands/get-task-status.ts";
 import { runGetTeamResult } from "../src/commands/get-team-result.ts";
@@ -881,6 +882,62 @@ describe("team result", () => {
 
 	it("team result returns team_not_found for unknown teams", () => {
 		const result = runGetTeamResult(ctx, { team_id: "tm_missing" });
+
+		expect("error" in result).toBe(true);
+		if ("error" in result) expect(result.error.code).toBe("team_not_found");
+	});
+});
+
+describe("delete-team", () => {
+	it("deletes an empty team", () => {
+		createSession(db, {
+			id: "s_delete_team",
+			project_root: "/p",
+			worktree_path: "/w",
+			parent_agent_kind: "pi",
+		});
+		createTaskTeam(db, { id: "tm_delete", session_id: "s_delete_team", title: "Delete" });
+
+		const result = runDeleteTeam(ctx, { team_id: "tm_delete" });
+
+		expect(result).toEqual({ ok: true, team_id: "tm_delete" });
+		expect(runGetTeamStatus(ctx, { team_id: "tm_delete" })).toMatchObject({
+			error: { code: "team_not_found" },
+		});
+	});
+
+	it("refuses to delete a team with tasks", () => {
+		createSession(db, {
+			id: "s_delete_nonempty_team",
+			project_root: "/p",
+			worktree_path: "/w",
+			parent_agent_kind: "pi",
+		});
+		createTaskTeam(db, {
+			id: "tm_delete_nonempty",
+			session_id: "s_delete_nonempty_team",
+			title: "Delete",
+		});
+		createTask(db, {
+			id: "t_delete_member",
+			session_id: "s_delete_nonempty_team",
+			team_id: "tm_delete_nonempty",
+			agent_kind: "claude-code",
+			objective: "work",
+			status: "completed",
+		});
+
+		const result = runDeleteTeam(ctx, { team_id: "tm_delete_nonempty" });
+
+		expect("error" in result).toBe(true);
+		if ("error" in result) expect(result.error.code).toBe("team_not_empty");
+		expect(runGetTeamStatus(ctx, { team_id: "tm_delete_nonempty" })).toMatchObject({
+			team_id: "tm_delete_nonempty",
+		});
+	});
+
+	it("delete-team returns team_not_found for unknown teams", () => {
+		const result = runDeleteTeam(ctx, { team_id: "tm_missing" });
 
 		expect("error" in result).toBe(true);
 		if ("error" in result) expect(result.error.code).toBe("team_not_found");

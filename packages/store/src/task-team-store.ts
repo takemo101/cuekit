@@ -91,3 +91,8 @@ export function listTasksByTeam(db: Database, team_id: string): Task[] {
 		.all(team_id);
 	return rows.map((row) => TaskSchema.parse(row));
 }
+
+export function deleteTaskTeam(db: Database, id: string): boolean {
+	const result = db.prepare("delete from task_teams where id = ?").run(id);
+	return result.changes > 0;
+}
