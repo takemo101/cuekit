@@ -113,6 +113,37 @@ describe("e2e: submit → status → cancel → result", () => {
 		}
 	});
 
+	it("passes the parent database path to child processes for CLI reporting fallback", async () => {
+		const dbPath = join(tmpRoot, "state.db");
+		const fileDb = new Database(dbPath);
+		fileDb.exec("pragma foreign_keys = ON;");
+		runMigrations(fileDb);
+		try {
+			const localRunner = new FakeTmuxRunner();
+			const localPanes = new PaneBackend({ runner: localRunner, sendKeysDelayMs: 0 });
+			const localRegistry = new AdapterRegistry();
+			localRegistry.register(
+				createClaudeCodeAdapter(fileDb, localPanes, { launchCommandOverride: () => "sleep 60" }),
+			);
+			const localCtx = { db: fileDb, registry: localRegistry };
+
+			const submit = await runSubmitTask(localCtx, {
+				objective: "report through fallback cli",
+				agent_kind: "claude-code",
+				cwd: tmpRoot,
+			});
+
+			expect(submit.accepted).toBe(true);
+			if (!submit.accepted) return;
+			const newSession = localRunner.calls.find(
+				(call) => call[0] === "new-session" && call.includes(`CUEKIT_TASK_ID=${submit.task_id}`),
+			);
+			expect(newSession).toContain(`CUEKIT_DB_PATH=${dbPath}`);
+		} finally {
+			fileDb.close();
+		}
+	});
+
 	it("covers simplified child reporting: submit env → report progress/completed → list events", async () => {
 		const submit = await runSubmitTask(ctx, {
 			objective: "report progress",
