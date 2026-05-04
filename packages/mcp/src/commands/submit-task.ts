@@ -13,6 +13,20 @@ import { z } from "incur";
 import type { CommandContext } from "../command-context.ts";
 import { resolveSessionId } from "../session-helpers.ts";
 
+const AdapterOptionsSchema = z.record(z.string(), z.unknown());
+
+const CliJsonAdapterOptionsSchema = z.string().transform((raw, ctx) => {
+	try {
+		return AdapterOptionsSchema.parse(JSON.parse(raw));
+	} catch (err) {
+		ctx.addIssue({
+			code: "custom",
+			message: `adapter_options must be a JSON object: ${err instanceof Error ? err.message : String(err)}`,
+		});
+		return z.NEVER;
+	}
+});
+
 export const SubmitTaskInputSchema = TaskSpecSchema.extend({
 	agent_kind: z.string().min(1).optional(),
 	role: z.string().min(1).optional(),
@@ -23,6 +37,7 @@ export const SubmitTaskInputSchema = TaskSpecSchema.extend({
 		.describe("cuekit session id. Auto-created from cwd when omitted."),
 	team_id: z.string().min(1).optional(),
 	position: TeamPositionSchema.optional(),
+	adapter_options: z.union([AdapterOptionsSchema, CliJsonAdapterOptionsSchema]).optional(),
 });
 
 export type SubmitTaskInput = z.infer<typeof SubmitTaskInputSchema>;

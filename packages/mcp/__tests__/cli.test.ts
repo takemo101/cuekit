@@ -557,6 +557,42 @@ describe("createCli", () => {
 		}
 	});
 
+	it("parses JSON object strings for task submit adapter_options", async () => {
+		const proc = Bun.spawn(
+			[
+				"bun",
+				"packages/mcp/src/bin.ts",
+				"task",
+				"submit",
+				"--format",
+				"json",
+				"--agent_kind",
+				"not-registered",
+				"--objective",
+				"x",
+				"--adapter_options",
+				'{"mode":"batch"}',
+			],
+			{
+				cwd: WORKSPACE_ROOT,
+				env: { ...process.env, CUEKIT_DB_PATH: ":memory:" },
+				stderr: "pipe",
+				stdout: "pipe",
+			},
+		);
+		const [exitCode, stdout, stderr] = await Promise.all([
+			proc.exited,
+			new Response(proc.stdout).text(),
+			new Response(proc.stderr).text(),
+		]);
+
+		expect(exitCode).toBe(0);
+		expect(stderr).toBe("");
+		const body = JSON.parse(stdout) as { accepted: false; error: { code: string } };
+		expect(body.accepted).toBe(false);
+		expect(body.error.code).toBe("adapter_not_found");
+	});
+
 	it("serves task commands through grouped cli.fetch paths", async () => {
 		const cli = makeCli();
 		const res = await cli.fetch(new Request("http://localhost/task/list"));
