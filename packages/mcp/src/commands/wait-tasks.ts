@@ -9,6 +9,7 @@ import { getSessionById, getTaskById, listTaskEvents } from "@cuekit/store";
 import { z } from "incur";
 import type { CommandContext } from "../command-context.ts";
 import { getTaskActivity } from "../task-activity.ts";
+import { withTerminalReportSummaryFallback } from "../task-result-summary.ts";
 
 export const WaitModeSchema = z.enum(["all", "any"]);
 
@@ -206,7 +207,7 @@ async function snapshotTask(
 		const adapterRes = ctx.registry.require(task.agent_kind);
 		if (!adapterRes.ok) return { error: adapterRes.error };
 		const result = await adapterRes.value.collect(taskId);
-		if (result.ok) snapshot.result = result.value;
+		if (result.ok) snapshot.result = withTerminalReportSummaryFallback(ctx, result.value);
 	}
 
 	return snapshot;

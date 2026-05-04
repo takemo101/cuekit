@@ -317,6 +317,30 @@ describe("submit-team-tasks", () => {
 		}
 	});
 
+	it("returns a path-aware error when no agent can be resolved", async () => {
+		createSession(db, {
+			id: "s_team_missing_agent",
+			project_root: "/p",
+			worktree_path: "/w",
+			parent_agent_kind: "pi",
+		});
+		createTaskTeam(db, {
+			id: "tm_missing_agent",
+			session_id: "s_team_missing_agent",
+			title: "Team",
+		});
+
+		const result = await runSubmitTeamTasks(ctx, {
+			team_id: "tm_missing_agent",
+			tasks: [{ objective: "Work", position: "worker" }],
+		});
+
+		expect("accepted" in result).toBe(true);
+		if (!("accepted" in result)) return;
+		expect(result.accepted).toEqual([]);
+		expect(result.rejected[0]?.error.message).toContain("tasks[0].agent_kind");
+	});
+
 	it("returns field paths for malformed team task input", async () => {
 		createSession(db, {
 			id: "s_team_paths",
@@ -1545,6 +1569,35 @@ describe("wait-tasks", () => {
 				.find((task) => task.task_id === second.task_id)
 				?.events?.map((event) => event.type),
 		).toEqual(["completed"]);
+	});
+
+	it("uses terminal child report message as inline result summary fallback", async () => {
+		const submit = await runSubmitTask(ctx, {
+			objective: "x",
+			agent_kind: "claude-code",
+			cwd: "/tmp",
+		});
+		if (!submit.accepted) throw new Error("setup failed");
+		updateTaskChildTokenHash(
+			db,
+			submit.task_id,
+			"sha256:3a6eb0790f39ac87c94f3856b2dd2c5d110e6811602261a9a923d3bb23adc8b7",
+		);
+		await runReportTaskEvent(ctx, {
+			task_id: submit.task_id,
+			child_token: "data",
+			type: "completed",
+			message: "inline wait summary",
+		});
+
+		const wait = await runWaitTasks(ctx, {
+			task_ids: [submit.task_id],
+			session_id: submit.session_id,
+			timeout_ms: 0,
+		});
+
+		expect(wait.done).toBe(true);
+		expect(wait.tasks[0]?.result?.summary).toBe("inline wait summary");
 	});
 
 	it("rejects tasks outside the requested session scope", async () => {
