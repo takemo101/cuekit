@@ -1,6 +1,6 @@
 import { Database } from "bun:sqlite";
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { createSession, createTask, runMigrations, updateTaskChildTokenHash } from "@cuekit/store";
@@ -222,7 +222,9 @@ describe("cuekit --mcp (stdio integration)", () => {
 		await initialize(server);
 		await server.send({ jsonrpc: "2.0", id: 2, method: "tools/list" });
 		const reply = await server.readNext("tools/list reply");
-		const result = reply.result as { tools: Array<{ name: string }> };
+		const result = reply.result as {
+			tools: Array<{ name: string; inputSchema?: { properties?: Record<string, unknown> } }>;
+		};
 		const names = result.tools.map((t) => t.name).sort();
 		expect(names).toEqual([
 			"cancel_tasks",
@@ -245,6 +247,10 @@ describe("cuekit --mcp (stdio integration)", () => {
 		expect(names).not.toContain("show_mcp_config");
 		expect(names).not.toContain("list_adapters");
 		expect(names).not.toContain("list_tasks");
+		const listTool = result.tools.find((tool) => tool.name === "list");
+		expect(listTool?.inputSchema?.properties).toHaveProperty("strategy");
+		expect(listTool?.inputSchema?.properties).toHaveProperty("include_prompt");
+		expect(listTool?.inputSchema?.properties).toHaveProperty("objective");
 	});
 
 	it("tools/call list kind=adapters returns the registered MVP adapters", async () => {
@@ -263,6 +269,33 @@ describe("cuekit --mcp (stdio integration)", () => {
 		const adapters = textPayload.adapters;
 		const kinds = adapters.map((a) => a.agent_kind).sort();
 		expect(kinds).toEqual(["claude-code", "jcode", "opencode", "pi"]);
+	});
+
+	it("tools/call list kind=strategies returns project team strategies", async () => {
+		writeFileSync(
+			join(tmpRoot, ".cuekit.yaml"),
+			`strategies:
+  feature:
+    description: Feature work
+    checks:
+      - bun test
+`,
+		);
+		await initialize(server);
+		await server.send({
+			jsonrpc: "2.0",
+			id: 33,
+			method: "tools/call",
+			params: { name: "list", arguments: { kind: "strategies", cwd: tmpRoot } },
+		});
+		const reply = await server.readNext("list strategies reply");
+		const result = reply.result as ToolCallResult;
+		const data = toolCallData(result) as {
+			strategies?: Array<{ name: string; description?: string; checks?: string[] }>;
+		};
+		expect(data.strategies).toEqual([
+			{ name: "feature", description: "Feature work", checks: ["bun test"] },
+		]);
 	});
 
 	it("tools/call submit_task returns a structured response (happy OR submit_failed)", async () => {

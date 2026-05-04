@@ -1,4 +1,4 @@
-import { loadProjectConfig, type TeamStrategy } from "@cuekit/project-config";
+import { loadProjectConfig, type TeamStrategy, TeamStrategySchema } from "@cuekit/project-config";
 import { z } from "incur";
 import type { CommandContext } from "../command-context.ts";
 import { renderTeamStrategyPrompt, resolveTeamStrategy } from "../team-strategy.ts";
@@ -19,7 +19,7 @@ const StrategySummarySchema = z.object({
 });
 
 const StrategyDetailSchema = StrategySummarySchema.extend({
-	strategy: z.unknown(),
+	strategy: TeamStrategySchema,
 	rendered_prompt: z.string().optional(),
 });
 
@@ -28,7 +28,7 @@ export const ListStrategiesOutputSchema = z.union([
 	z.object({ strategy: StrategyDetailSchema }),
 	z.object({
 		error: z.object({
-			code: z.enum(["invalid_project_config", "strategy_not_found"]),
+			code: z.enum(["invalid_input", "invalid_project_config", "strategy_not_found"]),
 			message: z.string(),
 		}),
 	}),
@@ -48,6 +48,15 @@ export function runListStrategies(
 	_ctx: CommandContext,
 	input: ListStrategiesInput,
 ): ListStrategiesOutput {
+	if (!input.strategy && (input.include_prompt || input.objective)) {
+		return {
+			error: {
+				code: "invalid_input",
+				message: "strategy is required when include_prompt or objective is provided",
+			},
+		};
+	}
+
 	const loaded = loadProjectConfig(input.cwd ?? process.cwd());
 	if (!loaded.ok) {
 		return { error: { code: "invalid_project_config", message: loaded.error } };

@@ -127,7 +127,7 @@ cuekit agent list
 cuekit agent list --scope project --cwd /path/to/repo --include_instructions true
 ```
 
-MCP tool: `list_agent_profiles`.
+MCP tool: `list({ "kind": "agent_profiles" })`.
 
 ## Submitting with an explicit role
 

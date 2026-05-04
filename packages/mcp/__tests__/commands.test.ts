@@ -36,7 +36,7 @@ import { runGetTeamResult } from "../src/commands/get-team-result.ts";
 import { runGetTeamStatus } from "../src/commands/get-team-status.ts";
 import { runListAdapters } from "../src/commands/list-adapters.ts";
 import { runListAgentProfiles } from "../src/commands/list-agent-profiles.ts";
-import { runListStrategies } from "../src/commands/list-strategies.ts";
+import { ListStrategiesOutputSchema, runListStrategies } from "../src/commands/list-strategies.ts";
 import { runListTaskEvents } from "../src/commands/list-task-events.ts";
 import { runListTasks } from "../src/commands/list-tasks.ts";
 import { runListTeams } from "../src/commands/list-teams.ts";
@@ -1092,6 +1092,33 @@ describe("strategy commands", () => {
 		} finally {
 			rmSync(root, { recursive: true, force: true });
 		}
+	});
+
+	it("returns invalid_input when prompt-only fields are provided without a strategy name", () => {
+		const root = mkdtempSync(join(tmpdir(), "cuekit-strategy-invalid-input-"));
+		try {
+			const result = runListStrategies(ctx, {
+				cwd: root,
+				include_prompt: true,
+				objective: "Render without a strategy",
+			});
+
+			expect("error" in result).toBe(true);
+			if ("error" in result) expect(result.error.code).toBe("invalid_input");
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("describes detailed strategy output with the team strategy schema", () => {
+		const parsed = ListStrategiesOutputSchema.safeParse({
+			strategy: {
+				name: "bad",
+				strategy: { validation: ["bun test"] },
+			},
+		});
+
+		expect(parsed.success).toBe(false);
 	});
 });
 
