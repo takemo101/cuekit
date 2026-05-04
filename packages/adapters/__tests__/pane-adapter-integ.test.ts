@@ -3,10 +3,10 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { chmodSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { globalTaskArtifactPaths, taskArtifactPaths } from "@cuekit/core";
 import { createSession, getTaskById, runMigrations } from "@cuekit/store";
 import { PaneBackend } from "../src/pane-backend.ts";
 import { createPiAdapter } from "../src/pi-adapter.ts";
+import { globalTaskArtifactPaths, taskArtifactPaths } from "../src/task-artifacts.ts";
 import { hasTmux } from "../src/testing.ts";
 
 // Dogfood-style end-to-end: real tmux + real fs + real child processes.

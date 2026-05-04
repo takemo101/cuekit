@@ -6,7 +6,6 @@ import { dirname, join } from "node:path";
 import {
 	type AdapterCapabilities,
 	ensureCollectable,
-	globalTaskArtifactPaths,
 	isTerminalTaskStatus,
 	type JobError,
 	type Logger,
@@ -17,9 +16,7 @@ import {
 	TaskSpecSchema,
 	type TaskSummary,
 	type TerminalTaskResultStatus,
-	taskArtifactPaths,
 	validateSpecAgainstCapabilities,
-	wrapLaunchCommandWithExitCode,
 } from "@cuekit/core";
 import {
 	completeTask,
@@ -37,6 +34,11 @@ import { adapterRunModeFor, supportsSteeringForMode } from "./adapter-options.ts
 import { type AdapterSubmitInput, type AgentAdapter, generateTaskId } from "./agent-adapter.ts";
 import type { PaneBackend } from "./pane-backend.ts";
 import { normalizeTaskResult } from "./result-normalizer.ts";
+import {
+	globalTaskArtifactPaths,
+	taskArtifactPaths,
+	wrapLaunchCommandWithExitCode,
+} from "./task-artifacts.ts";
 
 // Decision returned by `onPaneDisappeared`. `status` must be terminal;
 // `summary` is optional free-form text attached to the task row.
