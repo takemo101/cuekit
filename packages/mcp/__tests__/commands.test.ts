@@ -11,6 +11,7 @@ import {
 } from "@cuekit/adapters";
 import { FakeTmuxRunner } from "@cuekit/adapters/testing";
 import {
+	appendTaskEvent,
 	createSession,
 	createTask,
 	createTaskTeam,
@@ -130,6 +131,62 @@ describe("team commands", () => {
 		const second = runListTeams(ctx, { session_id: "s1", limit: 1, cursor: first.next_cursor });
 		expect(second.teams).toHaveLength(1);
 		expect(second.teams[0]?.team_id).not.toBe(first.teams[0]?.team_id);
+	});
+
+	it("get-team-status summarizes child reports by position", () => {
+		createSession(db, {
+			id: "s_summary",
+			project_root: "/p",
+			worktree_path: "/w",
+			parent_agent_kind: "pi",
+		});
+		createTaskTeam(db, { id: "tm_summary", session_id: "s_summary", title: "Team" });
+		createTask(db, {
+			id: "t_coord",
+			session_id: "s_summary",
+			agent_kind: "claude-code",
+			team_id: "tm_summary",
+			team_position: "coordinator",
+			objective: "coordinate",
+			status: "completed",
+		});
+		createTask(db, {
+			id: "t_review",
+			session_id: "s_summary",
+			agent_kind: "claude-code",
+			team_id: "tm_summary",
+			team_position: "reviewer",
+			objective: "review",
+			status: "running",
+		});
+		appendTaskEvent(db, {
+			id: "e_coord_done",
+			task_id: "t_coord",
+			type: "completed",
+			message: "Coordinator proposed the small safe extraction",
+		});
+		appendTaskEvent(db, {
+			id: "e_review_progress",
+			task_id: "t_review",
+			type: "progress",
+			message: "Reviewer is checking schema risks",
+		});
+
+		const result = runGetTeamStatus(ctx, { team_id: "tm_summary" });
+
+		expect("team_id" in result).toBe(true);
+		if (!("team_id" in result)) return;
+		expect(result.run_summary.completed_reports).toBe(1);
+		expect(result.run_summary.latest_completed_message).toBe(
+			"Coordinator proposed the small safe extraction",
+		);
+		expect(result.run_summary.positions.coordinator[0]?.message).toBe(
+			"Coordinator proposed the small safe extraction",
+		);
+		expect(result.run_summary.positions.reviewer[0]?.message).toBe(
+			"Reviewer is checking schema risks",
+		);
+		expect(result.run_summary.open_attention?.[0]?.task_id).toBe("t_review");
 	});
 
 	it("get-team-status returns empty team status", () => {
@@ -534,12 +591,19 @@ describe("wait-team and cleanup-team", () => {
 			objective: "done",
 			status: "completed",
 		});
+		appendTaskEvent(db, {
+			id: "e_done",
+			task_id: "t_done",
+			type: "completed",
+			message: "Worker finished implementation",
+		});
 
 		const result = await runWaitTeam(ctx, { team_id: "tm_1", timeout_ms: 0 });
 
 		expect(result.status).toBe("completed");
 		expect(result.done).toBe(true);
 		expect(result.tasks.map((task) => task.task_id)).toEqual(["t_done"]);
+		expect(result.run_summary.positions.worker[0]?.message).toBe("Worker finished implementation");
 	});
 
 	it("team defaults: wait-team uses configured wait defaults and explicit input wins", async () => {

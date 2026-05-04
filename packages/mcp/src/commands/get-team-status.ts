@@ -8,6 +8,7 @@ import {
 import { getTaskTeamById, listTasksByTeam } from "@cuekit/store";
 import { z } from "incur";
 import type { CommandContext } from "../command-context.ts";
+import { buildTeamRunSummary, TeamRunSummarySchema } from "../team-run-summary.ts";
 import { aggregateTeamStatus, countTeamTasks, groupTasksByPosition } from "../team-status.ts";
 
 export const GetTeamStatusInputSchema = z.object({
@@ -26,6 +27,7 @@ export const GetTeamStatusOutputSchema = z.union([
 		objective: z.string().optional(),
 		status: TeamStatusSchema,
 		task_counts: TeamTaskCountsSchema,
+		run_summary: TeamRunSummarySchema,
 		positions: PositionsSchema,
 		tasks: z.array(TaskSummarySchema),
 		created_at: z.string().datetime({ offset: true }),
@@ -76,6 +78,7 @@ export function runGetTeamStatus(
 		...(team.objective ? { objective: team.objective } : {}),
 		status: aggregateTeamStatus(tasks),
 		task_counts: countTeamTasks(tasks),
+		run_summary: buildTeamRunSummary(ctx, tasks),
 		positions: groupTasksByPosition(summaries),
 		tasks: summaries,
 		created_at: team.created_at,

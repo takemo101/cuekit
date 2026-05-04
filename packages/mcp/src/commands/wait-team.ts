@@ -3,6 +3,11 @@ import { applyTeamWaitDefaults, loadProjectConfig } from "@cuekit/project-config
 import { getSessionById, getTaskTeamById, listTasksByTeam } from "@cuekit/store";
 import { z } from "incur";
 import type { CommandContext } from "../command-context.ts";
+import {
+	buildTeamRunSummary,
+	emptyTeamRunSummary,
+	TeamRunSummarySchema,
+} from "../team-run-summary.ts";
 import { aggregateTeamStatus } from "../team-status.ts";
 import {
 	runWaitTasks,
@@ -32,6 +37,7 @@ export const WaitTeamOutputSchema = z.object({
 	timed_out: z.boolean(),
 	scope: z.object({ team_id: z.string(), session_id: z.string().optional() }),
 	tasks: z.array(WaitTaskSnapshotSchema),
+	run_summary: TeamRunSummarySchema,
 	next_action_hint: z.string().optional(),
 	error: JobErrorSchema.optional(),
 });
@@ -52,6 +58,7 @@ export async function runWaitTeam(
 			timed_out: false,
 			scope: { team_id: input.team_id },
 			tasks: [],
+			run_summary: emptyTeamRunSummary(),
 			error: {
 				code: "team_not_found",
 				message: `team '${input.team_id}' not found`,
@@ -69,6 +76,7 @@ export async function runWaitTeam(
 			timed_out: false,
 			scope: { team_id: team.id, session_id: team.session_id },
 			tasks: [],
+			run_summary: emptyTeamRunSummary(),
 			error: {
 				code: "session_not_found",
 				message: `session '${team.session_id}' not found`,
@@ -88,6 +96,7 @@ export async function runWaitTeam(
 			timed_out: false,
 			scope: { team_id: team.id, session_id: team.session_id },
 			tasks: [],
+			run_summary: emptyTeamRunSummary(),
 		};
 	}
 	const wait = await runWaitTasks(ctx, {
@@ -112,6 +121,7 @@ export async function runWaitTeam(
 		timed_out: wait.timed_out,
 		scope: { team_id: team.id, session_id: team.session_id },
 		tasks: wait.tasks,
+		run_summary: buildTeamRunSummary(ctx, latest),
 		...(wait.timed_out ? { next_action_hint: WAIT_TIMEOUT_ACTION_HINT } : {}),
 		...(wait.error ? { error: wait.error } : {}),
 	};
