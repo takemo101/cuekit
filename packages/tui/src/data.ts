@@ -48,6 +48,8 @@ const ANSI_CSI_RE = new RegExp(`${ESC}\\[[0-?]*[ -/]*[@-~]`, "g");
 const ANSI_OSC_RE = new RegExp(`${ESC}\\][^${BEL}]*(?:${BEL}|${ESC}\\\\)`, "g");
 const ANSI_STRING_RE = new RegExp(`${ESC}[PX^_][\\s\\S]*?${ESC}\\\\`, "g");
 const ANSI_ST_RE = new RegExp(`${ESC}\\\\`, "g");
+const BARE_CURSOR_VISIBILITY_RE = /\[\?25[lh]/g;
+const TERMINAL_REPAINT_GLYPHS_RE = /[■⬝┃]+/g;
 
 function stripControlCharacters(value: string): string {
 	return Array.from(value)
@@ -64,7 +66,9 @@ export function sanitizeTerminalText(value: string): string {
 			.replace(ANSI_STRING_RE, "")
 			.replace(ANSI_OSC_RE, "")
 			.replace(ANSI_CSI_RE, "")
-			.replace(ANSI_ST_RE, ""),
+			.replace(ANSI_ST_RE, "")
+			.replace(BARE_CURSOR_VISIBILITY_RE, "")
+			.replace(TERMINAL_REPAINT_GLYPHS_RE, ""),
 	).trimEnd();
 }
 
