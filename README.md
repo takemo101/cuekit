@@ -152,6 +152,8 @@ Agents that speak MCP can list the compact grouped tool surface: `submit_task`, 
 
 `wait` is the parent-side polling primitive for asynchronous delegation. Use `kind: "tasks"` with `task_ids: [task_id]` for one or more tasks, or `kind: "team"` with `team_id` for a team snapshot. Prefer short bounded waits such as `{ "kind": "tasks", "task_ids": ["t_..."], "timeout_ms": 30000, "poll_interval_ms": 5000 }` and poll again rather than one very long MCP request. Waiting is scoped by `session_id` or the current/explicit `cwd`; a wait timeout only stops waiting and does not cancel child work.
 
+When a bounded wait times out, call `get_status` for the task or team. If a task includes `attention_hint` (for example `stop_hook_or_idle_prompt_suspected`), use `steer_task` with a short instruction such as “please report progress or finish now”. Inspect durable child reports with `list({ "kind": "events", "task_id": "t_..." })`.
+
 ## State
 
 - **Global state index**: `~/.cuekit/state.db` — SQLite database with two tables (`sessions`, `tasks`) and a `schema_migrations` tracker. One connection per process; WAL mode, `foreign_keys = ON`.
