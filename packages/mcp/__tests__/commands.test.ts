@@ -31,6 +31,7 @@ import { runDeleteSessions } from "../src/commands/delete-session.ts";
 import { runDeleteTasks } from "../src/commands/delete-task.ts";
 import { runGetTaskResult } from "../src/commands/get-task-result.ts";
 import { runGetTaskStatus } from "../src/commands/get-task-status.ts";
+import { runGetTeamResult } from "../src/commands/get-team-result.ts";
 import { runGetTeamStatus } from "../src/commands/get-team-status.ts";
 import { runListAdapters } from "../src/commands/list-adapters.ts";
 import { runListAgentProfiles } from "../src/commands/list-agent-profiles.ts";
@@ -798,6 +799,88 @@ describe("wait-team and cleanup-team", () => {
 
 	it("cleanup-team returns team_not_found for unknown teams", async () => {
 		const result = await runCleanupTeam(ctx, { team_id: "tm_missing" });
+
+		expect("error" in result).toBe(true);
+		if ("error" in result) expect(result.error.code).toBe("team_not_found");
+	});
+});
+
+describe("team result", () => {
+	it("returns an event-first timeline and coordinator final summary", () => {
+		createSession(db, {
+			id: "s_team_result",
+			project_root: "/p",
+			worktree_path: "/w",
+			parent_agent_kind: "pi",
+		});
+		createTaskTeam(db, { id: "tm_result", session_id: "s_team_result", title: "Team" });
+		createTask(db, {
+			id: "t_worker_result",
+			session_id: "s_team_result",
+			team_id: "tm_result",
+			team_position: "worker",
+			agent_kind: "claude-code",
+			objective: "work",
+			status: "completed",
+		});
+		createTask(db, {
+			id: "t_reviewer_result",
+			session_id: "s_team_result",
+			team_id: "tm_result",
+			team_position: "reviewer",
+			agent_kind: "claude-code",
+			objective: "review",
+			status: "completed",
+		});
+		createTask(db, {
+			id: "t_coordinator_result",
+			session_id: "s_team_result",
+			team_id: "tm_result",
+			team_position: "coordinator",
+			agent_kind: "pi",
+			objective: "coordinate",
+			status: "completed",
+		});
+		appendTaskEvent(db, {
+			id: "e_worker_result",
+			task_id: "t_worker_result",
+			type: "completed",
+			message: "worker final report",
+		});
+		appendTaskEvent(db, {
+			id: "e_reviewer_result",
+			task_id: "t_reviewer_result",
+			type: "completed",
+			message: "reviewer final report",
+		});
+		appendTaskEvent(db, {
+			id: "e_coordinator_result",
+			task_id: "t_coordinator_result",
+			type: "completed",
+			message: "coordinator final report",
+		});
+
+		const result = runGetTeamResult(ctx, { team_id: "tm_result" });
+
+		expect("error" in result).toBe(false);
+		if ("error" in result) return;
+		expect(result.status).toBe("completed");
+		expect(result.task_counts.completed).toBe(3);
+		expect(result.final_summary).toContain("coordinator final report");
+		expect(result.timeline.map((event) => event.position)).toEqual([
+			"worker",
+			"reviewer",
+			"coordinator",
+		]);
+		expect(result.timeline.map((event) => event.message)).toEqual([
+			"worker final report",
+			"reviewer final report",
+			"coordinator final report",
+		]);
+	});
+
+	it("team result returns team_not_found for unknown teams", () => {
+		const result = runGetTeamResult(ctx, { team_id: "tm_missing" });
 
 		expect("error" in result).toBe(true);
 		if ("error" in result) expect(result.error.code).toBe("team_not_found");

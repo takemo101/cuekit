@@ -43,6 +43,11 @@ import {
 	runGetTaskStatus,
 } from "./commands/get-task-status.ts";
 import {
+	GetTeamResultInputSchema,
+	GetTeamResultOutputSchema,
+	runGetTeamResult,
+} from "./commands/get-team-result.ts";
+import {
 	GetTeamStatusInputSchema,
 	GetTeamStatusOutputSchema,
 	runGetTeamStatus,
@@ -361,6 +366,14 @@ export const CUEKIT_MCP_OPERATIONS = [
 		run: runGetTaskResult,
 	}),
 	defineMcpOperation({
+		mcpName: "get_team_result",
+		cliPath: ["team", "result"],
+		description: "Collect an event-first result timeline for a team.",
+		options: GetTeamResultInputSchema,
+		output: GetTeamResultOutputSchema,
+		run: runGetTeamResult,
+	}),
+	defineMcpOperation({
 		mcpName: "wait",
 		cliPath: ["wait", "target"],
 		description:
@@ -464,6 +477,13 @@ export const CUEKIT_CLI_OPERATIONS = [
 		options: GetTeamStatusInputSchema,
 		output: GetTeamStatusOutputSchema,
 		run: runGetTeamStatus,
+	}),
+	defineOperation({
+		cliPath: ["team", "result"],
+		description: "Collect an event-first result timeline for a task team.",
+		options: GetTeamResultInputSchema,
+		output: GetTeamResultOutputSchema,
+		run: runGetTeamResult,
 	}),
 	defineOperation({
 		cliPath: ["task", "status"],

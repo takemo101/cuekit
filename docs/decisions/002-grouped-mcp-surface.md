@@ -20,6 +20,7 @@ Expose a smaller grouped AI-facing MCP tool surface:
 - `list` (`kind: tasks | teams | events | adapters | agent_profiles`)
 - `report_task_event`
 - `steer_task`
+- `get_team_result`
 - `steer_team`
 - `cleanup` (`kind: tasks | team`)
 - `delete` (`kind: tasks | sessions`)
