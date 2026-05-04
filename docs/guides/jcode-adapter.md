@@ -110,6 +110,32 @@ cuekit task delete --task_ids <task_id>
 
 If the task already reported a terminal status, delete may be enough. If a tmux session is still alive, cancel first.
 
+## jcode REPL session lifecycle note
+
+jcode v0.11.x tracks active local sessions with PID marker files under:
+
+```sh
+~/.jcode/active_pids/<session_id>
+```
+
+On a later plain `jcode` TUI launch, jcode scans those marker files. If a marker points at a PID that is no longer running, jcode treats the session as an unexpected shutdown and may synthesize a reboot snapshot, producing output like:
+
+```text
+Detected N recent jcode session crash(es) from an unexpected shutdown. Restoring them now...
+```
+
+This matters for the cuekit adapter because `jcode repl` marks its session active, but in jcode v0.11.x the REPL's normal `quit` / `exit` / EOF path does not mark the session closed. A cuekit-managed tmux pane can therefore leave a stale `active_pids` marker even when the REPL exited normally.
+
+The adapter works around this by launching `jcode repl` as a child process, recording its PID, waiting for it to exit, and then removing only the `~/.jcode/active_pids/*` marker whose contents match that child PID. This prevents cuekit-managed REPL sessions from being restored as ghost jcode windows on the next plain `jcode` launch.
+
+If stale markers already exist from older adapter runs, clear any generated reboot snapshot with:
+
+```sh
+jcode restart clear
+```
+
+If necessary, inspect `~/.jcode/active_pids` and remove markers for PIDs that are no longer running. Do not remove markers for live jcode sessions.
+
 ## Notes
 
 - The `jcode` adapter supports model selection through `--model`.

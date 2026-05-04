@@ -42,8 +42,15 @@ export function buildJcodeReplLaunchCommand(
 		'mkfifo "$fifo"',
 		"&&",
 		`{ (printf '%s\\n' ${prompt}; cat < /dev/tty) > "$fifo" & feeder_pid=$!;`,
-		`${parts.join(" ")} < "$fifo";`,
+		`${parts.join(" ")} < "$fifo" & jcode_pid=$!;`,
+		'wait "$jcode_pid";',
 		"status=$?;",
+		// jcode v0.11.x marks `repl` sessions active in ~/.jcode/active_pids,
+		// but does not mark them closed when the REPL exits normally. Remove the
+		// PID marker owned by this cuekit-managed REPL so the next plain `jcode`
+		// launch does not auto-restore it as an unexpected shutdown.
+		'jcode_home="${JCODE_HOME:-$HOME/.jcode}";',
+		'if [ -d "$jcode_home/active_pids" ]; then for pid_file in "$jcode_home"/active_pids/*; do [ -f "$pid_file" ] || continue; if [ "$(cat "$pid_file" 2>/dev/null)" = "$jcode_pid" ]; then rm -f "$pid_file"; fi; done; fi;',
 		'kill "$feeder_pid" 2>/dev/null;',
 		'wait "$feeder_pid" 2>/dev/null;',
 		'rm -f "$fifo";',
