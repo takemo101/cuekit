@@ -105,7 +105,7 @@ Potential later work:
 
 Coordinator-led dogfood follow-ups (2026-05-04):
 
-- Dynamic team waiting: default `wait_team` remains snapshot-based, but coordinator-led workflows need an opt-in mode such as `follow_new_tasks` so waits can include workers/reviewers created by the coordinator after the wait begins.
+- Dynamic team waiting: default `wait_team` remains snapshot-based, but coordinator-led workflows can use `follow_new_tasks` so waits include workers/reviewers created by the coordinator after the wait begins.
 - Coordinator prompt guidance: coordinator tasks should get a concise recipe for using cuekit tools to submit workers, wait with bounded polling, request review, steer stalled work, and report a final team summary. This is prompt guidance only, not scheduler enforcement.
 - Team result/timeline: parents need an event-first team result view that highlights coordinator, worker, and reviewer terminal reports without reading noisy runtime transcripts.
 - Empty team deletion: `cleanup_team` removes terminal tasks but intentionally keeps the team row; add an explicit empty-team deletion policy/operation.

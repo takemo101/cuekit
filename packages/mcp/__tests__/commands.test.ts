@@ -682,6 +682,84 @@ describe("wait-team and cleanup-team", () => {
 		}
 	});
 
+	it("wait-team defaults to a snapshot and ignores tasks added after waiting starts", async () => {
+		createSession(db, {
+			id: "s_wait_snapshot",
+			project_root: "/p",
+			worktree_path: "/w",
+			parent_agent_kind: "pi",
+		});
+		createTaskTeam(db, { id: "tm_wait_snapshot", session_id: "s_wait_snapshot", title: "Team" });
+		const coordinator = await runSubmitTask(ctx, {
+			objective: "coordinate",
+			agent_kind: "claude-code",
+			session_id: "s_wait_snapshot",
+			team_id: "tm_wait_snapshot",
+		});
+		expect(coordinator.accepted).toBe(true);
+		setTimeout(() => {
+			createTask(db, {
+				id: "t_late_worker_snapshot",
+				session_id: "s_wait_snapshot",
+				team_id: "tm_wait_snapshot",
+				agent_kind: "claude-code",
+				objective: "late worker",
+				status: "running",
+			});
+		}, 5);
+
+		const result = await runWaitTeam(ctx, {
+			team_id: "tm_wait_snapshot",
+			timeout_ms: 30,
+			poll_interval_ms: 5,
+		});
+
+		expect(result.timed_out).toBe(true);
+		expect(result.tasks.map((task) => task.task_id)).toEqual([
+			coordinator.accepted ? coordinator.task_id : "",
+		]);
+	});
+
+	it("wait-team can follow tasks added after waiting starts", async () => {
+		createSession(db, {
+			id: "s_wait_follow",
+			project_root: "/p",
+			worktree_path: "/w",
+			parent_agent_kind: "pi",
+		});
+		createTaskTeam(db, { id: "tm_wait_follow", session_id: "s_wait_follow", title: "Team" });
+		const coordinator = await runSubmitTask(ctx, {
+			objective: "coordinate",
+			agent_kind: "claude-code",
+			session_id: "s_wait_follow",
+			team_id: "tm_wait_follow",
+		});
+		expect(coordinator.accepted).toBe(true);
+		setTimeout(() => {
+			createTask(db, {
+				id: "t_late_worker_follow",
+				session_id: "s_wait_follow",
+				team_id: "tm_wait_follow",
+				agent_kind: "claude-code",
+				objective: "late worker",
+				status: "running",
+			});
+		}, 5);
+
+		const result = await runWaitTeam(ctx, {
+			team_id: "tm_wait_follow",
+			timeout_ms: 30,
+			poll_interval_ms: 5,
+			follow_new_tasks: true,
+		});
+
+		expect(result.timed_out).toBe(true);
+		expect(result.tasks.map((task) => task.task_id).sort()).toEqual(
+			[coordinator.accepted ? coordinator.task_id : "", "t_late_worker_follow"].sort(),
+		);
+		expect(result.next_action_hint).toContain("newly created team tasks");
+	});
+
 	it("cleanup-team deletes terminal team tasks and keeps the team row", async () => {
 		createSession(db, {
 			id: "s1",

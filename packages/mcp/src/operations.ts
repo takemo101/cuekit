@@ -364,7 +364,7 @@ export const CUEKIT_MCP_OPERATIONS = [
 		mcpName: "wait",
 		cliPath: ["wait", "target"],
 		description:
-			"Wait for tasks or a team. Set kind to 'tasks' or 'team'. Long MCP waits are capped to avoid client request timeouts; call wait again to continue polling.",
+			"Wait for tasks or a team. Set kind to 'tasks' or 'team'. Team waits are snapshot-based by default; set follow_new_tasks for coordinator-led teams. Long MCP waits are capped to avoid client request timeouts; call wait again to continue polling.",
 		options: WaitInputSchema,
 		output: WaitOutputSchema,
 		run: runWait,
