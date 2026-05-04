@@ -57,12 +57,39 @@ describe("buildClaudeCodeLaunchCommand", () => {
 		expect(out).toContain("--model 'sonnet; touch /tmp/pwned'");
 	});
 
-	it("does NOT pass --print / -p (interactive mode preserves attach)", () => {
+	it("does NOT pass --print / -p by default (interactive mode preserves attach)", () => {
 		// Token-level check instead of substring — a trailing '-p' (no space)
 		// or a '-p' at end of line would slip past a naive toContain.
 		const tokens = buildClaudeCodeLaunchCommand(spec({ model: "opus" })).split(/\s+/);
 		expect(tokens).not.toContain("--print");
 		expect(tokens).not.toContain("-p");
+	});
+
+	it("passes -p in batch mode", () => {
+		const out = buildClaudeCodeLaunchCommand(
+			spec({ adapter_options: { mode: "batch" }, model: "opus" }),
+		);
+		expect(out).toStartWith(
+			"claude --dangerously-skip-permissions --model 'opus' -p 'do the thing",
+		);
+	});
+
+	it("falls back to interactive mode for invalid mode values", () => {
+		const tokens = buildClaudeCodeLaunchCommand(
+			spec({ adapter_options: { mode: "non-interactive" }, model: "opus" }),
+		).split(/\s+/);
+		expect(tokens).not.toContain("--print");
+		expect(tokens).not.toContain("-p");
+	});
+
+	it("preserves permission opt-out in batch mode", () => {
+		const out = buildClaudeCodeLaunchCommand(
+			spec({
+				adapter_options: { mode: "batch", dangerously_skip_permissions: false },
+			}),
+		);
+		expect(out).toStartWith("claude -p 'do the thing");
+		expect(out).not.toContain("--dangerously-skip-permissions");
 	});
 
 	it("shell-quotes objectives with single quotes via POSIX '\\'' escape", () => {
