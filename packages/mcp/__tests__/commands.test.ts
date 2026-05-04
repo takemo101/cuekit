@@ -542,6 +542,7 @@ describe("wait-team and cleanup-team", () => {
 
 			const fromConfig = await runWaitTeam(ctx, { team_id: "tm_wait_defaults" });
 			expect(fromConfig.timed_out).toBe(true);
+			expect(fromConfig.next_action_hint).toContain("poll again");
 
 			const explicit = await runWaitTeam(ctx, {
 				team_id: "tm_wait_defaults",
@@ -1361,6 +1362,7 @@ describe("wait-tasks", () => {
 
 		expect(waited.done).toBe(false);
 		expect(waited.timed_out).toBe(true);
+		expect(waited.next_action_hint).toContain("poll again");
 		expect(waited.tasks).toHaveLength(1);
 		expect(waited.tasks[0]?.status).toBe("running");
 		expect(getTaskById(db, submitted.task_id)?.status).toBe("running");

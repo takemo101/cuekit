@@ -313,7 +313,8 @@ export const CUEKIT_MCP_OPERATIONS = [
 	defineMcpOperation({
 		mcpName: "wait",
 		cliPath: ["wait", "target"],
-		description: "Wait for tasks or a team. Set kind to 'tasks' or 'team'.",
+		description:
+			"Wait for tasks or a team. Set kind to 'tasks' or 'team'. Prefer short bounded waits and poll again rather than one very long MCP request.",
 		options: WaitInputSchema,
 		output: WaitOutputSchema,
 		run: runWait,

@@ -73,6 +73,7 @@ export const WaitTasksOutputSchema = z.object({
 	timed_out: z.boolean(),
 	scope: z.object({ session_id: z.string().optional(), cwd: z.string().optional() }),
 	tasks: z.array(WaitTaskSnapshotSchema),
+	next_action_hint: z.string().optional(),
 	error: JobErrorSchema.optional(),
 });
 
@@ -81,6 +82,8 @@ export type WaitTasksOutput = z.infer<typeof WaitTasksOutputSchema>;
 const DEFAULT_TIMEOUT_MS = 300_000;
 const DEFAULT_POLL_INTERVAL_MS = 2_000;
 const FAILURE_LIKE_STATUSES = new Set(["failed", "blocked", "timed_out"]);
+export const WAIT_TIMEOUT_ACTION_HINT =
+	"Task is still running; poll again with a short timeout or inspect get_status for attention_hint.";
 
 function sleep(ms: number): Promise<void> {
 	return new Promise((resolveSleep) => setTimeout(resolveSleep, ms));
@@ -261,5 +264,12 @@ export async function runWaitTasks(
 		await sleep(Math.min(pollIntervalMs, Math.max(0, deadline - Date.now())));
 	}
 
-	return { mode, done: false, timed_out: true, scope, tasks: latest };
+	return {
+		mode,
+		done: false,
+		timed_out: true,
+		scope,
+		tasks: latest,
+		next_action_hint: WAIT_TIMEOUT_ACTION_HINT,
+	};
 }

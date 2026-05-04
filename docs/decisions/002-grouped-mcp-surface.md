@@ -30,5 +30,6 @@ Backward compatibility is intentionally not preserved while cuekit is in prototy
 ## Consequences
 
 - AI callers see fewer tools and choose by `kind` inside grouped tools.
+- AI callers should use short bounded `wait` calls and poll again instead of issuing one long MCP request.
 - CLI setup remains available through `cuekit mcp config`.
 - Historical docs/specs may mention the older flat MCP names, but current README/architecture/tests should describe the grouped surface.
