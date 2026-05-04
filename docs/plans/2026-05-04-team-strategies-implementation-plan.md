@@ -12,7 +12,7 @@
 
 ## References
 
-- Design: `docs/issues/cuekit-team-strategies-design.md`
+- Design: `docs/designs/cuekit-team-strategies-design.md`
 - Project config guide: `docs/guides/project-config.md`
 - Example config: `.cuekit.example.yaml`
 - Project config schema: `packages/project-config/src/schema.ts`
@@ -764,4 +764,4 @@ gh pr merge <PR> --squash --delete-branch
 5. **Expose strategy-backed team start over MCP** — Chunk 4 Task 6.
 6. **Dogfood Team Strategies and capture UX gaps** — Chunk 5.
 
-Each issue should link this plan and `docs/issues/cuekit-team-strategies-design.md`.
+Each issue should link this plan and `docs/designs/cuekit-team-strategies-design.md`.

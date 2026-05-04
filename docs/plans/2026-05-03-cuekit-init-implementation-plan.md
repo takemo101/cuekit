@@ -12,7 +12,7 @@
 
 ## Source design
 
-- Design doc section: `docs/issues/cuekit-project-config-design.md` → `Phase 5: Project init command`
+- Design doc section: `docs/designs/cuekit-project-config-design.md` → `Phase 5: Project init command`
 - Implementation issues:
   - #183 `Add project config init helpers`
   - #184 `Add cuekit init CLI command`

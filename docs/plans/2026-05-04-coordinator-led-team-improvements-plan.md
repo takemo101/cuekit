@@ -50,7 +50,7 @@ Findings:
 - `packages/adapters/src/task-spec-prompt.ts` — team/coordinator prompt context injection.
 - `packages/adapters/__tests__/task-spec-prompt.test.ts` — prompt rendering tests.
 - `packages/tui/src/data.ts` and `packages/tui/src/components/task-detail.tsx` — event-first display or transcript sanitization, if UI is touched.
-- `docs/issues/cuekit-task-teams-design.md` — Task Teams design and future roadmap.
+- `docs/designs/cuekit-task-teams-design.md` — Task Teams design and future roadmap.
 - `docs/decisions/002-grouped-mcp-surface.md` — grouped MCP surface ADR.
 - `README.md`, `docs/guides/project-config.md` — user-facing docs.
 
@@ -125,7 +125,7 @@ Expected: PASS.
 
 - [ ] **Step 4: Update docs**
 
-Update `README.md` and `docs/issues/cuekit-task-teams-design.md` with the distinction:
+Update `README.md` and `docs/designs/cuekit-task-teams-design.md` with the distinction:
 
 - default team wait = snapshot
 - `follow_new_tasks: true` = coordinator-led dynamic team wait
@@ -133,7 +133,7 @@ Update `README.md` and `docs/issues/cuekit-task-teams-design.md` with the distin
 - [ ] **Step 5: Commit**
 
 ```sh
-git add packages/mcp/src/commands/wait-team.ts packages/mcp/__tests__/commands.test.ts packages/mcp/src/operations.ts README.md docs/issues/cuekit-task-teams-design.md
+git add packages/mcp/src/commands/wait-team.ts packages/mcp/__tests__/commands.test.ts packages/mcp/src/operations.ts README.md docs/designs/cuekit-task-teams-design.md
 git commit -m "Add dynamic team wait option"
 ```
 
@@ -146,7 +146,7 @@ git commit -m "Add dynamic team wait option"
 **Files:**
 - Modify: `packages/adapters/src/task-spec-prompt.ts`
 - Modify: `packages/adapters/__tests__/task-spec-prompt.test.ts`
-- Modify: `docs/issues/cuekit-task-teams-design.md`
+- Modify: `docs/designs/cuekit-task-teams-design.md`
 
 - [ ] **Step 1: Write the failing prompt test**
 
@@ -203,7 +203,7 @@ Expected: PASS.
 - [ ] **Step 4: Commit**
 
 ```sh
-git add packages/adapters/src/task-spec-prompt.ts packages/adapters/__tests__/task-spec-prompt.test.ts docs/issues/cuekit-task-teams-design.md
+git add packages/adapters/src/task-spec-prompt.ts packages/adapters/__tests__/task-spec-prompt.test.ts docs/designs/cuekit-task-teams-design.md
 git commit -m "Guide coordinator-led team workflows"
 ```
 
@@ -304,7 +304,7 @@ git commit -m "Add team result timeline"
 - Modify: `packages/mcp/src/operations.ts`
 - Modify: `packages/mcp/__tests__/commands.test.ts`
 - Modify: `packages/mcp/__tests__/cli.test.ts`
-- Modify: `docs/issues/cuekit-task-teams-design.md`
+- Modify: `docs/designs/cuekit-task-teams-design.md`
 
 - [ ] **Step 1: Write store failing test**
 
@@ -361,7 +361,7 @@ bun run typecheck
 Commit:
 
 ```sh
-git add packages/store packages/mcp docs/issues/cuekit-task-teams-design.md
+git add packages/store packages/mcp docs/designs/cuekit-task-teams-design.md
 git commit -m "Add empty team deletion"
 ```
 
