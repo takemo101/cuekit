@@ -103,6 +103,17 @@ Potential later work:
 - lightweight conflict hints from declared scopes or git diff
 - optional worktree grouping
 
+Coordinator-led dogfood follow-ups (2026-05-04):
+
+- Dynamic team waiting: default `wait_team` remains snapshot-based, but coordinator-led workflows need an opt-in mode such as `follow_new_tasks` so waits can include workers/reviewers created by the coordinator after the wait begins.
+- Coordinator prompt guidance: coordinator tasks should get a concise recipe for using cuekit tools to submit workers, wait with bounded polling, request review, steer stalled work, and report a final team summary. This is prompt guidance only, not scheduler enforcement.
+- Team result/timeline: parents need an event-first team result view that highlights coordinator, worker, and reviewer terminal reports without reading noisy runtime transcripts.
+- Empty team deletion: `cleanup_team` removes terminal tasks but intentionally keeps the team row; add an explicit empty-team deletion policy/operation.
+- Steering surface review: `steer_team` is useful for broadcasting one instruction to all non-terminal team tasks. Before API stabilization, decide whether to keep `steer_task`/`steer_team` or introduce a grouped `steer({ kind })` operation.
+- Event-first display: team summaries should prefer durable `task_events`; transcript tails remain useful for task detail/debugging, but TUI/transcript noise should not be the primary team result surface.
+
+Implementation plan: [Coordinator-Led Team Improvements](../plans/2026-05-04-coordinator-led-team-improvements-plan.md).
+
 These are not part of Phase 1 or Phase 2.
 
 ## Data Model
