@@ -159,7 +159,7 @@ Update:
 - `README.md` adapter examples
 - `docs/guides/project-config.md` adapter options examples
 - `docs/issues/cuekit-opencode-run-positional-prompt.md` to clarify it applies to `opencode` batch mode
-- `docs/issues/cuekit-adapter-permission-bypass-design.md` to clarify OpenCode permission bypass is batch/run-specific
+- `docs/designs/cuekit-adapter-permission-bypass-design.md` to clarify OpenCode permission bypass is batch/run-specific
 - adapter smoke docs for `jcode` and future `opencode` TUI mode
 
 ## Test plan

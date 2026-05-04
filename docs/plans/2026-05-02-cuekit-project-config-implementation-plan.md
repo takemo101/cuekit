@@ -12,7 +12,7 @@
 
 ## Source design
 
-- Design doc: `docs/issues/cuekit-project-config-design.md`
+- Design doc: `docs/designs/cuekit-project-config-design.md`
 - Current TUI project-scope implementation: `packages/mcp/src/tui-context.ts`, `packages/mcp/src/bin.ts`, `packages/core/src/task-list-filter.ts`, `packages/store/src/task-store.ts`
 - Agent Profiles reference for package boundaries and discovery style: `packages/agent-profiles/src/*`
 - Existing config-like reference: `/Users/kawasakiisao/Desktop/ai/isuner/.isuner.yaml`, `/Users/kawasakiisao/Desktop/ai/isuner/src/lib/config.ts`
@@ -91,7 +91,7 @@
 - Create `.cuekit.example.yaml`
 - Modify `README.md`
 - Modify `docs/README.md`
-- Modify `docs/issues/cuekit-project-config-design.md` only if implementation clarifies design details
+- Modify `docs/designs/cuekit-project-config-design.md` only if implementation clarifies design details
 
 ---
 

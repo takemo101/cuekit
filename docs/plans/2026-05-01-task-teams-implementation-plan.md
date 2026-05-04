@@ -14,7 +14,7 @@
 
 Read before starting any task:
 
-- `docs/issues/cuekit-task-teams-design.md`
+- `docs/designs/cuekit-task-teams-design.md`
 - `docs/specs/2026-04-23-cuekit-protocol-spec.md`
 - `docs/specs/2026-04-23-cuekit-state-model.md`
 - `docs/architecture/design-principles.md`
@@ -93,7 +93,7 @@ If team context is kept out of `TaskSpec`, the submit command must render/inject
 
 ### Docs
 
-- Modify: `docs/issues/cuekit-task-teams-design.md` if implementation decisions differ.
+- Modify: `docs/designs/cuekit-task-teams-design.md` if implementation decisions differ.
 - Optionally create: `docs/guides/task-teams.md` after Phase 2 is implemented.
 
 ---

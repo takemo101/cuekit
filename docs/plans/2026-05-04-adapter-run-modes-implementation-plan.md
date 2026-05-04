@@ -102,7 +102,7 @@ bun run check
 - Modify: `packages/adapters/src/opencode-adapter.ts`
 - Modify: `packages/adapters/__tests__/stub-adapters.test.ts` or create `opencode-adapter.test.ts`
 - Modify: `docs/issues/cuekit-opencode-run-positional-prompt.md`
-- Modify: `docs/issues/cuekit-adapter-permission-bypass-design.md`
+- Modify: `docs/designs/cuekit-adapter-permission-bypass-design.md`
 - Modify: `README.md`
 
 **Tasks:**

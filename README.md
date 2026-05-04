@@ -6,7 +6,7 @@ Protocol and adapter foundation for orchestrating coding agents. A single schema
 
 - `@cuekit/core` — protocol types, Zod schemas, and lifecycle helpers. No runtime dependencies; pure TypeScript.
 - `@cuekit/store` — SQLite-backed persistence at `~/.cuekit/state.db` with migrations and typed row decoding.
-- `@cuekit/adapters` — runtime bindings. v0 ships a `tmux`-pane backend with adapters for claude-code (working spike), pi, opencode (stub), and jcode REPL. The jcode adapter uses `jcode repl` for the same attach/steer workflow; see [`docs/issues/cuekit-jcode-repl-adapter-design.md`](docs/issues/cuekit-jcode-repl-adapter-design.md).
+- `@cuekit/adapters` — runtime bindings. v0 ships a `tmux`-pane backend with adapters for claude-code (working spike), pi, opencode (stub), and jcode REPL. The jcode adapter uses `jcode repl` for the same attach/steer workflow; see [`docs/designs/cuekit-jcode-repl-adapter-design.md`](docs/designs/cuekit-jcode-repl-adapter-design.md).
 - `@cuekit/mcp` — control surface. The `cuekit` binary.
 
 ## Requirements
@@ -185,7 +185,8 @@ See [`docs/specs/2026-04-23-cuekit-adapter-spec.md`](docs/specs/2026-04-23-cueki
 
 - Specs: [`docs/specs/README.md`](docs/specs/README.md)
 - Architecture: [`docs/architecture/README.md`](docs/architecture/README.md)
-- Implementation plan: [`docs/plans/2026-04-23-cuekit-implementation-plan.md`](docs/plans/2026-04-23-cuekit-implementation-plan.md)
+- Stable design notes: [`docs/designs/README.md`](docs/designs/README.md)
+- Implementation plans: [`docs/plans/`](docs/plans/)
 
 ## Development
 
