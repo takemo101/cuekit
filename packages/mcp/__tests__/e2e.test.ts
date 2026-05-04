@@ -267,8 +267,9 @@ describe("e2e: submit → status → cancel → result", () => {
 		// claude-code: model selection with a published list
 		expect(map.get("claude-code")?.supports_model_selection).toBe(true);
 		expect(map.get("claude-code")?.available_models).toContain("sonnet");
-		// pi: no model selection
-		expect(map.get("pi")?.supports_model_selection).toBe(false);
+		// pi: model selection through `pi --model`, with no fixed catalog
+		expect(map.get("pi")?.supports_model_selection).toBe(true);
+		expect(map.get("pi")?.available_models).toBeUndefined();
 		// opencode: model selection but runtime-configurable catalog (no list)
 		expect(map.get("opencode")?.supports_model_selection).toBe(true);
 		expect(map.get("opencode")?.available_models).toBeUndefined();

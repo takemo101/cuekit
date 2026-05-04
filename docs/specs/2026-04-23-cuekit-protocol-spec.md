@@ -761,7 +761,7 @@ Example response:
       "agent_kind": "pi",
       "supports_steering": true,
       "supports_attach": true,
-      "supports_model_selection": false,
+      "supports_model_selection": true,
       "supports_artifacts": true,
       "supports_live_progress": false
     },

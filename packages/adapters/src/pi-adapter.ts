@@ -7,10 +7,9 @@ import type { PaneBackend } from "./pane-backend.ts";
 import { shellQuote } from "./shell-quote.ts";
 import { renderTaskSpecPrompt } from "./task-spec-prompt.ts";
 
-// The pi CLI supports interactive mode with an initial prompt (`pi "..."`)
-// and non-interactive batch mode via `pi -p "..."`. Model selection exists in
-// the CLI, but this adapter keeps model selection disabled until cuekit grows a
-// tested, documented provider/model mapping for pi.
+// The pi CLI supports interactive mode with an initial prompt (`pi "..."`),
+// non-interactive batch mode via `pi -p "..."`, and model selection via
+// `pi --model <provider/model-or-pattern>`.
 export interface PiAdapterOptions {
 	launchCommandOverride?: (spec: TaskSpec) => string;
 	piBin?: string;
@@ -24,9 +23,12 @@ const PI_REPORTING_GUIDANCE = `Pi adapter guidance:
 - If you cannot complete the task, run cuekit tool report with --type failed or --type blocked instead.`;
 
 export function buildPiLaunchCommand(spec: TaskSpec, piBin = "pi"): string {
-	const command = shellQuote(piBin);
+	const parts = [shellQuote(piBin)];
+	if (spec.model) parts.push("--model", shellQuote(spec.model));
 	const prompt = shellQuote(`${renderTaskSpecPrompt(spec)}\n\n${PI_REPORTING_GUIDANCE}`);
-	return adapterRunModeFor(spec) === "batch" ? `${command} -p ${prompt}` : `${command} ${prompt}`;
+	return adapterRunModeFor(spec) === "batch"
+		? `${parts.join(" ")} -p ${prompt}`
+		: `${parts.join(" ")} ${prompt}`;
 }
 
 export function createPiAdapter(
@@ -43,7 +45,7 @@ export function createPiAdapter(
 				agent_kind: "pi",
 				supports_steering: true,
 				supports_attach: true,
-				supports_model_selection: false,
+				supports_model_selection: true,
 				supports_artifacts: true,
 				supports_live_progress: false,
 				default_mode: "interactive",
