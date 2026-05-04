@@ -1179,6 +1179,41 @@ strategies:
 		}
 	});
 
+	it("starts a pi coordinator with a strategy-selected model", async () => {
+		const root = mkdtempSync(join(tmpdir(), "cuekit-start-strategy-pi-model-"));
+		try {
+			writeFileSync(
+				join(root, ".cuekit.yaml"),
+				`strategies:
+  docs-polish:
+    recommended_team:
+      coordinator:
+        position: coordinator
+        role: planner
+        agent: pi
+        model: openai-codex/gpt-5.5
+`,
+			);
+
+			const result = await runStartTeamStrategy(ctx, {
+				cwd: root,
+				strategy: "docs-polish",
+				objective: "Polish README",
+			});
+
+			expect(result.accepted).toBe(true);
+			if (!result.accepted) return;
+			expect(result.agent_kind).toBe("pi");
+			expect(result.model).toBe("openai-codex/gpt-5.5");
+			const task = getTaskById(db, result.coordinator_task_id);
+			const spec = JSON.parse(task?.spec_json ?? "{}");
+			expect(spec.agent_kind).toBe("pi");
+			expect(spec.model).toBe("openai-codex/gpt-5.5");
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
 	it("forces safe adapter options for coordinator roles from team defaults", async () => {
 		const root = mkdtempSync(join(tmpdir(), "cuekit-start-strategy-team-role-"));
 		try {
@@ -2672,7 +2707,8 @@ describe("list-adapters", () => {
 		const claude = result.adapters.find((a) => a.agent_kind === "claude-code");
 		expect(claude?.available_models).toContain("sonnet");
 		const pi = result.adapters.find((a) => a.agent_kind === "pi");
-		expect(pi?.supports_model_selection).toBe(false);
+		expect(pi?.supports_model_selection).toBe(true);
+		expect(pi?.available_models).toBeUndefined();
 	});
 });
 

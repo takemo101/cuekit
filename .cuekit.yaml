@@ -32,15 +32,16 @@ adapters:
     permissions: bypass
 
 strategies:
-  # Coordinator slots use pi. Configure pi itself to default to openai-codex/gpt-5.5;
-  # cuekit currently cannot pass model fields to the pi adapter.
+  # Coordinator slots always use pi with the OpenAI Codex model.
   docs-polish:
     description: "Small README/docs improvements"
     intent: "Make minimal docs-only changes and verify meaning is preserved."
     recommended_team:
       coordinator:
         position: coordinator
+        role: planner
         agent: pi
+        model: openai-codex/gpt-5.5
       worker:
         position: worker
         agent: pi
@@ -72,7 +73,9 @@ strategies:
     recommended_team:
       coordinator:
         position: coordinator
+        role: planner
         agent: pi
+        model: openai-codex/gpt-5.5
       investigator:
         position: worker
         role: scout
@@ -119,7 +122,9 @@ strategies:
     recommended_team:
       coordinator:
         position: coordinator
+        role: planner
         agent: pi
+        model: openai-codex/gpt-5.5
       implementer:
         position: worker
         agent: claude-code
@@ -158,7 +163,9 @@ strategies:
     recommended_team:
       coordinator:
         position: coordinator
+        role: planner
         agent: pi
+        model: openai-codex/gpt-5.5
       implementer:
         position: worker
         agent: claude-code
@@ -193,7 +200,9 @@ strategies:
     recommended_team:
       coordinator:
         position: coordinator
+        role: planner
         agent: pi
+        model: openai-codex/gpt-5.5
       reviewer:
         position: reviewer
         role: reviewer
@@ -231,7 +240,9 @@ strategies:
     recommended_team:
       coordinator:
         position: coordinator
+        role: planner
         agent: pi
+        model: openai-codex/gpt-5.5
       worker:
         position: worker
         agent: pi

@@ -33,11 +33,12 @@ beforeEach(() => {
 });
 
 describe("createPiAdapter (truthful stub)", () => {
-	it("declares supports_model_selection: false (pending verified CLI shape)", () => {
+	it("declares supports_model_selection: true because pi exposes --model", () => {
 		const adapter = createPiAdapter(db, panes);
 		const caps = adapter.capabilities();
 		expect(caps.agent_kind).toBe("pi");
-		expect(caps.supports_model_selection).toBe(false);
+		expect(caps.supports_model_selection).toBe(true);
+		expect(caps.available_models).toBeUndefined();
 		expect(caps.supports_attach).toBe(true);
 		expect(caps.supports_steering).toBe(true);
 		expect(caps.supports_live_progress).toBe(false);
@@ -87,7 +88,17 @@ describe("createPiAdapter (truthful stub)", () => {
 		expect(command).toStartWith("'custom pi' '");
 	});
 
-	it("rejects spec.model because supports_model_selection is false", async () => {
+	it("passes caller-selected model to pi --model", () => {
+		const command = buildPiLaunchCommand({
+			agent_kind: "pi",
+			objective: "investigate",
+			model: "openai-codex/gpt-5.5",
+		});
+		expect(command).toStartWith("'pi' --model 'openai-codex/gpt-5.5' '");
+		expect(command).toContain("investigate");
+	});
+
+	it("accepts spec.model because pi supports --model", async () => {
 		const adapter = createPiAdapter(db, panes, {
 			launchCommandOverride: () => "sleep 60",
 		});
@@ -95,10 +106,7 @@ describe("createPiAdapter (truthful stub)", () => {
 			spec: { agent_kind: "pi", objective: "x", model: "anything" },
 			session_id: "s1",
 		});
-		expect(result.ok).toBe(false);
-		if (!result.ok) {
-			expect(result.error.code).toBe("invalid_input");
-		}
+		expect(result.ok).toBe(true);
 	});
 
 	it("end-to-end: submit → status with attach_hint", async () => {
