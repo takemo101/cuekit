@@ -111,6 +111,32 @@ describe("buildJcodeReplLaunchCommand", () => {
 		expect(launch).toContain("'/opt/bin/jcode with spaces' repl --no-update");
 	});
 
+	it("passes string provider_profile adapter options to jcode", () => {
+		const launch = buildJcodeReplLaunchCommand({
+			agent_kind: "jcode",
+			objective: "x",
+			adapter_options: { provider_profile: "work profile" },
+		});
+
+		expect(launch).toContain("--provider-profile 'work profile'");
+	});
+
+	it("ignores non-string or empty provider_profile adapter options", () => {
+		const numeric = buildJcodeReplLaunchCommand({
+			agent_kind: "jcode",
+			objective: "x",
+			adapter_options: { provider_profile: 123 },
+		});
+		const empty = buildJcodeReplLaunchCommand({
+			agent_kind: "jcode",
+			objective: "x",
+			adapter_options: { provider_profile: "" },
+		});
+
+		expect(numeric).not.toContain("--provider-profile");
+		expect(empty).not.toContain("--provider-profile");
+	});
+
 	it("exits when the jcode process exits before the feeder receives more input", async () => {
 		const dir = mkdtempSync(join(tmpdir(), "cuekit-jcode-test-"));
 		const fakeJcode = join(dir, "jcode-fake");

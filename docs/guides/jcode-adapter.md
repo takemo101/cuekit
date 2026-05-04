@@ -113,5 +113,5 @@ If the task already reported a terminal status, delete may be enough. If a tmux 
 ## Notes
 
 - The `jcode` adapter supports model selection through `--model`.
+- To select a named jcode provider profile, submit with `adapter_options.provider_profile`. cuekit translates a non-empty string value to `jcode repl --provider-profile <name>`.
 - The adapter does not currently implement cuekit permission-bypass semantics. Do not assume `adapter_options.dangerously_skip_permissions` affects jcode.
-- Provider profiles are planned separately via `adapter_options.provider_profile`.

@@ -17,12 +17,21 @@ export interface BuildJcodeReplLaunchCommandOptions {
 	jcodeBin?: string;
 }
 
+function providerProfileFor(spec: TaskSpec): string | undefined {
+	const value = spec.adapter_options?.provider_profile;
+	return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
 export function buildJcodeReplLaunchCommand(
 	spec: TaskSpec,
 	options: BuildJcodeReplLaunchCommandOptions = {},
 ): string {
 	const bin = shellQuote(options.jcodeBin ?? "jcode");
 	const parts = [bin, "repl", "--no-update"];
+	const providerProfile = providerProfileFor(spec);
+	if (providerProfile) {
+		parts.push("--provider-profile", shellQuote(providerProfile));
+	}
 	if (spec.model) {
 		parts.push("--model", shellQuote(spec.model));
 	}
