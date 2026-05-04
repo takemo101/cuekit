@@ -10,6 +10,7 @@ import { z } from "incur";
 import type { CommandContext } from "../command-context.ts";
 import { getTaskActivity } from "../task-activity.ts";
 import { withTerminalReportSummaryFallback } from "../task-result-summary.ts";
+import { findFirstDuplicate } from "./_duplicates.ts";
 
 export const WaitModeSchema = z.enum(["all", "any"]);
 
@@ -109,20 +110,11 @@ function normalizeCwd(inputCwd: string | undefined): string {
 	return resolve(inputCwd ?? process.cwd());
 }
 
-function validateUniqueTaskIds(taskIds: string[]): string | null {
-	const seen = new Set<string>();
-	for (const taskId of taskIds) {
-		if (seen.has(taskId)) return taskId;
-		seen.add(taskId);
-	}
-	return null;
-}
-
 async function validateScope(
 	ctx: CommandContext,
 	input: WaitTasksInput,
 ): Promise<{ ok: true; cwd?: string } | { ok: false; output: WaitTasksOutput }> {
-	const duplicate = validateUniqueTaskIds(input.task_ids);
+	const duplicate = findFirstDuplicate(input.task_ids);
 	if (duplicate) {
 		return {
 			ok: false,
