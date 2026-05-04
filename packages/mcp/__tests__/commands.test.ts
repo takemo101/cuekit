@@ -185,6 +185,53 @@ describe("submit-team-tasks", () => {
 		expect(getTaskById(db, result.accepted[0]?.task_id ?? "")?.team_id).toBe("tm_1");
 	});
 
+	it("team defaults: applies submit agent and model when team task omits them", async () => {
+		const root = mkdtempSync(join(tmpdir(), "cuekit-team-submit-defaults-"));
+		try {
+			mkdirSync(join(root, ".git"), { recursive: true });
+			writeFileSync(
+				join(root, ".cuekit.yaml"),
+				[
+					"submit:",
+					"  agent: claude-code",
+					"  model: sonnet",
+					"teams:",
+					"  roles:",
+					"    coordinator: planner",
+					"",
+				].join("\n"),
+			);
+			createSession(db, {
+				id: "s_team_submit_defaults",
+				project_root: root,
+				worktree_path: root,
+				parent_agent_kind: "pi",
+			});
+			createTaskTeam(db, {
+				id: "tm_submit_defaults",
+				session_id: "s_team_submit_defaults",
+				title: "Team",
+			});
+
+			const result = await runSubmitTeamTasks(ctx, {
+				team_id: "tm_submit_defaults",
+				tasks: [{ objective: "Plan", position: "coordinator", cwd: root }],
+			});
+
+			expect("accepted" in result).toBe(true);
+			if (!("accepted" in result)) return;
+			expect(result.rejected).toEqual([]);
+			expect(result.accepted[0]).toMatchObject({
+				agent_kind: "claude-code",
+				role: "planner",
+				position: "coordinator",
+				model: "sonnet",
+			});
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
 	it("team defaults: applies configured roles by position and safe permissions", async () => {
 		const root = mkdtempSync(join(tmpdir(), "cuekit-team-defaults-"));
 		try {

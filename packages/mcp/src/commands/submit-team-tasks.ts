@@ -5,7 +5,7 @@ import {
 	loadProjectConfig,
 	safeAdapterOptions,
 } from "@cuekit/project-config";
-import { getSessionById, getTaskTeamById } from "@cuekit/store";
+import { getSessionById, getTaskById, getTaskTeamById } from "@cuekit/store";
 import { z } from "incur";
 import type { CommandContext } from "../command-context.ts";
 import { runSubmitTask, SubmitTaskInputSchema } from "./submit-task.ts";
@@ -126,13 +126,14 @@ export async function runSubmitTeamTasks(
 			team_id: team.id,
 		});
 		if (result.accepted) {
+			const createdTask = getTaskById(ctx.db, result.task_id);
 			accepted.push({
 				index,
 				task_id: result.task_id,
 				agent_kind: result.agent_kind,
 				...(result.role ? { role: result.role } : {}),
 				...(result.position ? { position: result.position } : {}),
-				...(task.model ? { model: task.model } : {}),
+				...(createdTask?.model ? { model: createdTask.model } : {}),
 			});
 		} else {
 			rejected.push({ index, error: result.error });
