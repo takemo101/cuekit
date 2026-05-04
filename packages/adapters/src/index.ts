@@ -1,6 +1,7 @@
 export * from "./adapter-registry.ts";
 export * from "./agent-adapter.ts";
 export * from "./claude-code-adapter.ts";
+export * from "./jcode-adapter.ts";
 export * from "./opencode-adapter.ts";
 export * from "./pane-adapter.ts";
 export * from "./pane-backend.ts";
