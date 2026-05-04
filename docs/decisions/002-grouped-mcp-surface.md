@@ -18,7 +18,7 @@ Expose a smaller grouped AI-facing MCP tool surface:
 - `get_task_result`
 - `wait` (`kind: tasks | team`)
 - `cancel_tasks`
-- `list` (`kind: tasks | teams | events | adapters | agent_profiles`)
+- `list` (`kind: tasks | teams | events | adapters | agent_profiles | strategies`)
 - `report_task_event`
 - `steer_task`
 - `get_team_result`

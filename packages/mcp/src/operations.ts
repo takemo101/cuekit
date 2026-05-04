@@ -280,19 +280,35 @@ async function runWait(
 const ListInputSchema = z
 	.object({
 		kind: z
-			.enum(["tasks", "teams", "events", "adapters", "agent_profiles"])
+			.enum(["tasks", "teams", "events", "adapters", "agent_profiles", "strategies"])
 			.describe("Resource type to list."),
 		task_id: z.string().min(1).optional().describe("Required when kind is events."),
 		status: z.string().optional().describe("Task status filter when kind is tasks."),
 		agent_kind: z.string().min(1).optional().describe("Adapter filter when kind is tasks."),
 		session_id: z.string().min(1).optional().describe("Session filter for tasks or teams."),
-		cwd: z.string().min(1).optional().describe("Worktree filter for tasks, teams, or profiles."),
+		cwd: z
+			.string()
+			.min(1)
+			.optional()
+			.describe("Worktree filter for tasks, teams, and profiles; project root for strategies."),
 		team_id: z.string().min(1).optional().describe("Team filter when kind is tasks."),
 		position: z.string().optional().describe("Team position filter when kind is tasks."),
 		limit: z.number().int().positive().optional(),
 		cursor: z.string().optional(),
 		include_instructions: z.boolean().optional().describe("Include profile instructions."),
 		role_sources: z.array(z.enum(["builtin", "user", "project"])).optional(),
+		strategy: z.string().min(1).optional().describe("Strategy name when kind is strategies."),
+		include_prompt: z
+			.boolean()
+			.optional()
+			.describe("Include rendered coordinator prompt when kind is strategies and strategy is set."),
+		objective: z
+			.string()
+			.min(1)
+			.optional()
+			.describe(
+				"Objective used for rendered_prompt when kind is strategies and include_prompt is true.",
+			),
 	})
 	.passthrough();
 const ListOutputSchema = z.union([
@@ -301,6 +317,7 @@ const ListOutputSchema = z.union([
 	ListTaskEventsOutputSchema,
 	ListAdaptersOutputSchema,
 	ListAgentProfilesOutputSchema,
+	ListStrategiesOutputSchema,
 ]);
 
 async function runList(
@@ -318,6 +335,8 @@ async function runList(
 			return runListAdapters(ctx, ListAdaptersInputSchema.parse(input));
 		case "agent_profiles":
 			return runListAgentProfiles(ctx, ListAgentProfilesInputSchema.parse(input));
+		case "strategies":
+			return runListStrategies(ctx, ListStrategiesInputSchema.parse(input));
 	}
 }
 
@@ -442,7 +461,7 @@ export const CUEKIT_MCP_OPERATIONS = [
 		mcpName: "list",
 		cliPath: ["list", "resources"],
 		description:
-			"List resources. Set kind to 'tasks', 'teams', 'events', 'adapters', or 'agent_profiles'.",
+			"List resources. Set kind to 'tasks', 'teams', 'events', 'adapters', 'agent_profiles', or 'strategies'. Pass cwd explicitly for reliable project-local strategy discovery.",
 		options: ListInputSchema,
 		output: ListOutputSchema,
 		run: runList,
