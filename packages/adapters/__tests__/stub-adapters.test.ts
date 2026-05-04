@@ -4,7 +4,12 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { createSession, runMigrations } from "@cuekit/store";
-import { buildOpenCodeLaunchCommand, createOpenCodeAdapter } from "../src/opencode-adapter.ts";
+import {
+	buildOpenCodeLaunchCommand,
+	buildOpenCodeRunLaunchCommand,
+	buildOpenCodeTuiLaunchCommand,
+	createOpenCodeAdapter,
+} from "../src/opencode-adapter.ts";
 import { PaneBackend } from "../src/pane-backend.ts";
 import { buildPiLaunchCommand, createPiAdapter } from "../src/pi-adapter.ts";
 import { FakeTmuxRunner } from "../src/testing.ts";
@@ -155,6 +160,8 @@ describe("createOpenCodeAdapter (truthful stub)", () => {
 		expect(caps.supports_model_selection).toBe(true);
 		expect(caps.available_models).toBeUndefined();
 		expect(caps.supports_live_progress).toBe(false);
+		expect(caps.default_mode).toBe("interactive");
+		expect(caps.supported_modes).toEqual(["interactive", "batch"]);
 	});
 
 	it("accepts any model when no available_models list is published", async () => {
@@ -189,37 +196,57 @@ describe("createOpenCodeAdapter (truthful stub)", () => {
 		expect(call[call.length - 1]).toContain("--model 'safe; touch /tmp/pwned'");
 	});
 
-	it("passes the rendered prompt as the positional run message after an option terminator", () => {
+	it("uses TUI mode with --prompt by default", () => {
 		const launch = buildOpenCodeLaunchCommand({ agent_kind: "opencode", objective: "x" });
-		expect(launch).toStartWith("opencode run --dangerously-skip-permissions -- 'x");
+		expect(launch).toStartWith("'opencode' --prompt 'x");
+		expect(launch).not.toContain("opencode' run");
+		expect(launch).not.toContain("--dangerously-skip-permissions");
+	});
+
+	it("uses run mode for batch tasks", () => {
+		const launch = buildOpenCodeLaunchCommand({
+			agent_kind: "opencode",
+			objective: "x",
+			adapter_options: { mode: "batch" },
+		});
+		expect(launch).toStartWith("'opencode' run --dangerously-skip-permissions -- 'x");
 		expect(launch).not.toContain("--prompt");
 	});
 
-	it("protects prompts that start with option-looking text", () => {
-		const launch = buildOpenCodeLaunchCommand({ agent_kind: "opencode", objective: "--help" });
-		expect(launch).toStartWith("opencode run --dangerously-skip-permissions -- '--help");
+	it("passes the rendered prompt as the positional run message after an option terminator", () => {
+		const launch = buildOpenCodeRunLaunchCommand({ agent_kind: "opencode", objective: "x" });
+		expect(launch).toStartWith("'opencode' run --dangerously-skip-permissions -- 'x");
+		expect(launch).not.toContain("--prompt");
 	});
 
-	it("skips permissions by default and when explicitly enabled", () => {
-		expect(buildOpenCodeLaunchCommand({ agent_kind: "opencode", objective: "x" })).toStartWith(
-			"opencode run --dangerously-skip-permissions -- 'x",
+	it("protects run prompts that start with option-looking text", () => {
+		const launch = buildOpenCodeRunLaunchCommand({ agent_kind: "opencode", objective: "--help" });
+		expect(launch).toStartWith("'opencode' run --dangerously-skip-permissions -- '--help");
+	});
+
+	it("applies permission bypass only in batch run mode", () => {
+		expect(buildOpenCodeTuiLaunchCommand({ agent_kind: "opencode", objective: "x" })).not.toContain(
+			"--dangerously-skip-permissions",
+		);
+		expect(buildOpenCodeRunLaunchCommand({ agent_kind: "opencode", objective: "x" })).toStartWith(
+			"'opencode' run --dangerously-skip-permissions -- 'x",
 		);
 		expect(
 			buildOpenCodeLaunchCommand({
 				agent_kind: "opencode",
 				objective: "x",
 				model: "anthropic/claude",
-				adapter_options: { dangerously_skip_permissions: true },
+				adapter_options: { mode: "batch", dangerously_skip_permissions: true },
 			}),
-		).toStartWith("opencode run --dangerously-skip-permissions --model 'anthropic/claude' -- 'x");
+		).toStartWith("'opencode' run --dangerously-skip-permissions --model 'anthropic/claude' -- 'x");
 	});
 
-	it("omits --dangerously-skip-permissions when explicitly disabled", () => {
+	it("omits --dangerously-skip-permissions in batch when explicitly disabled", () => {
 		expect(
 			buildOpenCodeLaunchCommand({
 				agent_kind: "opencode",
 				objective: "x",
-				adapter_options: { dangerously_skip_permissions: false },
+				adapter_options: { mode: "batch", dangerously_skip_permissions: false },
 			}),
 		).not.toContain("--dangerously-skip-permissions");
 	});

@@ -61,11 +61,12 @@ cuekit task submit --objective "add retry logic to src/api/client.ts" \
                   --cwd /path/to/repo
 # → { accepted: true, task_id: "t_abc...", agent_kind: "claude-code", session_id: "s_..." }
 
-# claude-code and opencode default to runtime permission bypass so delegated
-# panes do not stall. Disable it per task when you want runtime prompts.
-cuekit task submit --objective "run with prompts" \
+# claude-code defaults to runtime permission bypass so delegated panes do not
+# stall. opencode uses the interactive TUI by default; permission bypass applies
+# only to its opt-in batch/run mode.
+cuekit task submit --objective "run one opencode batch prompt" \
                   --agent_kind opencode \
-                  --adapter_options '{"dangerously_skip_permissions":false}'
+                  --adapter_options '{"mode":"batch","dangerously_skip_permissions":false}'
 
 cuekit task status --task_id t_abc...
 # → { task_id, status: "running", attach_hint: "tmux attach-session -t cuekit-task-t_abc...", ... }
