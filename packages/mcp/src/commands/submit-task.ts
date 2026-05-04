@@ -67,6 +67,21 @@ const ExpectedOutputCliInputSchema = z.union([
 	CliJsonExpectedOutputSchema,
 ]);
 const MetadataCliInputSchema = z.union([MetadataSchema, CliJsonMetadataSchema]);
+const TimeoutMsInputSchema = z.union([
+	z.number().int().positive(),
+	z.null(),
+	z.string().transform((raw, ctx) => {
+		const trimmed = raw.trim();
+		if (trimmed === "null") return null;
+		const parsed = Number(trimmed);
+		if (Number.isInteger(parsed) && parsed > 0) return parsed;
+		ctx.addIssue({
+			code: "custom",
+			message: "timeout_ms must be a positive integer or null",
+		});
+		return z.NEVER;
+	}),
+]);
 
 export const SubmitTaskInputSchema = TaskSpecSchema.extend({
 	agent_kind: z.string().min(1).optional(),
@@ -78,12 +93,9 @@ export const SubmitTaskInputSchema = TaskSpecSchema.extend({
 	inputs: InputsCliInputSchema.optional(),
 	expected_output: ExpectedOutputCliInputSchema.optional(),
 	metadata: MetadataCliInputSchema.optional(),
-	timeout_ms: z
-		.union([z.number().int().positive(), z.null()])
-		.optional()
-		.describe(
-			"Task timeout in milliseconds. Use null to disable project-config submit timeout defaults.",
-		),
+	timeout_ms: TimeoutMsInputSchema.optional().describe(
+		"Task timeout in milliseconds. Use null to disable project-config submit timeout defaults.",
+	),
 	session_id: z
 		.string()
 		.min(1)
@@ -268,7 +280,7 @@ export async function runSubmitTask(
 	if (!teamResolution.ok) return teamResolution.output;
 	const roleResolution = resolveExplicitRole(ctx, input, session_id);
 	if (!roleResolution.ok) return roleResolution.output;
-	const { session_id: _ignored, team_id, position, timeout_ms, ...rawSpec } = input;
+	const { session_id: _ignored, team_id, position, timeout_ms: _timeout_ms, ...rawSpec } = input;
 	const agent_kind =
 		rawSpec.agent_kind ?? roleResolution.specPatch.agent_kind ?? submitDefaults.agent_kind;
 	const model = rawSpec.model ?? roleResolution.specPatch.model ?? submitDefaults.model;
@@ -278,9 +290,7 @@ export async function runSubmitTask(
 		...teamResolution.specPatch,
 		...(agent_kind ? { agent_kind } : {}),
 		...(model ? { model } : {}),
-		...((timeout_ms ?? submitDefaults.timeout_ms)
-			? { timeout_ms: timeout_ms ?? submitDefaults.timeout_ms }
-			: {}),
+		...(submitDefaults.timeout_ms ? { timeout_ms: submitDefaults.timeout_ms } : {}),
 		...((rawSpec.priority ?? submitDefaults.priority)
 			? { priority: rawSpec.priority ?? submitDefaults.priority }
 			: {}),

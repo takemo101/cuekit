@@ -19,6 +19,7 @@ submit:
   role: worker
   agent: claude-code
   model: sonnet
+  # Runtime submit calls can pass timeout_ms: null to opt out for one long-running task.
   timeout_ms: 1800000
   priority: normal
 

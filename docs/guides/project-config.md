@@ -135,6 +135,18 @@ Detailed order:
 - `timeout_ms = explicit timeout_ms ?? submit.timeout_ms`; explicit `timeout_ms: null` disables the project default for that task and stores no task timeout
 - `priority = explicit priority ?? submit.priority`
 
+`timeout_ms: null` is a runtime-only per-call opt-out for long-running tasks such as reviewers or workers. The `.cuekit.yaml` schema does not accept `null` for `submit.timeout_ms`; omit the YAML field instead if the project should have no default timeout.
+
+Example `submit_task` input that opts out of a configured project timeout for one task:
+
+```json
+{
+  "objective": "Review this change thoroughly",
+  "agent_kind": "claude-code",
+  "timeout_ms": null
+}
+```
+
 ## Task Teams defaults
 
 `teams.roles.<position>` supplies a role for `submit_team_tasks` items when:

@@ -54,6 +54,18 @@ describe("applySubmitDefaults", () => {
 			agent_from_config: true,
 		});
 	});
+
+	it("allows explicit null timeout to disable config timeout defaults", () => {
+		const result = applySubmitDefaults({ timeout_ms: null }, { submit: { timeout_ms: 30 } });
+
+		expect(result.timeout_ms).toBeUndefined();
+	});
+
+	it("keeps null timeout disabled when no config timeout exists", () => {
+		const result = applySubmitDefaults({ timeout_ms: null }, {});
+
+		expect(result.timeout_ms).toBeUndefined();
+	});
 });
 
 describe("shouldForceSafeAdapterOptions", () => {
