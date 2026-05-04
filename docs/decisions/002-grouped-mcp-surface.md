@@ -21,7 +21,8 @@ Expose a smaller grouped AI-facing MCP tool surface:
 - `report_task_event`
 - `steer_task`
 - `get_team_result`
-- `steer_team`
+- `steer` (preferred grouped steering surface)
+- `steer_team` (compatibility alias during prototype window)
 - `cleanup` (`kind: tasks | team`)
 - `delete` (`kind: tasks | sessions`)
 
@@ -33,6 +34,7 @@ Backward compatibility is intentionally not preserved while cuekit is in prototy
 
 - AI callers see fewer tools and choose by `kind` inside grouped tools.
 - AI callers should use short bounded `wait` calls and poll again instead of issuing one long MCP request.
-- On wait timeout, AI callers should inspect `get_status`; if `attention_hint` is present, they can use `steer_task` to ask one child to report progress or finish, or `steer_team` to broadcast one instruction to all currently non-terminal tasks in a team, then inspect `list({ kind: "events", task_id })`.
+- On wait timeout, AI callers should inspect `get_status`; if `attention_hint` is present, they should prefer grouped `steer({ kind: "task" | "team" })` to ask one child to report progress/finish or broadcast one instruction to all currently non-terminal tasks in a team, then inspect `list({ kind: "events", task_id })`.
+- Compatibility policy: keep `steer_task` and `steer_team` as aliases during the prototype window so existing MCP clients do not break; revisit removal only before a documented API stabilization release.
 - CLI setup remains available through `cuekit mcp config`.
 - Historical docs/specs may mention the older flat MCP names, but current README/architecture/tests should describe the grouped surface.

@@ -197,6 +197,25 @@ const WaitInputSchema = z
 	.passthrough();
 const WaitOutputSchema = z.union([WaitTasksOutputSchema, WaitTeamOutputSchema]);
 
+const SteerInputSchema = z
+	.object({
+		kind: z.enum(["task", "team"]).describe("Steering target type."),
+		task_id: z.string().min(1).optional().describe("Required when kind is task."),
+		team_id: z.string().min(1).optional().describe("Required when kind is team."),
+		message: z.string().min(1),
+		reason: z.string().optional(),
+	})
+	.passthrough();
+const SteerOutputSchema = z.union([SteerTaskOutputSchema, SteerTeamOutputSchema]);
+
+async function runSteer(
+	ctx: CommandContext,
+	input: z.infer<typeof SteerInputSchema>,
+): Promise<z.infer<typeof SteerOutputSchema>> {
+	if (input.kind === "task") return runSteerTask(ctx, SteerTaskInputSchema.parse(input));
+	return runSteerTeam(ctx, SteerTeamInputSchema.parse(input));
+}
+
 export const MCP_SAFE_WAIT_TIMEOUT_MS = 45_000;
 
 export function applyMcpWaitSafetyBounds(
@@ -417,6 +436,15 @@ export const CUEKIT_MCP_OPERATIONS = [
 		options: ReportTaskEventInputSchema,
 		output: ReportTaskEventOutputSchema,
 		run: runReportTaskEvent,
+	}),
+	defineMcpOperation({
+		mcpName: "steer",
+		cliPath: ["steer", "target"],
+		description:
+			"Send a steering message to one task or all currently non-terminal tasks in a team. Set kind to 'task' or 'team'.",
+		options: SteerInputSchema,
+		output: SteerOutputSchema,
+		run: runSteer,
 	}),
 	defineMcpOperation({
 		mcpName: "steer_task",

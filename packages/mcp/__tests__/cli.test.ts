@@ -69,6 +69,7 @@ describe("createCli", () => {
 			"cancel_tasks",
 			"list",
 			"report_task_event",
+			"steer",
 			"steer_task",
 			"steer_team",
 			"cleanup",
