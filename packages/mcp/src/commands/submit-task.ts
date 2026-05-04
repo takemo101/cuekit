@@ -78,6 +78,12 @@ export const SubmitTaskInputSchema = TaskSpecSchema.extend({
 	inputs: InputsCliInputSchema.optional(),
 	expected_output: ExpectedOutputCliInputSchema.optional(),
 	metadata: MetadataCliInputSchema.optional(),
+	timeout_ms: z
+		.union([z.number().int().positive(), z.null()])
+		.optional()
+		.describe(
+			"Task timeout in milliseconds. Use null to disable project-config submit timeout defaults.",
+		),
 	session_id: z
 		.string()
 		.min(1)
@@ -262,7 +268,7 @@ export async function runSubmitTask(
 	if (!teamResolution.ok) return teamResolution.output;
 	const roleResolution = resolveExplicitRole(ctx, input, session_id);
 	if (!roleResolution.ok) return roleResolution.output;
-	const { session_id: _ignored, team_id, position, ...rawSpec } = input;
+	const { session_id: _ignored, team_id, position, timeout_ms, ...rawSpec } = input;
 	const agent_kind =
 		rawSpec.agent_kind ?? roleResolution.specPatch.agent_kind ?? submitDefaults.agent_kind;
 	const model = rawSpec.model ?? roleResolution.specPatch.model ?? submitDefaults.model;
@@ -272,8 +278,8 @@ export async function runSubmitTask(
 		...teamResolution.specPatch,
 		...(agent_kind ? { agent_kind } : {}),
 		...(model ? { model } : {}),
-		...((rawSpec.timeout_ms ?? submitDefaults.timeout_ms)
-			? { timeout_ms: rawSpec.timeout_ms ?? submitDefaults.timeout_ms }
+		...((timeout_ms ?? submitDefaults.timeout_ms)
+			? { timeout_ms: timeout_ms ?? submitDefaults.timeout_ms }
 			: {}),
 		...((rawSpec.priority ?? submitDefaults.priority)
 			? { priority: rawSpec.priority ?? submitDefaults.priority }

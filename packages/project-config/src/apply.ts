@@ -5,7 +5,7 @@ export interface SubmitDefaultsInput {
 	role?: string;
 	agent_kind?: string;
 	model?: string;
-	timeout_ms?: number;
+	timeout_ms?: number | null;
 	priority?: "low" | "normal" | "high";
 	adapter_options?: Record<string, unknown>;
 }
@@ -35,7 +35,8 @@ export function applySubmitDefaults(
 		role: input.role ?? config.submit?.role,
 		agent_kind: input.agent_kind ?? config.submit?.agent,
 		model: input.model ?? config.submit?.model,
-		timeout_ms: input.timeout_ms ?? config.submit?.timeout_ms,
+		timeout_ms:
+			input.timeout_ms === null ? undefined : (input.timeout_ms ?? config.submit?.timeout_ms),
 		priority: input.priority ?? config.submit?.priority,
 		adapter_options: input.adapter_options,
 		role_from_config,
