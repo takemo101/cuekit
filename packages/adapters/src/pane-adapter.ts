@@ -338,6 +338,7 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 					env: {
 						CUEKIT_TASK_ID: task_id,
 						CUEKIT_CHILD_TOKEN: childToken,
+						CUEKIT_DB_PATH: db.filename,
 					},
 				});
 				updateTaskNativeRef(db, task_id, handle.pane_id);
