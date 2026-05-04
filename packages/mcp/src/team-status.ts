@@ -68,6 +68,7 @@ function parseMetadata(metadata_json: string | null): Record<string, unknown> | 
 }
 
 export function buildTeamSummary(team: TaskTeamRow, tasks: Task[]): TeamSummary {
+	const metadata = parseMetadata(team.metadata_json);
 	return {
 		team_id: team.id,
 		session_id: team.session_id,
@@ -75,7 +76,7 @@ export function buildTeamSummary(team: TaskTeamRow, tasks: Task[]): TeamSummary 
 		...(team.objective ? { objective: team.objective } : {}),
 		created_at: team.created_at,
 		updated_at: team.updated_at,
-		...(parseMetadata(team.metadata_json) ? { metadata: parseMetadata(team.metadata_json) } : {}),
+		...(metadata ? { metadata } : {}),
 		status: aggregateTeamStatus(tasks),
 		task_counts: countTeamTasks(tasks),
 	};
