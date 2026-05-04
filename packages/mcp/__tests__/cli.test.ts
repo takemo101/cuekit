@@ -53,6 +53,7 @@ describe("createCli", () => {
 		expect(cliPaths).toContain("task events");
 		expect(cliPaths).toContain("adapter list");
 		expect(cliPaths).toContain("tool report");
+		expect(cliPaths).toContain("team steer");
 		expect(cliPaths).toContain("session delete");
 		expect(cliPaths).toContain("mcp config");
 		expect(mcpNames).toEqual([
@@ -66,6 +67,7 @@ describe("createCli", () => {
 			"list",
 			"report_task_event",
 			"steer_task",
+			"steer_team",
 			"cleanup",
 			"delete",
 		]);
@@ -866,7 +868,13 @@ describe("createCli", () => {
 
 	it("does not keep flat non-task CLI aliases", async () => {
 		const cli = makeCli();
-		for (const path of ["list_adapters", "delete_session", "delete_sessions", "show_mcp_config"]) {
+		for (const path of [
+			"list_adapters",
+			"delete_session",
+			"delete_sessions",
+			"steer_team",
+			"show_mcp_config",
+		]) {
 			const res = await cli.fetch(new Request(`http://localhost/${path}`));
 			expect(res.ok).toBe(false);
 		}

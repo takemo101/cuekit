@@ -149,11 +149,11 @@ Start the stdio MCP server:
 cuekit --mcp
 ```
 
-Agents that speak MCP can list the compact grouped tool surface: `submit_task`, `submit_team_tasks`, `create_team`, `get_status`, `get_task_result`, `wait`, `cancel_tasks`, `list`, `report_task_event`, `steer_task`, `cleanup`, and `delete`. Use `cuekit mcp config` from the human CLI to print a client configuration snippet; setup helpers are not exposed as MCP tools.
+Agents that speak MCP can list the compact grouped tool surface: `submit_task`, `submit_team_tasks`, `create_team`, `get_status`, `get_task_result`, `wait`, `cancel_tasks`, `list`, `report_task_event`, `steer_task`, `steer_team`, `cleanup`, and `delete`. Use `cuekit mcp config` from the human CLI to print a client configuration snippet; setup helpers are not exposed as MCP tools.
 
 `wait` is the parent-side polling primitive for asynchronous delegation. Use `kind: "tasks"` with `task_ids: [task_id]` for one or more tasks, or `kind: "team"` with `team_id` for a team snapshot. Prefer short bounded waits such as `{ "kind": "tasks", "task_ids": ["t_..."], "timeout_ms": 30000, "poll_interval_ms": 5000 }` and poll again rather than one very long MCP request. Waiting is scoped by `session_id` or the current/explicit `cwd`; a wait timeout only stops waiting and does not cancel child work.
 
-When a bounded wait times out, call `get_status` for the task or team. If a task includes `attention_hint` (for example `stop_hook_or_idle_prompt_suspected`), use `steer_task` with a short instruction such as “please report progress or finish now”. Inspect durable child reports with `list({ "kind": "events", "task_id": "t_..." })`.
+When a bounded wait times out, call `get_status` for the task or team. If a task includes `attention_hint` (for example `stop_hook_or_idle_prompt_suspected`), use `steer_task` with a short instruction such as “please report progress or finish now”. To send one instruction to every currently non-terminal task in a team, use `steer_team` / `cuekit team steer`. Inspect durable child reports with `list({ "kind": "events", "task_id": "t_..." })`.
 
 ## State
 

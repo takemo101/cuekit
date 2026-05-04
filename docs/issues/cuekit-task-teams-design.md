@@ -527,7 +527,7 @@ This prompt context does not create new permissions. It only tells capable child
 
 ### Coordinator-to-worker guidance
 
-Coordinators can give workers instructions through existing `steer_task` if their runtime has MCP access. No dedicated team messaging tool is required for Phase 2.
+Coordinators can give one worker instructions through existing `steer_task`, or broadcast one instruction to all currently non-terminal team tasks through `steer_team`, if their runtime has MCP access. Dedicated durable team messaging is still out of scope for Phase 2.
 
 Example:
 
@@ -538,7 +538,7 @@ Example:
 }
 ```
 
-Cuekit does not automatically decide when to steer workers. The coordinator task may choose to inspect `get_team_status`, `get_task_status`, or `get_task_result`, then call `steer_task` explicitly.
+Cuekit does not automatically decide when to steer workers. The coordinator task may choose to inspect `get_team_status`, `get_task_status`, or `get_task_result`, then call `steer_task` or `steer_team` explicitly.
 
 ### Partial failure policy
 
