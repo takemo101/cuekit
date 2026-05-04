@@ -22,6 +22,10 @@ function providerProfileFor(spec: TaskSpec): string | undefined {
 	return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
+function shellDefaultExpansion(variable: string, fallback: string): string {
+	return `\${${variable}:-${fallback}}`;
+}
+
 export function buildJcodeReplLaunchCommand(
 	spec: TaskSpec,
 	options: BuildJcodeReplLaunchCommandOptions = {},
@@ -36,8 +40,10 @@ export function buildJcodeReplLaunchCommand(
 		parts.push("--model", shellQuote(spec.model));
 	}
 	const prompt = shellQuote(renderTaskSpecPrompt(spec));
+	const tmpDirExpansion = shellDefaultExpansion("TMPDIR", "/tmp");
+	const jcodeHomeExpansion = shellDefaultExpansion("JCODE_HOME", "$HOME/.jcode");
 	return [
-		'fifo="' + "$" + "{TMPDIR:-/tmp}" + '/cuekit-jcode-$$";',
+		`fifo="${tmpDirExpansion}/cuekit-jcode-$$";`,
 		'rm -f "$fifo";',
 		'mkfifo "$fifo"',
 		"&&",
@@ -49,7 +55,7 @@ export function buildJcodeReplLaunchCommand(
 		// but does not mark them closed when the REPL exits normally. Remove the
 		// PID marker owned by this cuekit-managed REPL so the next plain `jcode`
 		// launch does not auto-restore it as an unexpected shutdown.
-		'jcode_home="${JCODE_HOME:-$HOME/.jcode}";',
+		`jcode_home="${jcodeHomeExpansion}";`,
 		'if [ -d "$jcode_home/active_pids" ]; then for pid_file in "$jcode_home"/active_pids/*; do [ -f "$pid_file" ] || continue; if [ "$(cat "$pid_file" 2>/dev/null)" = "$jcode_pid" ]; then rm -f "$pid_file"; fi; done; fi;',
 		'kill "$feeder_pid" 2>/dev/null;',
 		'wait "$feeder_pid" 2>/dev/null;',
