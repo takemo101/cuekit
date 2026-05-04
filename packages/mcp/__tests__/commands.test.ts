@@ -290,6 +290,43 @@ describe("submit-team-tasks", () => {
 		}
 	});
 
+	it("team defaults: per-task null timeout disables project timeout default", async () => {
+		const root = mkdtempSync(join(tmpdir(), "cuekit-team-null-timeout-"));
+		try {
+			mkdirSync(join(root, ".git"), { recursive: true });
+			writeFileSync(
+				join(root, ".cuekit.yaml"),
+				"submit:\n  agent: claude-code\n  timeout_ms: 180000\n",
+			);
+			createSession(db, {
+				id: "s_team_null_timeout",
+				project_root: root,
+				worktree_path: root,
+				parent_agent_kind: "pi",
+			});
+			createTaskTeam(db, {
+				id: "tm_null_timeout",
+				session_id: "s_team_null_timeout",
+				title: "Team",
+			});
+
+			const result = await runSubmitTeamTasks(ctx, {
+				team_id: "tm_null_timeout",
+				tasks: [{ objective: "Review without timeout", timeout_ms: null }],
+			});
+
+			expect("accepted" in result).toBe(true);
+			if (!("accepted" in result)) return;
+			expect(result.rejected).toEqual([]);
+			const spec = JSON.parse(
+				getTaskById(db, result.accepted[0]?.task_id ?? "")?.spec_json ?? "{}",
+			);
+			expect(spec).not.toHaveProperty("timeout_ms");
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
 	it("team defaults: applies configured roles by position and safe permissions", async () => {
 		const root = mkdtempSync(join(tmpdir(), "cuekit-team-defaults-"));
 		try {
