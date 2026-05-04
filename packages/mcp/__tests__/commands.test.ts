@@ -1183,6 +1183,12 @@ describe("cancel-task", () => {
 		const ack = await runCancelTasks(ctx, { task_ids: ["t_nope"] });
 		expect(ack.ok).toBe(false);
 	});
+
+	it("rejects duplicate task ids", async () => {
+		const ack = await runCancelTasks(ctx, { task_ids: ["t_dup", "t_dup"] });
+		expect(ack.ok).toBe(false);
+		if (!ack.ok) expect(ack.error.message).toBe("duplicate task_id 't_dup'");
+	});
 });
 
 describe("report-task-event", () => {

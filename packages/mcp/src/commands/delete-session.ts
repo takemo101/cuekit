@@ -2,6 +2,7 @@ import { isTerminalTaskStatus, JobErrorSchema } from "@cuekit/core";
 import { deleteSession, getSessionById, listTasksBySession } from "@cuekit/store";
 import { z } from "incur";
 import type { CommandContext } from "../command-context.ts";
+import { findFirstDuplicate } from "./_duplicates.ts";
 
 export const DeleteSessionsInputSchema = z.object({
 	session_ids: z
@@ -37,20 +38,11 @@ export const DeleteSessionsOutputSchema = z.discriminatedUnion("ok", [
 
 export type DeleteSessionsOutput = z.infer<typeof DeleteSessionsOutputSchema>;
 
-function duplicateSessionId(sessionIds: string[]): string | null {
-	const seen = new Set<string>();
-	for (const sessionId of sessionIds) {
-		if (seen.has(sessionId)) return sessionId;
-		seen.add(sessionId);
-	}
-	return null;
-}
-
 export async function runDeleteSessions(
 	ctx: CommandContext,
 	input: DeleteSessionsInput,
 ): Promise<DeleteSessionsOutput> {
-	const duplicate = duplicateSessionId(input.session_ids);
+	const duplicate = findFirstDuplicate(input.session_ids);
 	if (duplicate) {
 		return {
 			ok: false,
