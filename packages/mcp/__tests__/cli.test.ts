@@ -557,6 +557,44 @@ describe("createCli", () => {
 		}
 	});
 
+	it("parses JSON object strings for team create metadata", async () => {
+		const tmpRoot = mkdtempSync(`${tmpdir()}/cuekit-team-metadata-json-`);
+		try {
+			const proc = Bun.spawn(
+				[
+					"bun",
+					"packages/mcp/src/bin.ts",
+					"team",
+					"create",
+					"--format",
+					"json",
+					"--title",
+					"cli metadata team",
+					"--metadata",
+					'{"source":"cli-test"}',
+				],
+				{
+					cwd: WORKSPACE_ROOT,
+					env: { ...process.env, CUEKIT_DB_PATH: `${tmpRoot}/state.db` },
+					stderr: "pipe",
+					stdout: "pipe",
+				},
+			);
+			const [exitCode, stdout, stderr] = await Promise.all([
+				proc.exited,
+				new Response(proc.stdout).text(),
+				new Response(proc.stderr).text(),
+			]);
+
+			expect(exitCode).toBe(0);
+			expect(stderr).toBe("");
+			const body = JSON.parse(stdout) as { metadata?: { source?: string } };
+			expect(body.metadata).toEqual({ source: "cli-test" });
+		} finally {
+			rmSync(tmpRoot, { recursive: true, force: true });
+		}
+	});
+
 	it("parses JSON arrays for team submit tasks", async () => {
 		const tmpRoot = mkdtempSync(`${tmpdir()}/cuekit-team-submit-json-`);
 		try {
