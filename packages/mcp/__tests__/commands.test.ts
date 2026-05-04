@@ -1464,6 +1464,17 @@ describe("list-task-events", () => {
 });
 
 describe("wait-tasks", () => {
+	it("rejects duplicate task ids", async () => {
+		const waited = await runWaitTasks(ctx, {
+			task_ids: ["t_dup", "t_dup"],
+			timeout_ms: 0,
+		});
+
+		expect(waited.done).toBe(false);
+		expect(waited.error?.code).toBe("invalid_input");
+		expect(waited.error?.message).toBe("duplicate task_id 't_dup'");
+	});
+
 	it("timeout_ms 0 returns a non-blocking snapshot without cancelling the task", async () => {
 		const submitted = await runSubmitTask(ctx, {
 			objective: "x",
