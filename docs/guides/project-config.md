@@ -132,7 +132,7 @@ Detailed order:
 - Resolve Agent Profile when role is present.
 - `agent_kind = explicit agent_kind ?? profile.agent_kind ?? submit.agent`
 - `model = explicit model ?? profile.model ?? submit.model`
-- `timeout_ms = explicit timeout_ms ?? submit.timeout_ms`
+- `timeout_ms = explicit timeout_ms ?? submit.timeout_ms`; explicit `timeout_ms: null` disables the project default for that task and stores no task timeout
 - `priority = explicit priority ?? submit.priority`
 
 ## Task Teams defaults

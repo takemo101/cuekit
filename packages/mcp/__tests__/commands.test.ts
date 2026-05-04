@@ -894,6 +894,29 @@ describe("submit-task", () => {
 		}
 	});
 
+	it("submit defaults: explicit null timeout disables project timeout default", async () => {
+		const root = mkdtempSync(join(tmpdir(), "cuekit-submit-defaults-null-timeout-"));
+		try {
+			writeFileSync(
+				join(root, ".cuekit.yaml"),
+				"submit:\n  agent: claude-code\n  timeout_ms: 180000\n",
+			);
+
+			const result = await runSubmitTask(ctx, {
+				objective: "Run without task timeout",
+				timeout_ms: null,
+				cwd: root,
+			});
+
+			expect(result.accepted).toBe(true);
+			if (!result.accepted) return;
+			const spec = JSON.parse(getTaskById(db, result.task_id)?.spec_json ?? "{}");
+			expect(spec).not.toHaveProperty("timeout_ms");
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
 	it("submit defaults: profile agent and model win over config agent and model", async () => {
 		const root = mkdtempSync(join(tmpdir(), "cuekit-submit-defaults-profile-"));
 		try {
