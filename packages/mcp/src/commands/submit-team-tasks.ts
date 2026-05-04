@@ -62,6 +62,15 @@ function taskError(
 	return { index, error: { code, message, retryable: false } };
 }
 
+function formatTaskIssues(index: number, issues: z.core.$ZodIssue[]): string {
+	return issues
+		.map((issue) => {
+			const path = issue.path.length > 0 ? `.${issue.path.join(".")}` : "";
+			return `tasks[${index}]${path}: ${issue.message}`;
+		})
+		.join("; ");
+}
+
 function isSameOrInsidePath(candidate: string, root: string): boolean {
 	const resolvedCandidate = resolve(candidate);
 	const resolvedRoot = resolve(root);
@@ -93,11 +102,7 @@ export async function runSubmitTeamTasks(
 		const parsedTask = SubmitTeamTaskItemSchema.safeParse(rawTask);
 		if (!parsedTask.success) {
 			rejected.push(
-				taskError(
-					index,
-					"invalid_input",
-					parsedTask.error.issues.map((issue) => issue.message).join("; "),
-				),
+				taskError(index, "invalid_input", formatTaskIssues(index, parsedTask.error.issues)),
 			);
 			continue;
 		}
