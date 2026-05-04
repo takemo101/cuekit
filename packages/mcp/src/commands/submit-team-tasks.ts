@@ -15,9 +15,23 @@ export const SubmitTeamTaskItemSchema = SubmitTaskInputSchema.omit({
 	team_id: true,
 });
 
+const TeamTasksArraySchema = z.array(z.unknown()).min(1);
+
+const CliJsonTeamTasksSchema = z.string().transform((raw, ctx) => {
+	try {
+		return TeamTasksArraySchema.parse(JSON.parse(raw));
+	} catch (err) {
+		ctx.addIssue({
+			code: "custom",
+			message: `tasks must be a JSON array: ${err instanceof Error ? err.message : String(err)}`,
+		});
+		return z.NEVER;
+	}
+});
+
 export const SubmitTeamTasksInputSchema = z.object({
 	team_id: z.string().min(1),
-	tasks: z.array(z.unknown()).min(1),
+	tasks: z.union([TeamTasksArraySchema, CliJsonTeamTasksSchema]),
 });
 
 export type SubmitTeamTasksInput = z.infer<typeof SubmitTeamTasksInputSchema>;
