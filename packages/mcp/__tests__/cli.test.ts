@@ -629,6 +629,52 @@ describe("createCli", () => {
 		}
 	});
 
+	it("parses JSON strings for task submit structured fields", async () => {
+		const proc = Bun.spawn(
+			[
+				"bun",
+				"packages/mcp/src/bin.ts",
+				"task",
+				"submit",
+				"--format",
+				"json",
+				"--agent_kind",
+				"not-registered",
+				"--objective",
+				"x",
+				"--role_sources",
+				'["builtin"]',
+				"--team_context",
+				'{"team_id":"tm_fake","title":"fake"}',
+				"--constraints",
+				'["keep it small"]',
+				"--inputs",
+				'[{"kind":"file","ref":"README.md"}]',
+				"--expected_output",
+				'{"format":"summary","require_tests":false}',
+				"--metadata",
+				'{"source":"cli-test"}',
+			],
+			{
+				cwd: WORKSPACE_ROOT,
+				env: { ...process.env, CUEKIT_DB_PATH: ":memory:" },
+				stderr: "pipe",
+				stdout: "pipe",
+			},
+		);
+		const [exitCode, stdout, stderr] = await Promise.all([
+			proc.exited,
+			new Response(proc.stdout).text(),
+			new Response(proc.stderr).text(),
+		]);
+
+		expect(exitCode).toBe(0);
+		expect(stderr).toBe("");
+		const body = JSON.parse(stdout) as { accepted: false; error: { code: string } };
+		expect(body.accepted).toBe(false);
+		expect(body.error.code).toBe("adapter_not_found");
+	});
+
 	it("parses JSON object strings for task submit adapter_options", async () => {
 		const proc = Bun.spawn(
 			[

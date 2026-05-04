@@ -1,6 +1,13 @@
 import { resolve } from "node:path";
 import { discoverAgentProfiles, selectAgentProfile } from "@cuekit/agent-profiles";
-import { JobErrorSchema, type TaskSpec, TaskSpecSchema, TeamPositionSchema } from "@cuekit/core";
+import {
+	ExpectedOutputSpecSchema,
+	InputRefSchema,
+	JobErrorSchema,
+	type TaskSpec,
+	TaskSpecSchema,
+	TeamPositionSchema,
+} from "@cuekit/core";
 import {
 	applySafeAdapterOptions,
 	applySubmitDefaults,
@@ -15,21 +22,62 @@ import { resolveSessionId } from "../session-helpers.ts";
 
 const AdapterOptionsSchema = z.record(z.string(), z.unknown());
 
-const CliJsonAdapterOptionsSchema = z.string().transform((raw, ctx) => {
-	try {
-		return AdapterOptionsSchema.parse(JSON.parse(raw));
-	} catch (err) {
-		ctx.addIssue({
-			code: "custom",
-			message: `adapter_options must be a JSON object: ${err instanceof Error ? err.message : String(err)}`,
-		});
-		return z.NEVER;
-	}
+function cliJsonSchema<T extends z.ZodType>(label: string, schema: T) {
+	return z.string().transform((raw, ctx) => {
+		try {
+			return schema.parse(JSON.parse(raw));
+		} catch (err) {
+			ctx.addIssue({
+				code: "custom",
+				message: `${label} must be valid JSON matching the expected schema: ${err instanceof Error ? err.message : String(err)}`,
+			});
+			return z.NEVER;
+		}
+	});
+}
+
+const CliJsonAdapterOptionsSchema = cliJsonSchema("adapter_options", AdapterOptionsSchema);
+
+const TeamContextInputSchema = z.object({
+	team_id: z.string().min(1),
+	title: z.string().min(1),
+	objective: z.string().min(1).optional(),
+	position: TeamPositionSchema.optional(),
 });
+
+const StringArraySchema = z.array(z.string().min(1));
+const RoleSourcesArraySchema = z.array(z.enum(["builtin", "user", "project"]));
+const InputsArraySchema = z.array(InputRefSchema);
+const MetadataSchema = z.record(z.string(), z.unknown());
+
+const CliJsonTeamContextSchema = cliJsonSchema("team_context", TeamContextInputSchema);
+const CliJsonStringArraySchema = cliJsonSchema("array option", StringArraySchema);
+const CliJsonRoleSourcesSchema = cliJsonSchema("role_sources", RoleSourcesArraySchema);
+const CliJsonInputsSchema = cliJsonSchema("inputs", InputsArraySchema);
+const CliJsonExpectedOutputSchema = cliJsonSchema("expected_output", ExpectedOutputSpecSchema);
+const CliJsonMetadataSchema = cliJsonSchema("metadata", MetadataSchema);
+
+const AdapterOptionsInputSchema = z.union([AdapterOptionsSchema, CliJsonAdapterOptionsSchema]);
+const TeamContextCliInputSchema = z.union([TeamContextInputSchema, CliJsonTeamContextSchema]);
+const StringArrayCliInputSchema = z.union([StringArraySchema, CliJsonStringArraySchema]);
+const RoleSourcesCliInputSchema = z.union([RoleSourcesArraySchema, CliJsonRoleSourcesSchema]);
+const InputsCliInputSchema = z.union([InputsArraySchema, CliJsonInputsSchema]);
+const ExpectedOutputCliInputSchema = z.union([
+	ExpectedOutputSpecSchema,
+	CliJsonExpectedOutputSchema,
+]);
+const MetadataCliInputSchema = z.union([MetadataSchema, CliJsonMetadataSchema]);
 
 export const SubmitTaskInputSchema = TaskSpecSchema.extend({
 	agent_kind: z.string().min(1).optional(),
 	role: z.string().min(1).optional(),
+	role_sources: RoleSourcesCliInputSchema.optional(),
+	team_context: TeamContextCliInputSchema.optional(),
+	context: z.string().min(1).optional(),
+	constraints: StringArrayCliInputSchema.optional(),
+	inputs: InputsCliInputSchema.optional(),
+	expected_output: ExpectedOutputCliInputSchema.optional(),
+	metadata: MetadataCliInputSchema.optional(),
 	session_id: z
 		.string()
 		.min(1)
@@ -37,7 +85,7 @@ export const SubmitTaskInputSchema = TaskSpecSchema.extend({
 		.describe("cuekit session id. Auto-created from cwd when omitted."),
 	team_id: z.string().min(1).optional(),
 	position: TeamPositionSchema.optional(),
-	adapter_options: z.union([AdapterOptionsSchema, CliJsonAdapterOptionsSchema]).optional(),
+	adapter_options: AdapterOptionsInputSchema.optional(),
 });
 
 export type SubmitTaskInput = z.infer<typeof SubmitTaskInputSchema>;
