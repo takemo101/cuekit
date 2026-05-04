@@ -12,6 +12,7 @@ Expose a smaller grouped AI-facing MCP tool surface:
 
 - `submit_task`
 - `submit_team_tasks`
+- `start_team_strategy`
 - `create_team`
 - `get_status` (`kind: task | team`)
 - `get_task_result`
