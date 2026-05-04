@@ -26,6 +26,16 @@ function shellDefaultExpansion(variable: string, fallback: string): string {
 	return `\${${variable}:-${fallback}}`;
 }
 
+function renderJcodePrompt(spec: TaskSpec): string {
+	return `${renderTaskSpecPrompt(spec)}
+
+Jcode adapter guidance:
+- Run validation commands in the foreground with enough timeout so you can read their final output.
+- If a validation command that is expected to terminate starts in the background, wait for and inspect that result before deciding success.
+- For intentionally long-running background commands such as dev servers or watchers, inspect current status/output instead of waiting for completion.
+- Report completed, failed, or blocked through cuekit before exiting.`;
+}
+
 export function buildJcodeReplLaunchCommand(
 	spec: TaskSpec,
 	options: BuildJcodeReplLaunchCommandOptions = {},
@@ -39,7 +49,7 @@ export function buildJcodeReplLaunchCommand(
 	if (spec.model) {
 		parts.push("--model", shellQuote(spec.model));
 	}
-	const prompt = shellQuote(renderTaskSpecPrompt(spec));
+	const prompt = shellQuote(renderJcodePrompt(spec));
 	const tmpDirExpansion = shellDefaultExpansion("TMPDIR", "/tmp");
 	const jcodeHomeExpansion = shellDefaultExpansion("JCODE_HOME", "$HOME/.jcode");
 	return [

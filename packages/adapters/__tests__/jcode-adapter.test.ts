@@ -114,6 +114,16 @@ describe("buildJcodeReplLaunchCommand", () => {
 		expect(launch).toContain("'/opt/bin/jcode with spaces' repl --no-update");
 	});
 
+	it("adds jcode-specific guidance for foreground validation and terminal reporting", () => {
+		const launch = buildJcodeReplLaunchCommand({ agent_kind: "jcode", objective: "x" });
+
+		expect(launch).toContain("Jcode adapter guidance:");
+		expect(launch).toContain("Run validation commands in the foreground");
+		expect(launch).toContain("validation command that is expected to terminate");
+		expect(launch).toContain("dev servers or watchers");
+		expect(launch).toContain("Report completed, failed, or blocked through cuekit before exiting");
+	});
+
 	it("passes string provider_profile adapter options to jcode", () => {
 		const launch = buildJcodeReplLaunchCommand({
 			agent_kind: "jcode",
