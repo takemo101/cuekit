@@ -37,6 +37,8 @@ Direct work is acceptable when:
 - cuekit MCP and CLI are both unavailable and the task is still safe to complete directly.
 - You are only answering a simple factual question from already-visible context.
 
+When the user asks to test, dogfood, or verify that cuekit strategy/team delegation works, do not replace that with a single smoke task. Use a strategy-backed team end-to-end unless the user asks for a narrower smoke test.
+
 ## Strategy Discovery
 
 Before starting a non-trivial cuekit delegation, discover available strategies.
@@ -112,7 +114,9 @@ Then poll with bounded waits. For coordinator-led teams, always follow newly-cre
 
 Call `cuekit_wait` repeatedly as needed.
 
-Before final reporting, inspect the team result:
+If a coordinator-led team has completed worker/reviewer tasks but the coordinator remains running, steer the coordinator to inspect the team result and emit a final completed report. This is often better than waiting indefinitely.
+
+Before final reporting, always inspect the team result:
 
 ```json
 {
@@ -120,7 +124,7 @@ Before final reporting, inspect the team result:
 }
 ```
 
-Call `cuekit_get_team_result`.
+Call `cuekit_get_team_result` and use it as the evidence source for your final answer.
 
 ### Submit focused tasks into an existing team
 
@@ -196,6 +200,18 @@ cuekit strategy --help
 - For implementation work, keep normal project practices: tests first for behavior changes, focused diffs, and code review before merge.
 - If cuekit delegation fails, report the failure, what fallback was attempted, and whether direct work continued.
 - For dogfood tasks, capture UX gaps as focused follow-up ideas rather than broad rewrites.
+- After a strategy/team dogfood run, explicitly confirm whether coordinator, worker/reviewer, reporting events, wait, steering, and `get_team_result` worked.
+
+## Read-only Delegation Caveat
+
+`Do not edit files` and `constraints` are prompt-level guidance, not filesystem enforcement. cuekit does not currently make a child task's worktree read-only by default.
+
+When you need investigation-only behavior:
+
+- Prefer doing simple inspection directly in the parent rather than over-delegating.
+- If delegation is still useful, use scout/reviewer roles and state `Do not edit files` prominently in the objective and constraints.
+- Check `but status -fv` after the child finishes or if it behaves unexpectedly.
+- If strict read-only execution is required, say that cuekit does not currently guarantee it without an external sandbox/read-only worktree mechanism.
 
 ## Safety Rules
 
