@@ -317,6 +317,25 @@ describe("submit-team-tasks", () => {
 		}
 	});
 
+	it("returns field paths for malformed team task input", async () => {
+		createSession(db, {
+			id: "s_team_paths",
+			project_root: "/p",
+			worktree_path: "/w",
+			parent_agent_kind: "pi",
+		});
+		createTaskTeam(db, { id: "tm_paths", session_id: "s_team_paths", title: "Team" });
+
+		const result = await runSubmitTeamTasks(ctx, {
+			team_id: "tm_paths",
+			tasks: [{ objective: "", agent_kind: "claude-code", position: "worker" }],
+		});
+
+		expect("accepted" in result).toBe(true);
+		if (!("accepted" in result)) return;
+		expect(result.rejected[0]?.error.message).toContain("tasks[0].objective");
+	});
+
 	it("keeps accepted tasks when later task input is malformed", async () => {
 		createSession(db, {
 			id: "s1",
