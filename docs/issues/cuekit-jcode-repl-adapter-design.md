@@ -40,6 +40,10 @@ The launch command should run inside cuekit's existing tmux pane backend and pip
 
 The adapter should be a normal `createPaneAdapter` consumer.
 
+Because jcode v0.11.x records active sessions in `~/.jcode/active_pids/<session_id>`, the launch wrapper must also account for REPL lifecycle cleanup. `jcode repl` marks its session active when the agent is created, but the observed normal REPL exit path does not mark the session closed. If cuekit simply lets the REPL process exit or kills the tmux pane, the next plain `jcode` TUI launch can see a dead PID marker and auto-restore the REPL session as an unexpected shutdown.
+
+The cuekit wrapper should therefore run `jcode repl` as a child process, keep its PID, wait for it to exit, and remove only the `active_pids` marker whose file contents equal that child PID. This cleanup is intentionally narrow so it does not affect unrelated live jcode sessions.
+
 Proposed capabilities:
 
 ```ts
@@ -83,6 +87,7 @@ Implementation should ensure:
 - model values are shell-quoted;
 - a prompt starting with `-` is treated as text, not an option;
 - `cat` keeps the pipeline alive for subsequent `tmux send-keys` steering;
+- the wrapper removes only the stale `~/.jcode/active_pids/*` marker owned by the exited `jcode repl` child process, preventing ghost auto-restore on future plain `jcode` launches;
 - the command still runs under `wrapLaunchCommandWithExitCode` from the shared pane adapter, so normal terminal status inference still works.
 
 ## Safety and permissions
