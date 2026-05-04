@@ -68,6 +68,11 @@ import {
 	runListAgentProfiles,
 } from "./commands/list-agent-profiles.ts";
 import {
+	ListStrategiesInputSchema,
+	ListStrategiesOutputSchema,
+	runListStrategies,
+} from "./commands/list-strategies.ts";
+import {
 	ListTaskEventsInputSchema,
 	ListTaskEventsOutputSchema,
 	runListTaskEvents,
@@ -510,6 +515,20 @@ export const CUEKIT_CLI_OPERATIONS = [
 		options: ListTeamsInputSchema,
 		output: ListTeamsOutputSchema,
 		run: runListTeams,
+	}),
+	defineOperation({
+		cliPath: ["strategy", "list"],
+		description: "List project Team Strategies from .cuekit.yaml.",
+		options: ListStrategiesInputSchema,
+		output: ListStrategiesOutputSchema,
+		run: runListStrategies,
+	}),
+	defineOperation({
+		cliPath: ["strategy", "show"],
+		description: "Show one project Team Strategy from .cuekit.yaml.",
+		options: ListStrategiesInputSchema,
+		output: ListStrategiesOutputSchema,
+		run: runListStrategies,
 	}),
 	defineOperation({
 		cliPath: ["team", "status"],

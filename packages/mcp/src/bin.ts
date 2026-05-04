@@ -146,6 +146,39 @@ function hasExplicitAgent(argv: string[]): boolean {
 	);
 }
 
+function findStrategyShowPositional(rest: string[]): { value: string; index: number } | undefined {
+	const optionsWithValues = new Set(["--format", "--cwd", "--strategy", "--objective"]);
+	for (let index = 0; index < rest.length; index++) {
+		const arg = rest[index];
+		if (arg === undefined) continue;
+		if (arg.startsWith("--strategy=")) return undefined;
+		if (optionsWithValues.has(arg)) {
+			index++;
+			continue;
+		}
+		if (arg.startsWith("-")) continue;
+		return { value: arg, index };
+	}
+	return undefined;
+}
+
+function normalizeCuekitArgv(): string[] | undefined {
+	if (process.argv[2] === "strategy" && process.argv[3] === "show") {
+		const rest = process.argv.slice(4);
+		const positional = findStrategyShowPositional(rest);
+		if (positional && !rest.some((arg) => arg === "--strategy" || arg.startsWith("--strategy="))) {
+			return [
+				"strategy",
+				"show",
+				"--strategy",
+				positional.value,
+				...rest.filter((_, index) => index !== positional.index),
+			];
+		}
+	}
+	return undefined;
+}
+
 async function main(): Promise<void> {
 	// Construct the logger before any fallible startup work so the catch
 	// block can use it uniformly. parseLogLevel guards against typos in
@@ -263,7 +296,7 @@ async function main(): Promise<void> {
 			? ["config", ...process.argv.slice(4)]
 			: isMcpAdd && piAgents.hasPi
 				? ["mcp", "add", ...piAgents.rest]
-				: undefined;
+				: normalizeCuekitArgv();
 		await cli.serve(argv);
 	} catch (err) {
 		if (db) closeQuietly(db);

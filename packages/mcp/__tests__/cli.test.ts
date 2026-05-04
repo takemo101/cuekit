@@ -56,6 +56,8 @@ describe("createCli", () => {
 		expect(cliPaths).toContain("team steer");
 		expect(cliPaths).toContain("team result");
 		expect(cliPaths).toContain("team delete");
+		expect(cliPaths).toContain("strategy list");
+		expect(cliPaths).toContain("strategy show");
 		expect(cliPaths).toContain("session delete");
 		expect(cliPaths).toContain("mcp config");
 		expect(mcpNames).toEqual([
@@ -596,6 +598,86 @@ describe("createCli", () => {
 			expect(stderr).toBe("");
 			const body = JSON.parse(stdout) as { metadata?: { source?: string } };
 			expect(body.metadata).toEqual({ source: "cli-test" });
+		} finally {
+			rmSync(tmpRoot, { recursive: true, force: true });
+		}
+	});
+
+	it("serves strategy show with a positional strategy name", async () => {
+		const tmpRoot = mkdtempSync(`${tmpdir()}/cuekit-strategy-show-cli-`);
+		try {
+			writeFileSync(
+				`${tmpRoot}/.cuekit.yaml`,
+				"strategies:\n  docs-polish:\n    description: Docs polish\n    checks:\n      - bun run check\n",
+			);
+			const proc = Bun.spawn(
+				[
+					"bun",
+					`${WORKSPACE_ROOT}/packages/mcp/src/bin.ts`,
+					"strategy",
+					"show",
+					"docs-polish",
+					"--format",
+					"json",
+				],
+				{
+					cwd: tmpRoot,
+					env: { ...process.env, CUEKIT_DB_PATH: `${tmpRoot}/state.db` },
+					stderr: "pipe",
+					stdout: "pipe",
+				},
+			);
+			const [exitCode, stdout, stderr] = await Promise.all([
+				proc.exited,
+				new Response(proc.stdout).text(),
+				new Response(proc.stderr).text(),
+			]);
+
+			expect(exitCode).toBe(0);
+			expect(stderr).toBe("");
+			const body = JSON.parse(stdout) as { strategy?: { name?: string; checks?: string[] } };
+			expect(body.strategy?.name).toBe("docs-polish");
+			expect(body.strategy?.checks).toEqual(["bun run check"]);
+		} finally {
+			rmSync(tmpRoot, { recursive: true, force: true });
+		}
+	});
+
+	it("serves strategy show when options precede the positional strategy name", async () => {
+		const tmpRoot = mkdtempSync(`${tmpdir()}/cuekit-strategy-show-cli-options-`);
+		try {
+			writeFileSync(
+				`${tmpRoot}/.cuekit.yaml`,
+				"strategies:\n  docs-polish:\n    description: Docs polish\n    checks:\n      - bun run check\n",
+			);
+			const proc = Bun.spawn(
+				[
+					"bun",
+					`${WORKSPACE_ROOT}/packages/mcp/src/bin.ts`,
+					"strategy",
+					"show",
+					"--format",
+					"json",
+					"docs-polish",
+				],
+				{
+					cwd: tmpRoot,
+					env: { ...process.env, CUEKIT_DB_PATH: `${tmpRoot}/state.db` },
+					stderr: "pipe",
+					stdout: "pipe",
+				},
+			);
+			const [exitCode, stdout, stderr] = await Promise.all([
+				proc.exited,
+				new Response(proc.stdout).text(),
+				new Response(proc.stderr).text(),
+			]);
+
+			expect(exitCode).toBe(0);
+			expect(stderr).toBe("");
+			const body = JSON.parse(stdout) as { strategy?: { name?: string; checks?: string[] } };
+			expect(body.strategy?.name).toBe("docs-polish");
+			expect(body.strategy?.checks).toEqual(["bun run check"]);
 		} finally {
 			rmSync(tmpRoot, { recursive: true, force: true });
 		}
