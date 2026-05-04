@@ -4,7 +4,12 @@ import { getSessionById, getTaskTeamById, listTasksByTeam } from "@cuekit/store"
 import { z } from "incur";
 import type { CommandContext } from "../command-context.ts";
 import { aggregateTeamStatus } from "../team-status.ts";
-import { runWaitTasks, WaitModeSchema, WaitTaskSnapshotSchema } from "./wait-tasks.ts";
+import {
+	runWaitTasks,
+	WAIT_TIMEOUT_ACTION_HINT,
+	WaitModeSchema,
+	WaitTaskSnapshotSchema,
+} from "./wait-tasks.ts";
 
 export const WaitTeamInputSchema = z.object({
 	team_id: z.string().min(1),
@@ -27,6 +32,7 @@ export const WaitTeamOutputSchema = z.object({
 	timed_out: z.boolean(),
 	scope: z.object({ team_id: z.string(), session_id: z.string().optional() }),
 	tasks: z.array(WaitTaskSnapshotSchema),
+	next_action_hint: z.string().optional(),
 	error: JobErrorSchema.optional(),
 });
 
@@ -106,6 +112,7 @@ export async function runWaitTeam(
 		timed_out: wait.timed_out,
 		scope: { team_id: team.id, session_id: team.session_id },
 		tasks: wait.tasks,
+		...(wait.timed_out ? { next_action_hint: WAIT_TIMEOUT_ACTION_HINT } : {}),
 		...(wait.error ? { error: wait.error } : {}),
 	};
 }
