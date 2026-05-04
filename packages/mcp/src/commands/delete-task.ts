@@ -2,6 +2,7 @@ import { isTerminalTaskStatus, JobErrorSchema } from "@cuekit/core";
 import { deleteTask, getTaskById } from "@cuekit/store";
 import { z } from "incur";
 import type { CommandContext } from "../command-context.ts";
+import { findFirstDuplicate } from "./_duplicates.ts";
 
 export const DeleteTasksInputSchema = z.object({
 	task_ids: z
@@ -36,15 +37,6 @@ export const DeleteTasksOutputSchema = z.discriminatedUnion("ok", [
 
 export type DeleteTasksOutput = z.infer<typeof DeleteTasksOutputSchema>;
 
-function duplicateTaskId(taskIds: string[]): string | null {
-	const seen = new Set<string>();
-	for (const taskId of taskIds) {
-		if (seen.has(taskId)) return taskId;
-		seen.add(taskId);
-	}
-	return null;
-}
-
 function invalidInput(message: string): DeleteTasksOutput {
 	return { ok: false, error: { code: "invalid_input", message, retryable: false } };
 }
@@ -53,7 +45,7 @@ export async function runDeleteTasks(
 	ctx: CommandContext,
 	input: DeleteTasksInput,
 ): Promise<DeleteTasksOutput> {
-	const duplicate = duplicateTaskId(input.task_ids);
+	const duplicate = findFirstDuplicate(input.task_ids);
 	if (duplicate) return invalidInput(`duplicate task_id '${duplicate}'`);
 
 	const results: z.infer<typeof DeleteTaskItemSchema>[] = [];

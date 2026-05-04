@@ -2,6 +2,7 @@ import { JobErrorSchema } from "@cuekit/core";
 import { getTaskById } from "@cuekit/store";
 import { z } from "incur";
 import type { CommandContext } from "../command-context.ts";
+import { findFirstDuplicate } from "./_duplicates.ts";
 
 export const CancelTasksInputSchema = z.object({
 	task_ids: z
@@ -36,20 +37,11 @@ export const CancelTasksOutputSchema = z.discriminatedUnion("ok", [
 
 export type CancelTasksOutput = z.infer<typeof CancelTasksOutputSchema>;
 
-function duplicateTaskId(taskIds: string[]): string | null {
-	const seen = new Set<string>();
-	for (const taskId of taskIds) {
-		if (seen.has(taskId)) return taskId;
-		seen.add(taskId);
-	}
-	return null;
-}
-
 export async function runCancelTasks(
 	ctx: CommandContext,
 	input: CancelTasksInput,
 ): Promise<CancelTasksOutput> {
-	const duplicate = duplicateTaskId(input.task_ids);
+	const duplicate = findFirstDuplicate(input.task_ids);
 	if (duplicate) {
 		return {
 			ok: false,
