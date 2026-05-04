@@ -1,6 +1,6 @@
 import { JobErrorSchema, TeamStatusSchema } from "@cuekit/core";
 import { applyTeamWaitDefaults, loadProjectConfig } from "@cuekit/project-config";
-import { getSessionById, getTaskTeamById, listTasksByTeam } from "@cuekit/store";
+import { getSessionById, getTaskTeamById, listTasksByTeam, type Task } from "@cuekit/store";
 import { z } from "incur";
 import type { CommandContext } from "../command-context.ts";
 import {
@@ -25,6 +25,10 @@ export const WaitTeamInputSchema = z.object({
 	include_results: z.boolean().optional(),
 	include_events: z.boolean().optional(),
 	since_event_sequences: z.record(z.string(), z.number().int().min(0)).optional(),
+	follow_new_tasks: z
+		.boolean()
+		.optional()
+		.describe("Refresh team membership while waiting so coordinator-created tasks are included."),
 });
 
 export type WaitTeamInput = z.infer<typeof WaitTeamInputSchema>;
@@ -43,6 +47,36 @@ export const WaitTeamOutputSchema = z.object({
 });
 
 export type WaitTeamOutput = z.infer<typeof WaitTeamOutputSchema>;
+
+function sleep(ms: number): Promise<void> {
+	return new Promise((resolveSleep) => setTimeout(resolveSleep, ms));
+}
+
+function teamWaitTimeoutHint(followNewTasks: boolean): string {
+	if (!followNewTasks) return WAIT_TIMEOUT_ACTION_HINT;
+	return `${WAIT_TIMEOUT_ACTION_HINT} follow_new_tasks is enabled, so call wait again to continue polling current and newly created team tasks.`;
+}
+
+async function waitCurrentTeamTasks(
+	ctx: CommandContext,
+	input: WaitTeamInput,
+	team: { id: string; session_id: string },
+	timeout_ms: number | undefined,
+	poll_interval_ms: number | undefined,
+) {
+	const tasks = listTasksByTeam(ctx.db, team.id);
+	return runWaitTasks(ctx, {
+		task_ids: tasks.map((task) => task.id),
+		session_id: team.session_id,
+		mode: input.mode,
+		timeout_ms,
+		poll_interval_ms,
+		stop_on_failed: input.stop_on_failed,
+		include_results: input.include_results,
+		include_events: input.include_events,
+		since_event_sequences: input.since_event_sequences,
+	});
+}
 
 export async function runWaitTeam(
 	ctx: CommandContext,
@@ -99,20 +133,30 @@ export async function runWaitTeam(
 			run_summary: emptyTeamRunSummary(),
 		};
 	}
-	const wait = await runWaitTasks(ctx, {
-		task_ids: tasks.map((task) => task.id),
-		session_id: team.session_id,
-		mode: input.mode,
-		timeout_ms: teamWaitDefaults.timeout_ms,
-		poll_interval_ms: teamWaitDefaults.poll_interval_ms,
-		stop_on_failed: input.stop_on_failed,
-		include_results: input.include_results,
-		include_events: input.include_events,
-		since_event_sequences: input.since_event_sequences,
-	});
-	const latest = listTasksByTeam(ctx.db, team.id).filter((task) =>
-		tasks.some((snapshotted) => snapshotted.id === task.id),
-	);
+	let wait: Awaited<ReturnType<typeof runWaitTasks>>;
+	let latest: Task[];
+	if (input.follow_new_tasks) {
+		const timeoutMs = teamWaitDefaults.timeout_ms ?? 300_000;
+		const pollIntervalMs = teamWaitDefaults.poll_interval_ms ?? 2_000;
+		const deadline = Date.now() + timeoutMs;
+		for (;;) {
+			wait = await waitCurrentTeamTasks(ctx, input, team, 0, pollIntervalMs);
+			latest = listTasksByTeam(ctx.db, team.id);
+			if (wait.done || Date.now() >= deadline) break;
+			await sleep(Math.min(pollIntervalMs, Math.max(0, deadline - Date.now())));
+		}
+	} else {
+		wait = await waitCurrentTeamTasks(
+			ctx,
+			input,
+			team,
+			teamWaitDefaults.timeout_ms,
+			teamWaitDefaults.poll_interval_ms,
+		);
+		latest = listTasksByTeam(ctx.db, team.id).filter((task) =>
+			tasks.some((snapshotted) => snapshotted.id === task.id),
+		);
+	}
 	return {
 		team_id: team.id,
 		status: aggregateTeamStatus(latest),
@@ -122,7 +166,9 @@ export async function runWaitTeam(
 		scope: { team_id: team.id, session_id: team.session_id },
 		tasks: wait.tasks,
 		run_summary: buildTeamRunSummary(ctx, latest),
-		...(wait.timed_out ? { next_action_hint: WAIT_TIMEOUT_ACTION_HINT } : {}),
+		...(wait.timed_out
+			? { next_action_hint: teamWaitTimeoutHint(input.follow_new_tasks ?? false) }
+			: {}),
 		...(wait.error ? { error: wait.error } : {}),
 	};
 }
