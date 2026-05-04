@@ -64,6 +64,7 @@ describe("createCli", () => {
 		expect(mcpNames).toEqual([
 			"submit_task",
 			"submit_team_tasks",
+			"start_team_strategy",
 			"create_team",
 			"get_status",
 			"get_task_result",

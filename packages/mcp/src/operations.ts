@@ -382,6 +382,14 @@ export const CUEKIT_MCP_OPERATIONS = [
 		run: runSubmitTeamTasks,
 	}),
 	defineMcpOperation({
+		mcpName: "start_team_strategy",
+		cliPath: ["team", "start"],
+		description: "Create a team and submit a coordinator task using a project Team Strategy.",
+		options: StartTeamStrategyInputSchema,
+		output: StartTeamStrategyOutputSchema,
+		run: runStartTeamStrategy,
+	}),
+	defineMcpOperation({
 		mcpName: "create_team",
 		cliPath: ["team", "create"],
 		description: "Create a session-scoped task team.",
