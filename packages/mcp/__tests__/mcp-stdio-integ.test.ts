@@ -231,6 +231,7 @@ describe("cuekit --mcp (stdio integration)", () => {
 			"delete",
 			"get_status",
 			"get_task_result",
+			"get_team_result",
 			"list",
 			"report_task_event",
 			"steer_task",

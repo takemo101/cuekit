@@ -54,6 +54,7 @@ describe("createCli", () => {
 		expect(cliPaths).toContain("adapter list");
 		expect(cliPaths).toContain("tool report");
 		expect(cliPaths).toContain("team steer");
+		expect(cliPaths).toContain("team result");
 		expect(cliPaths).toContain("session delete");
 		expect(cliPaths).toContain("mcp config");
 		expect(mcpNames).toEqual([
@@ -62,6 +63,7 @@ describe("createCli", () => {
 			"create_team",
 			"get_status",
 			"get_task_result",
+			"get_team_result",
 			"wait",
 			"cancel_tasks",
 			"list",
