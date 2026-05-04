@@ -5,6 +5,7 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import {
 	type AdapterCapabilities,
+	canCancelTask,
 	ensureCollectable,
 	isTerminalTaskStatus,
 	type JobError,
@@ -545,16 +546,8 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 			const owned = ownTask(task_id);
 			if (!owned.ok) return { ok: false, error: owned.error };
 
-			if (isTerminalTaskStatus(owned.task.status)) {
-				return {
-					ok: false,
-					error: {
-						code: "invalid_state",
-						message: `task is already in terminal state '${owned.task.status}'`,
-						retryable: false,
-					},
-				};
-			}
+			const cancelCheck = canCancelTask(owned.task.status);
+			if (!cancelCheck.ok) return { ok: false, error: cancelCheck.error };
 			try {
 				await panes.killTask(task_id);
 			} catch (err) {
