@@ -4,6 +4,7 @@ import { existsSync, statSync } from "node:fs";
 import {
 	AdapterRegistry,
 	createClaudeCodeAdapter,
+	createJcodeAdapter,
 	createOpenCodeAdapter,
 	createPiAdapter,
 	PaneBackend,
@@ -21,7 +22,7 @@ import { registerPiMcpServer } from "./pi-mcp-config.ts";
 import { createTuiContext } from "./tui-context.ts";
 
 // Default cuekit entry point: opens ~/.cuekit/state.db, migrates, wires the
-// tmux pane backend + all three adapters, and hands argv to incur.
+// tmux pane backend + all built-in adapters, and hands argv to incur.
 // `cuekit --mcp` flips incur into stdio MCP server mode; `cuekit <command>`
 // runs the command once from the CLI.
 
@@ -210,6 +211,7 @@ async function main(): Promise<void> {
 		registry.register(createClaudeCodeAdapter(db, panes, { logger }));
 		registry.register(createPiAdapter(db, panes, { logger }));
 		registry.register(createOpenCodeAdapter(db, panes, { logger }));
+		registry.register(createJcodeAdapter(db, panes, { logger }));
 
 		if (isTui) {
 			const { runTui } = await import(TUI_PACKAGE_NAME);

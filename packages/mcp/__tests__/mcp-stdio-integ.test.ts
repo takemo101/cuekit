@@ -243,7 +243,7 @@ describe("cuekit --mcp (stdio integration)", () => {
 		expect(names).not.toContain("list_tasks");
 	});
 
-	it("tools/call list kind=adapters returns all 3 MVP adapters", async () => {
+	it("tools/call list kind=adapters returns the registered MVP adapters", async () => {
 		await initialize(server);
 		await server.send({
 			jsonrpc: "2.0",
@@ -258,7 +258,7 @@ describe("cuekit --mcp (stdio integration)", () => {
 		const textPayload = JSON.parse(text) as { adapters: Array<{ agent_kind: string }> };
 		const adapters = textPayload.adapters;
 		const kinds = adapters.map((a) => a.agent_kind).sort();
-		expect(kinds).toEqual(["claude-code", "opencode", "pi"]);
+		expect(kinds).toEqual(["claude-code", "jcode", "opencode", "pi"]);
 	});
 
 	it("tools/call submit_task returns a structured response (happy OR submit_failed)", async () => {
