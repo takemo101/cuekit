@@ -36,6 +36,7 @@ import { runGetTeamResult } from "../src/commands/get-team-result.ts";
 import { runGetTeamStatus } from "../src/commands/get-team-status.ts";
 import { runListAdapters } from "../src/commands/list-adapters.ts";
 import { runListAgentProfiles } from "../src/commands/list-agent-profiles.ts";
+import { runListStrategies } from "../src/commands/list-strategies.ts";
 import { runListTaskEvents } from "../src/commands/list-task-events.ts";
 import { runListTasks } from "../src/commands/list-tasks.ts";
 import { runListTeams } from "../src/commands/list-teams.ts";
@@ -996,6 +997,100 @@ describe("delete-team", () => {
 
 		expect("error" in result).toBe(true);
 		if ("error" in result) expect(result.error.code).toBe("team_not_found");
+	});
+});
+
+describe("strategy commands", () => {
+	it("lists configured team strategies", () => {
+		const root = mkdtempSync(join(tmpdir(), "cuekit-strategy-list-"));
+		try {
+			writeFileSync(
+				join(root, ".cuekit.yaml"),
+				`strategies:
+  docs-polish:
+    description: Docs polish
+    intent: Improve docs.
+    checks:
+      - bun run check
+  bugfix:
+    description: Bugfix
+`,
+			);
+
+			const result = runListStrategies(ctx, { cwd: root });
+
+			expect("strategies" in result).toBe(true);
+			if (!("strategies" in result)) return;
+			expect(result.strategies.map((strategy) => strategy.name)).toEqual(["bugfix", "docs-polish"]);
+			expect(result.strategies[1]?.checks).toEqual(["bun run check"]);
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("shows one configured team strategy with rendered prompt", () => {
+		const root = mkdtempSync(join(tmpdir(), "cuekit-strategy-show-"));
+		try {
+			writeFileSync(
+				join(root, ".cuekit.yaml"),
+				`strategies:
+  docs-polish:
+    description: Docs polish
+    intent: Improve docs.
+    recommended_team:
+      worker:
+        position: worker
+        agent: pi
+    checks:
+      - bun run check
+`,
+			);
+
+			const result = runListStrategies(ctx, {
+				cwd: root,
+				strategy: "docs-polish",
+				include_prompt: true,
+				objective: "Polish README",
+			});
+
+			expect("strategy" in result).toBe(true);
+			if (!("strategy" in result)) return;
+			expect(result.strategy.name).toBe("docs-polish");
+			expect(result.strategy.rendered_prompt).toContain("Checks:");
+			expect(result.strategy.rendered_prompt).toContain("Polish README");
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("returns an empty strategy list when no project config exists", () => {
+		const root = mkdtempSync(join(tmpdir(), "cuekit-strategy-empty-"));
+		try {
+			const result = runListStrategies(ctx, { cwd: root });
+
+			expect("strategies" in result).toBe(true);
+			if (!("strategies" in result)) return;
+			expect(result.strategies).toEqual([]);
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("returns strategy_not_found for unknown named strategies", () => {
+		const root = mkdtempSync(join(tmpdir(), "cuekit-strategy-missing-"));
+		try {
+			writeFileSync(
+				join(root, ".cuekit.yaml"),
+				"strategies:\n  docs-polish:\n    description: Docs\n",
+			);
+
+			const result = runListStrategies(ctx, { cwd: root, strategy: "missing" });
+
+			expect("error" in result).toBe(true);
+			if ("error" in result) expect(result.error.code).toBe("strategy_not_found");
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
 	});
 });
 

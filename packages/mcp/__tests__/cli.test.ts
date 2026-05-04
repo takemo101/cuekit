@@ -56,6 +56,8 @@ describe("createCli", () => {
 		expect(cliPaths).toContain("team steer");
 		expect(cliPaths).toContain("team result");
 		expect(cliPaths).toContain("team delete");
+		expect(cliPaths).toContain("strategy list");
+		expect(cliPaths).toContain("strategy show");
 		expect(cliPaths).toContain("session delete");
 		expect(cliPaths).toContain("mcp config");
 		expect(mcpNames).toEqual([
