@@ -36,6 +36,37 @@ teams:
   # Planned/inactive until cuekit has a delete_team operation.
   cleanup: keep-team
 
+strategies:
+  docs-polish:
+    description: "Small README/docs improvements"
+    intent: "Make minimal docs-only changes and verify meaning is preserved."
+    recommended_team:
+      coordinator:
+        position: coordinator
+        role: planner
+        agent: pi
+      worker:
+        position: worker
+        role: worker
+        agent: pi
+      reviewer:
+        position: reviewer
+        role: reviewer
+        agent: claude-code
+        model: sonnet
+    guardrails:
+      - "Keep changes docs-only."
+      - "Do not commit/push/PR unless explicitly requested."
+    success_criteria:
+      - "Diff is limited to README/docs."
+      - "Meaning is preserved."
+    checks:
+      - "git diff --check"
+      - "bun run check"
+    autonomy:
+      allow_additional_workers: true
+      require_reviewer: true
+
 adapters:
   claude-code:
     # prompt keeps generated/example config safe. Use bypass only for trusted

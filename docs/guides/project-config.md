@@ -61,6 +61,34 @@ adapters:
   claude-code:
     # prompt keeps generated config safe. Use bypass only for trusted repos.
     permissions: prompt
+
+strategies:
+  docs-polish:
+    description: "Small README/docs improvements"
+    intent: "Make minimal docs-only changes and verify meaning is preserved."
+    recommended_team:
+      coordinator:
+        position: coordinator
+        role: planner
+        agent: pi
+      worker:
+        position: worker
+        role: worker
+        agent: pi
+      reviewer:
+        position: reviewer
+        role: reviewer
+        agent: claude-code
+        model: sonnet
+    guardrails:
+      - "Keep changes docs-only."
+      - "Do not commit/push/PR unless explicitly requested."
+    success_criteria:
+      - "Diff is limited to README/docs."
+      - "Meaning is preserved."
+    checks:
+      - "git diff --check"
+      - "bun run check"
 ```
 
 ## `cuekit init`
@@ -160,6 +188,22 @@ Explicit per-task `role` always wins.
 
 `teams.cleanup: delete-empty-team` is planned but inactive until cuekit has a `delete_team` operation. Use `keep-team` today.
 
+## Team Strategies
+
+`strategies` defines project-local mission briefs for coordinator-led Task Teams. A strategy is prompt guidance, not a workflow engine: cuekit should render the strategy into coordinator context and the coordinator decides whether to submit workers, request review, steer tasks, or ask for help.
+
+Strategy fields:
+
+- `description`: short human-facing label.
+- `intent`: mission goal for the coordinator.
+- `recommended_team`: named slots such as `coordinator`, `worker`, `reviewer`, or project-specific names. Slot fields can recommend `position`, `role`, `agent`, `model`, `objective`, and `adapter_options`.
+- `guardrails`: constraints the coordinator should preserve.
+- `success_criteria`: semantic completion conditions for AI/human judgment.
+- `checks`: concrete confidence checks, such as `git diff --check` or `bun run check`. Use `checks`, not `validation`; checks are recommendations, not automatically executed CI steps.
+- `autonomy`: hints such as `allow_additional_workers`, `allow_parallel_reviewers`, `require_reviewer`, and `allow_skip_checks`.
+
+Strategy recommendations are lower precedence than explicit request fields and higher precedence than broad `teams` / `submit` defaults. Strategy-derived executable behavior follows cuekit's safety rules: it must not silently enable permission bypass unless the caller explicitly supplies adapter options.
+
 ## Safety rules
 
 Project-local config can affect adapter permissions, so use bypass only in trusted repositories.
@@ -222,3 +266,18 @@ Top-level keys are strict: unknown top-level keys are rejected.
 - `teams.wait.poll_interval_ms`: positive integer
 - `teams.cleanup`: currently `keep-team` only in practice; `delete-empty-team` is reserved/planned
 - `adapters.<agent>.permissions`: `prompt` or `bypass`
+- `strategies.<name>.description`: optional display label
+- `strategies.<name>.intent`: optional mission goal
+- `strategies.<name>.recommended_team.<slot>.position`: `coordinator`, `worker`, `reviewer`, or `observer`
+- `strategies.<name>.recommended_team.<slot>.role`: optional Agent Profile id
+- `strategies.<name>.recommended_team.<slot>.agent`: optional adapter kind
+- `strategies.<name>.recommended_team.<slot>.model`: optional adapter model
+- `strategies.<name>.recommended_team.<slot>.objective`: optional slot-specific guidance
+- `strategies.<name>.recommended_team.<slot>.adapter_options`: optional object
+- `strategies.<name>.guardrails`: optional string array
+- `strategies.<name>.success_criteria`: optional string array
+- `strategies.<name>.checks`: optional string array
+- `strategies.<name>.autonomy.allow_additional_workers`: optional boolean
+- `strategies.<name>.autonomy.allow_parallel_reviewers`: optional boolean
+- `strategies.<name>.autonomy.require_reviewer`: optional boolean
+- `strategies.<name>.autonomy.allow_skip_checks`: optional boolean

@@ -4,6 +4,38 @@ export const ProjectIdSchema = z.string().regex(/^[A-Za-z0-9._-]+$/);
 export const TuiScopeSchema = z.enum(["project", "path"]);
 export const TeamCleanupSchema = z.enum(["keep-team", "delete-empty-team"]);
 export const AdapterPermissionSchema = z.enum(["prompt", "bypass"]);
+export const StrategyPositionSchema = z.enum(["coordinator", "worker", "reviewer", "observer"]);
+
+export const TeamStrategySlotSchema = z
+	.object({
+		position: StrategyPositionSchema.optional(),
+		role: z.string().min(1).optional(),
+		agent: z.string().min(1).optional(),
+		model: z.string().min(1).optional(),
+		objective: z.string().min(1).optional(),
+		adapter_options: z.record(z.string(), z.unknown()).optional(),
+	})
+	.strict();
+
+export const TeamStrategySchema = z
+	.object({
+		description: z.string().min(1).optional(),
+		intent: z.string().min(1).optional(),
+		recommended_team: z.record(z.string().min(1), TeamStrategySlotSchema).optional(),
+		guardrails: z.array(z.string().min(1)).optional(),
+		success_criteria: z.array(z.string().min(1)).optional(),
+		checks: z.array(z.string().min(1)).optional(),
+		autonomy: z
+			.object({
+				allow_additional_workers: z.boolean().optional(),
+				allow_parallel_reviewers: z.boolean().optional(),
+				require_reviewer: z.boolean().optional(),
+				allow_skip_checks: z.boolean().optional(),
+			})
+			.strict()
+			.optional(),
+	})
+	.strict();
 
 export const CuekitProjectConfigSchema = z
 	.object({
@@ -62,6 +94,7 @@ export const CuekitProjectConfigSchema = z
 					.strict(),
 			)
 			.optional(),
+		strategies: z.record(z.string().min(1), TeamStrategySchema).optional(),
 	})
 	.strict();
 
@@ -69,6 +102,8 @@ export type CuekitProjectConfig = z.infer<typeof CuekitProjectConfigSchema>;
 export type TuiScope = z.infer<typeof TuiScopeSchema>;
 export type TeamCleanup = z.infer<typeof TeamCleanupSchema>;
 export type AdapterPermission = z.infer<typeof AdapterPermissionSchema>;
+export type TeamStrategy = z.infer<typeof TeamStrategySchema>;
+export type TeamStrategySlot = z.infer<typeof TeamStrategySlotSchema>;
 export type SubmitDefaults = NonNullable<CuekitProjectConfig["submit"]>;
 export type TeamDefaults = NonNullable<CuekitProjectConfig["teams"]>;
 export type AdapterPermissionDefaults = NonNullable<CuekitProjectConfig["adapters"]>;
