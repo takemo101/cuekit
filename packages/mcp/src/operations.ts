@@ -140,8 +140,8 @@ function defineMcpOperation<InputSchema extends z.ZodType, OutputSchema extends 
 	},
 ): CuekitMcpOperation<InputSchema, OutputSchema> {
 	return {
-		...operation,
-		run: (ctx, options) => operation.run(ctx, options as z.infer<InputSchema>),
+		...defineOperation(operation),
+		mcpName: operation.mcpName,
 	};
 }
 
