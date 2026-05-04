@@ -11,7 +11,7 @@ import { runSubmitTask } from "./submit-task.ts";
 
 const AdapterOptionsSchema = z.record(z.string(), z.unknown());
 
-const CoordinatorInputSchema = z
+const CoordinatorObjectSchema = z
 	.object({
 		role: z.string().min(1).optional(),
 		agent_kind: z.string().min(1).optional(),
@@ -20,6 +20,20 @@ const CoordinatorInputSchema = z
 		adapter_options: AdapterOptionsSchema.optional(),
 	})
 	.strict();
+
+const CliJsonCoordinatorSchema = z.string().transform((raw, ctx) => {
+	try {
+		return CoordinatorObjectSchema.parse(JSON.parse(raw));
+	} catch (err) {
+		ctx.addIssue({
+			code: "custom",
+			message: `coordinator must be a JSON object matching the expected schema: ${err instanceof Error ? err.message : String(err)}`,
+		});
+		return z.NEVER;
+	}
+});
+
+const CoordinatorInputSchema = z.union([CoordinatorObjectSchema, CliJsonCoordinatorSchema]);
 
 export const StartTeamStrategyInputSchema = z.object({
 	strategy: z.string().min(1),
@@ -112,14 +126,15 @@ export async function runStartTeamStrategy(
 	const role = input.coordinator?.role ?? slot.role ?? loaded.config.teams?.roles?.coordinator;
 	const agent_kind = input.coordinator?.agent_kind ?? slot.agent;
 	const model = input.coordinator?.model ?? slot.model;
-	const strategyDerivedExecutableField =
-		(input.coordinator?.role === undefined && slot.role !== undefined) ||
+	const projectDerivedExecutableField =
+		(input.coordinator?.role === undefined &&
+			(slot.role !== undefined || loaded.config.teams?.roles?.coordinator !== undefined)) ||
 		(input.coordinator?.agent_kind === undefined && slot.agent !== undefined) ||
 		(input.coordinator?.model === undefined && slot.model !== undefined);
 	const adapter_options = resolveAdapterOptions({
 		caller: input.coordinator?.adapter_options,
 		strategy: slot.adapter_options,
-		strategyDerivedExecutableField,
+		strategyDerivedExecutableField: projectDerivedExecutableField,
 	});
 	const context = renderTeamStrategyPrompt({
 		strategy_name: resolved.strategy_name,

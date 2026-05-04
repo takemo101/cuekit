@@ -1179,6 +1179,41 @@ strategies:
 		}
 	});
 
+	it("forces safe adapter options for coordinator roles from team defaults", async () => {
+		const root = mkdtempSync(join(tmpdir(), "cuekit-start-strategy-team-role-"));
+		try {
+			writeFileSync(
+				join(root, ".cuekit.yaml"),
+				`teams:
+  roles:
+    coordinator: planner
+strategies:
+  docs-polish:
+    recommended_team:
+      coordinator:
+        position: coordinator
+        agent: claude-code
+        model: sonnet
+`,
+			);
+
+			const result = await runStartTeamStrategy(ctx, {
+				cwd: root,
+				strategy: "docs-polish",
+				objective: "Polish README",
+			});
+
+			expect(result.accepted).toBe(true);
+			if (!result.accepted) return;
+			const task = getTaskById(db, result.coordinator_task_id);
+			const spec = JSON.parse(task?.spec_json ?? "{}");
+			expect(spec.role).toBe("planner");
+			expect(spec.adapter_options?.dangerously_skip_permissions).toBe(false);
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
 	it("returns strategy_not_found for missing start strategies", async () => {
 		const root = mkdtempSync(join(tmpdir(), "cuekit-start-strategy-missing-"));
 		try {
