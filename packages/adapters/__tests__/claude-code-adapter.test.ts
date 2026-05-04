@@ -4,11 +4,11 @@ import { createHash } from "node:crypto";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { taskArtifactPaths } from "@cuekit/core";
 import { createSession, getTaskById, runMigrations } from "@cuekit/store";
 import { createClaudeCodeAdapter } from "../src/claude-code-adapter.ts";
 import { PaneBackend } from "../src/pane-backend.ts";
 import { createPiAdapter } from "../src/pi-adapter.ts";
+import { taskArtifactPaths } from "../src/task-artifacts.ts";
 import { FakeTmuxRunner } from "../src/testing.ts";
 
 let db: Database;
