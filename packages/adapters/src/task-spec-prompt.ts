@@ -16,7 +16,11 @@ function renderTeamContext(spec: TaskSpec): string | undefined {
 	const preamble =
 		"Team context:\nThis team context is supplemental; follow your agent profile and role instructions first if there is any conflict.";
 	if (team.position === "coordinator") {
-		return `${preamble}\nYou are the coordinator for ${header}.\nUse cuekit MCP tools such as get_team_status, wait_team, get_task_result, submit_team_tasks, and steer_task to inspect team status, wait for workers, inspect task results, submit follow-up team tasks if needed, and steer workers when they are blocked or off-scope.\nYou are expected to run in the same coding-agent runtime as the caller/orchestrator, or another runtime with equivalent cuekit MCP access.\nDo not micromanage workers unnecessarily. Do not cleanup tasks unless explicitly requested.`;
+		return `${preamble}
+You are the coordinator for ${header}.
+Use cuekit tools when available. Recommended flow: inspect team status, submit workers for scoped tasks, wait with bounded polling (use follow_new_tasks when you expect to create more tasks), inspect results/events, request reviewer tasks, use steer_task or steer_team for stalled/off-scope work, then report a final team summary.
+You are expected to run in the same coding-agent runtime as the caller/orchestrator, or another runtime with equivalent cuekit MCP/CLI access.
+Cuekit will not schedule, route messages, or enforce coordinator authority for you; coordinate explicitly and do not micromanage workers unnecessarily. Do not cleanup tasks unless explicitly requested.`;
 	}
 	if (team.position === "worker") {
 		return `${preamble}\nYou are a worker in ${header}.\nFocus on your assigned objective. A coordinator may inspect your status/result or steer you if needed.\nReport progress and completion through cuekit reporting as usual.`;
