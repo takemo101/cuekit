@@ -557,6 +557,78 @@ describe("createCli", () => {
 		}
 	});
 
+	it("parses JSON arrays for team submit tasks", async () => {
+		const tmpRoot = mkdtempSync(`${tmpdir()}/cuekit-team-submit-json-`);
+		try {
+			const dbPath = `${tmpRoot}/state.db`;
+			const teamProc = Bun.spawn(
+				[
+					"bun",
+					"packages/mcp/src/bin.ts",
+					"team",
+					"create",
+					"--format",
+					"json",
+					"--title",
+					"cli json team",
+				],
+				{
+					cwd: WORKSPACE_ROOT,
+					env: { ...process.env, CUEKIT_DB_PATH: dbPath },
+					stderr: "pipe",
+					stdout: "pipe",
+				},
+			);
+			const [teamExit, teamStdout, teamStderr] = await Promise.all([
+				teamProc.exited,
+				new Response(teamProc.stdout).text(),
+				new Response(teamProc.stderr).text(),
+			]);
+			expect(teamExit).toBe(0);
+			expect(teamStderr).toBe("");
+			const team = JSON.parse(teamStdout) as { team_id: string };
+
+			const submitProc = Bun.spawn(
+				[
+					"bun",
+					"packages/mcp/src/bin.ts",
+					"team",
+					"submit",
+					"--format",
+					"json",
+					"--team_id",
+					team.team_id,
+					"--tasks",
+					'[{"objective":"x","agent_kind":"not-registered","adapter_options":{"mode":"batch"}}]',
+				],
+				{
+					cwd: WORKSPACE_ROOT,
+					env: { ...process.env, CUEKIT_DB_PATH: dbPath },
+					stderr: "pipe",
+					stdout: "pipe",
+				},
+			);
+			const [submitExit, submitStdout, submitStderr] = await Promise.all([
+				submitProc.exited,
+				new Response(submitProc.stdout).text(),
+				new Response(submitProc.stderr).text(),
+			]);
+
+			expect(submitExit).toBe(0);
+			expect(submitStderr).toBe("");
+			const body = JSON.parse(submitStdout) as {
+				accepted: unknown[];
+				rejected: Array<{ index: number; error: { code: string } }>;
+			};
+			expect(body.accepted).toEqual([]);
+			expect(body.rejected).toHaveLength(1);
+			expect(body.rejected[0]?.index).toBe(0);
+			expect(body.rejected[0]?.error.code).toBe("adapter_not_found");
+		} finally {
+			rmSync(tmpRoot, { recursive: true, force: true });
+		}
+	});
+
 	it("parses JSON object strings for task submit adapter_options", async () => {
 		const proc = Bun.spawn(
 			[
