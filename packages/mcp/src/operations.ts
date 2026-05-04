@@ -33,6 +33,11 @@ import {
 	runDeleteTasks,
 } from "./commands/delete-task.ts";
 import {
+	DeleteTeamInputSchema,
+	DeleteTeamOutputSchema,
+	runDeleteTeam,
+} from "./commands/delete-team.ts";
+import {
 	GetTaskResultInputSchema,
 	GetTaskResultOutputSchema,
 	runGetTaskResult,
@@ -309,18 +314,24 @@ async function runCleanup(
 
 const DeleteInputSchema = z
 	.object({
-		kind: z.enum(["tasks", "sessions"]).describe("Delete target type."),
+		kind: z.enum(["tasks", "sessions", "team"]).describe("Delete target type."),
 		task_ids: z.array(z.string().min(1)).optional().describe("Required when kind is tasks."),
 		session_ids: z.array(z.string().min(1)).optional().describe("Required when kind is sessions."),
+		team_id: z.string().min(1).optional().describe("Required when kind is team."),
 	})
 	.passthrough();
-const DeleteOutputSchema = z.union([DeleteTasksOutputSchema, DeleteSessionsOutputSchema]);
+const DeleteOutputSchema = z.union([
+	DeleteTasksOutputSchema,
+	DeleteSessionsOutputSchema,
+	DeleteTeamOutputSchema,
+]);
 
 async function runDelete(
 	ctx: CommandContext,
 	input: z.infer<typeof DeleteInputSchema>,
 ): Promise<z.infer<typeof DeleteOutputSchema>> {
 	if (input.kind === "tasks") return runDeleteTasks(ctx, DeleteTasksInputSchema.parse(input));
+	if (input.kind === "team") return runDeleteTeam(ctx, DeleteTeamInputSchema.parse(input));
 	return runDeleteSessions(ctx, DeleteSessionsInputSchema.parse(input));
 }
 
@@ -435,7 +446,8 @@ export const CUEKIT_MCP_OPERATIONS = [
 	defineMcpOperation({
 		mcpName: "delete",
 		cliPath: ["delete", "target"],
-		description: "Delete terminal tasks or sessions. Set kind to 'tasks' or 'sessions'.",
+		description:
+			"Delete terminal tasks, sessions, or empty teams. Set kind to 'tasks', 'sessions', or 'team'.",
 		options: DeleteInputSchema,
 		output: DeleteOutputSchema,
 		run: runDelete,
@@ -519,6 +531,13 @@ export const CUEKIT_CLI_OPERATIONS = [
 		options: CleanupTeamInputSchema,
 		output: CleanupTeamOutputSchema,
 		run: runCleanupTeam,
+	}),
+	defineOperation({
+		cliPath: ["team", "delete"],
+		description: "Delete an empty task team row.",
+		options: DeleteTeamInputSchema,
+		output: DeleteTeamOutputSchema,
+		run: runDeleteTeam,
 	}),
 	defineOperation({
 		cliPath: ["task", "cancel"],

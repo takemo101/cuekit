@@ -2,7 +2,12 @@ import { Database } from "bun:sqlite";
 import { beforeEach, describe, expect, it } from "bun:test";
 import { runMigrations } from "../src/migrate.ts";
 import { createSession } from "../src/session-store.ts";
-import { createTaskTeam, getTaskTeamById, listTaskTeamsBySession } from "../src/task-team-store.ts";
+import {
+	createTaskTeam,
+	deleteTaskTeam,
+	getTaskTeamById,
+	listTaskTeamsBySession,
+} from "../src/task-team-store.ts";
 
 let db: Database;
 
@@ -51,5 +56,13 @@ describe("task team store", () => {
 		createTaskTeam(db, { id: "tm_2", session_id: "s2", title: "Two" });
 
 		expect(listTaskTeamsBySession(db, "s1").map((team) => team.id)).toEqual(["tm_1"]);
+	});
+
+	it("deletes an empty task team", () => {
+		createTaskTeam(db, { id: "tm_delete", session_id: "s1", title: "Delete" });
+
+		expect(deleteTaskTeam(db, "tm_delete")).toBe(true);
+		expect(getTaskTeamById(db, "tm_delete")).toBeNull();
+		expect(deleteTaskTeam(db, "tm_delete")).toBe(false);
 	});
 });
