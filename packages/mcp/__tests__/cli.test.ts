@@ -56,6 +56,7 @@ describe("createCli", () => {
 		expect(cliPaths).toContain("team steer");
 		expect(cliPaths).toContain("team result");
 		expect(cliPaths).toContain("team delete");
+		expect(cliPaths).toContain("team start");
 		expect(cliPaths).toContain("strategy list");
 		expect(cliPaths).toContain("strategy show");
 		expect(cliPaths).toContain("session delete");
@@ -678,6 +679,63 @@ describe("createCli", () => {
 			const body = JSON.parse(stdout) as { strategy?: { name?: string; checks?: string[] } };
 			expect(body.strategy?.name).toBe("docs-polish");
 			expect(body.strategy?.checks).toEqual(["bun run check"]);
+		} finally {
+			rmSync(tmpRoot, { recursive: true, force: true });
+		}
+	});
+
+	it("parses JSON object strings for team start coordinator overrides", async () => {
+		const tmpRoot = mkdtempSync(`${tmpdir()}/cuekit-team-start-coordinator-json-`);
+		try {
+			writeFileSync(
+				`${tmpRoot}/.cuekit.yaml`,
+				`strategies:
+  docs-polish:
+    recommended_team:
+      coordinator:
+        position: coordinator
+        agent: pi
+        model: k2p5
+`,
+			);
+			const proc = Bun.spawn(
+				[
+					"bun",
+					`${WORKSPACE_ROOT}/packages/mcp/src/bin.ts`,
+					"team",
+					"start",
+					"--format",
+					"json",
+					"--strategy",
+					"docs-polish",
+					"--objective",
+					"Polish README",
+					"--coordinator",
+					'{"agent_kind":"claude-code","model":"sonnet","role":"planner"}',
+				],
+				{
+					cwd: tmpRoot,
+					env: { ...process.env, CUEKIT_DB_PATH: `${tmpRoot}/state.db` },
+					stderr: "pipe",
+					stdout: "pipe",
+				},
+			);
+			const [exitCode, stdout, stderr] = await Promise.all([
+				proc.exited,
+				new Response(proc.stdout).text(),
+				new Response(proc.stderr).text(),
+			]);
+
+			expect(exitCode).toBe(0);
+			expect(stderr).toBe("");
+			const body = JSON.parse(stdout) as {
+				accepted?: boolean;
+				agent_kind?: string;
+				model?: string;
+			};
+			expect(body.accepted).toBe(true);
+			expect(body.agent_kind).toBe("claude-code");
+			expect(body.model).toBe("sonnet");
 		} finally {
 			rmSync(tmpRoot, { recursive: true, force: true });
 		}
