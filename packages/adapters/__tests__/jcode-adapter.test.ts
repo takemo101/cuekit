@@ -86,7 +86,10 @@ describe("buildJcodeReplLaunchCommand", () => {
 		expect(launch).toContain("mkfifo");
 		expect(launch).toContain("printf '%s\\n'");
 		expect(launch).toContain('; cat < /dev/tty) > "$fifo" & feeder_pid=$!;');
-		expect(launch).toContain("'jcode' repl --no-update < \"$fifo\"");
+		expect(launch).toContain("'jcode' repl --no-update < \"$fifo\" & jcode_pid=$!");
+		expect(launch).toContain('wait "$jcode_pid";');
+		expect(launch).toContain('jcode_home="${JCODE_HOME:-$HOME/.jcode}";');
+		expect(launch).toContain('rm -f "$pid_file"');
 		expect(launch).toContain("Say '\\''hello'\\'' and wait");
 		expect(launch).toContain("Child reporting contract:");
 		expect(launch).not.toContain("jcode run");
