@@ -193,6 +193,22 @@ describe("tui data helpers", () => {
 		expect(sanitizeTerminalText("\u009b31mred\u009dtitle\u007f text")).toBe("31mredtitle text");
 	});
 
+	it("cleans OpenCode TUI repaint fragments from transcript text", () => {
+		expect(
+			sanitizeTerminalText(
+				'[?25l⬝⬝■■┃ # Reports completed $ cuekit tool report --type completed --message "ok" opencode■■ adapter smoke ok · 1m 47s',
+			),
+		).toBe(
+			' # Reports completed $ cuekit tool report --type completed --message "ok" opencode adapter smoke ok · 1m 47s',
+		);
+	});
+
+	it("does not strip ordinary bracketed text or spacing while cleaning bare cursor fragments", () => {
+		expect(sanitizeTerminalText("Option [A] and [docs](url) [?25l done")).toBe(
+			"Option [A] and [docs](url)  done",
+		);
+	});
+
 	it("filters common Claude UI and cuekit prompt contract noise from transcript tails", () => {
 		const dir = mkdtempSync(`${tmpdir()}/cuekit-tui-transcript-noise-`);
 		try {
