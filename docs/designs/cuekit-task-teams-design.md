@@ -179,7 +179,7 @@ Recommended meaning:
 
 Cuekit does not enforce special permissions for positions in Phase 1/2. A coordinator is a normal cuekit task with coordinator-oriented metadata and prompt context. If its runtime has MCP access, it can use existing tools to inspect the team and steer workers; cuekit does not automatically wake it, route reports to it, or require workers to obey it.
 
-A coordinator should normally use the same coding-agent runtime as the caller/orchestrator, or at least a runtime with equivalent cuekit MCP access. In dogfood runs where only the caller's runtime has cuekit MCP configured, the coordinator should use that same runtime. Workers and reviewers may use other adapters because they can complete scoped work and report results without orchestrating the team.
+A coordinator should normally use the same coding-agent runtime as the caller/orchestrator, or at least a runtime with equivalent cuekit MCP access. In dogfood runs where only the caller's runtime has cuekit MCP configured, the coordinator should use that same runtime. Coordinator tasks should also normally use interactive adapter mode: coordination is multi-step, may need steering, and can stall in non-interactive batch mode. cuekit allows explicit coordinator batch mode for compatibility, but should warn callers that batch is better suited to focused worker/reviewer tasks. Workers and reviewers may use other adapters because they can complete scoped work and report results without orchestrating the team.
 
 ## Team Status Aggregation
 

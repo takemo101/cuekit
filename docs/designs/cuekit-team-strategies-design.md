@@ -122,6 +122,8 @@ Named slots for suggested participants. Slot names are project-defined (`worker`
 
 The strategy does not automatically submit all slots unless a command explicitly chooses that behavior. In the first slice, the strategy primarily informs the coordinator prompt; the coordinator decides what to submit.
 
+Coordinator slots should normally use interactive adapter mode. A strategy may still specify `adapter_options.mode: "batch"`, and callers may explicitly override a coordinator into batch mode, but cuekit should warn because coordinator work is orchestration-heavy and batch mode can stall or be unsteerable. Batch mode remains more appropriate for focused worker/reviewer tasks.
+
 ### `guardrails`
 
 Constraints the coordinator should preserve while planning and delegating. These are prompt guidance, not hard runtime policy.
