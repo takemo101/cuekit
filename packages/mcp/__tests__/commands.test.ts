@@ -632,6 +632,31 @@ describe("submit-team-tasks", () => {
 		expect(result.rejected[0]?.error.message).toContain("tasks[0].objective");
 	});
 
+	it("accepts unpositioned team tasks with a warning instead of hard-rejecting", async () => {
+		createSession(db, {
+			id: "s_team_unpositioned",
+			project_root: "/p",
+			worktree_path: "/w",
+			parent_agent_kind: "pi",
+		});
+		createTaskTeam(db, { id: "tm_unpositioned", session_id: "s_team_unpositioned", title: "Team" });
+
+		const result = await runSubmitTeamTasks(ctx, {
+			team_id: "tm_unpositioned",
+			tasks: [{ objective: "Scout without a lane", agent_kind: "claude-code" }],
+		});
+
+		expect("accepted" in result).toBe(true);
+		if (!("accepted" in result)) return;
+		expect(result.rejected).toEqual([]);
+		expect(result.accepted[0]).toMatchObject({
+			index: 0,
+			agent_kind: "claude-code",
+			warnings: [expect.objectContaining({ code: "missing_team_position" })],
+		});
+		expect(result.accepted[0]?.position).toBeUndefined();
+	});
+
 	it("keeps accepted tasks when later task input is malformed", async () => {
 		createSession(db, {
 			id: "s1",

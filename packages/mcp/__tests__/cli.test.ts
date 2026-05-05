@@ -178,6 +178,25 @@ describe("createCli", () => {
   feature:
     description: Feature work
     intent: Add behavior safely.
+    recommended_team:
+      coordinator:
+        position: coordinator
+        agent: pi
+      worker:
+        position: worker
+        role: worker
+        agent: pi
+        model: k2p5
+      reviewer:
+        position: reviewer
+        role: reviewer
+        agent: claude-code
+        model: sonnet
+        objective: Review the feature diff.
+      finisher:
+        position: finisher
+        role: pr-finisher
+        agent: claude-code
     checks:
       - bun test
 `,
@@ -194,7 +213,9 @@ describe("createCli", () => {
 						cwd: root,
 						strategy: "feature",
 						include_prompt: true,
+						include_task_skeleton: true,
 						objective: "Add grouped discovery",
+						team_id: "tm_123",
 					}),
 				}),
 			);
@@ -202,12 +223,66 @@ describe("createCli", () => {
 			expect(res.ok).toBe(true);
 			const body = (await res.json()) as {
 				ok: boolean;
-				data: { strategy: { name: string; rendered_prompt?: string } };
+				data: {
+					strategy: {
+						name: string;
+						rendered_prompt?: string;
+						task_skeleton?: {
+							strategy: string;
+							team_id?: string;
+							objective: string;
+							tasks: Array<{ slot: string; position?: string; agent_kind?: string }>;
+						};
+					};
+				};
 			};
 			expect(body.ok).toBe(true);
 			expect(body.data.strategy.name).toBe("feature");
 			expect(body.data.strategy.rendered_prompt).toContain("Team strategy: feature");
 			expect(body.data.strategy.rendered_prompt).toContain("Add grouped discovery");
+			expect(body.data.strategy.task_skeleton).toMatchObject({
+				strategy: "feature",
+				team_id: "tm_123",
+				objective: "Add grouped discovery",
+			});
+			expect(body.data.strategy.task_skeleton?.tasks).toEqual(
+				expect.arrayContaining([
+					expect.objectContaining({ slot: "worker", position: "worker", agent_kind: "pi" }),
+					expect.objectContaining({ slot: "reviewer", position: "reviewer" }),
+					expect.objectContaining({ slot: "finisher", position: "finisher" }),
+				]),
+			);
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("requires a specific strategy when requesting a task skeleton", async () => {
+		const root = mkdtempSync(join(tmpdir(), "cuekit-mcp-strategy-skeleton-invalid-"));
+		try {
+			writeFileSync(
+				join(root, ".cuekit.yaml"),
+				"strategies:\n  feature:\n    description: Feature\n",
+			);
+			const { db, registry } = makeCliHarness();
+			const mcp = createMcpCli({ db, registry });
+
+			const res = await mcp.fetch(
+				new Request("http://localhost/list", {
+					method: "POST",
+					headers: { "content-type": "application/json" },
+					body: JSON.stringify({ kind: "strategies", cwd: root, include_task_skeleton: true }),
+				}),
+			);
+
+			expect(res.ok).toBe(true);
+			const body = (await res.json()) as {
+				ok: boolean;
+				data: { error: { code: string; message: string } };
+			};
+			expect(body.ok).toBe(true);
+			expect(body.data.error.code).toBe("invalid_input");
+			expect(body.data.error.message).toContain("strategy is required");
 		} finally {
 			rmSync(root, { recursive: true, force: true });
 		}
@@ -795,6 +870,76 @@ describe("createCli", () => {
 			const body = JSON.parse(stdout) as { strategy?: { name?: string; checks?: string[] } };
 			expect(body.strategy?.name).toBe("docs-polish");
 			expect(body.strategy?.checks).toEqual(["bun run check"]);
+		} finally {
+			rmSync(tmpRoot, { recursive: true, force: true });
+		}
+	});
+
+	it("serves strategy show with a task skeleton", async () => {
+		const tmpRoot = mkdtempSync(`${tmpdir()}/cuekit-strategy-show-skeleton-cli-`);
+		try {
+			writeFileSync(
+				`${tmpRoot}/.cuekit.yaml`,
+				`strategies:
+  feature:
+    description: Feature
+    recommended_team:
+      coordinator:
+        position: coordinator
+        agent: pi
+      worker:
+        position: worker
+        role: worker
+        agent: pi
+      reviewer:
+        position: reviewer
+        role: reviewer
+        agent: claude-code
+`,
+			);
+			const proc = Bun.spawn(
+				[
+					"bun",
+					`${WORKSPACE_ROOT}/packages/mcp/src/bin.ts`,
+					"strategy",
+					"show",
+					"feature",
+					"--objective",
+					"Add skeletons",
+					"--team_id",
+					"tm_123",
+					"--include_task_skeleton",
+					"true",
+					"--format",
+					"json",
+				],
+				{
+					cwd: tmpRoot,
+					env: { ...process.env, CUEKIT_DB_PATH: `${tmpRoot}/state.db` },
+					stderr: "pipe",
+					stdout: "pipe",
+				},
+			);
+			const [exitCode, stdout, stderr] = await Promise.all([
+				proc.exited,
+				new Response(proc.stdout).text(),
+				new Response(proc.stderr).text(),
+			]);
+
+			expect(exitCode).toBe(0);
+			expect(stderr).toBe("");
+			const body = JSON.parse(stdout) as {
+				strategy?: {
+					name?: string;
+					task_skeleton?: { team_id?: string; tasks: Array<{ position?: string }> };
+				};
+			};
+			expect(body.strategy?.name).toBe("feature");
+			expect(body.strategy?.task_skeleton?.team_id).toBe("tm_123");
+			expect(body.strategy?.task_skeleton?.tasks.map((task) => task.position)).toEqual([
+				"reviewer",
+				"worker",
+			]);
 		} finally {
 			rmSync(tmpRoot, { recursive: true, force: true });
 		}

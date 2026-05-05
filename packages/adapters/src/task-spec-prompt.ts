@@ -22,6 +22,7 @@ function renderTeamContext(spec: TaskSpec): string | undefined {
 		return `${preamble}
 You are the coordinator for ${header}.
 Use cuekit tools when available. Recommended flow: inspect team status, submit workers for scoped tasks, wait with bounded polling (use follow_new_tasks when you expect to create more tasks), inspect results/events, request reviewer tasks, use steer_task or steer_team for stalled/off-scope work, then report a final team summary.
+When submitting team tasks, set a clear position whenever the lifecycle lane is known: worker for implementation/investigation, reviewer for review, finisher for PR/release/cleanup finishing, observer for monitoring, and coordinator only for orchestration. Unpositioned team tasks are allowed for ambiguous ad-hoc work, but they will not appear in worker/reviewer/finisher lanes.
 When team status or result includes attention_items, inspect them before deciding whether to continue, submit more tasks, steer a task, or emit your final report.
 You are expected to run in the same coding-agent runtime as the caller/orchestrator, or another runtime with equivalent cuekit MCP/CLI access.
 Cuekit will not schedule, route messages, or enforce coordinator authority for you; coordinate explicitly and do not micromanage workers unnecessarily. Do not cleanup tasks unless explicitly requested.`;
@@ -31,6 +32,9 @@ Cuekit will not schedule, route messages, or enforce coordinator authority for y
 	}
 	if (team.position === "reviewer") {
 		return `${preamble}\nYou are a reviewer in ${header}.\nReview the relevant team outputs or final combined changes. Prefer concrete findings with task/file references.`;
+	}
+	if (team.position === "finisher") {
+		return `${preamble}\nYou are the finisher in ${header}.\nOwn the final release, PR, cleanup, or report-back lane requested by the coordinator or parent. Verify prerequisites are satisfied, complete the finishing task, and emit a durable completed report when done.`;
 	}
 	if (team.position === "observer") {
 		return `${preamble}\nYou are an observer in ${header}.\nMonitor or summarize as requested without taking ownership of implementation.`;
