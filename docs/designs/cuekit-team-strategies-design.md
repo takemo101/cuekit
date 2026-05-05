@@ -186,6 +186,8 @@ Autonomy:
 - Reviewer is required before final completion.
 
 Use cuekit tools to coordinate: submit_team_tasks, wait with follow_new_tasks, steer when needed, get_team_result, and report a final completed event.
+
+After a finisher or pr-finisher task completes, inspect the team result with get_team_result and immediately emit your own final completed report — do not wait for parent steering.
 ```
 
 ## Resolution and Precedence

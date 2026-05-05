@@ -74,4 +74,19 @@ describe("team strategy helpers", () => {
 		expect(prompt).toContain("follow_new_tasks");
 		expect(prompt).not.toContain("Validation:");
 	});
+
+	it("includes finisher post-completion guidance in coordinator prompt", () => {
+		const result = resolveTeamStrategy(config, "docs-polish");
+		if (!result.ok) throw new Error("setup failed");
+
+		const prompt = renderTeamStrategyPrompt({
+			strategy_name: result.strategy_name,
+			strategy: result.strategy,
+			objective: "Polish README wait guidance.",
+		});
+
+		expect(prompt).toContain("After a finisher or pr-finisher task completes");
+		expect(prompt).toContain("get_team_result");
+		expect(prompt).toContain("do not wait for parent steering");
+	});
 });
