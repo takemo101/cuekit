@@ -12,6 +12,7 @@ import type { CommandContext } from "../command-context.ts";
 import { getTaskActivity } from "../task-activity.ts";
 import { withTerminalReportSummaryFallback } from "../task-result-summary.ts";
 import { findFirstDuplicate } from "./_duplicates.ts";
+import { sleep } from "./_sleep.ts";
 
 export const WaitModeSchema = z.enum(["all", "any"]);
 
@@ -106,10 +107,6 @@ function cleanupHintForSnapshots(snapshots: WaitTasksOutput["tasks"]): string | 
 	return cleanupHintForTaskIds(
 		snapshots.filter((task) => task.terminal).map((task) => task.task_id),
 	);
-}
-
-function sleep(ms: number): Promise<void> {
-	return new Promise((resolveSleep) => setTimeout(resolveSleep, ms));
 }
 
 function commandError(

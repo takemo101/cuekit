@@ -10,6 +10,7 @@ import {
 	TeamRunSummarySchema,
 } from "../team-run-summary.ts";
 import { aggregateTeamStatus } from "../team-status.ts";
+import { sleep } from "./_sleep.ts";
 import {
 	runWaitTasks,
 	WAIT_TIMEOUT_ACTION_HINT,
@@ -49,10 +50,6 @@ export const WaitTeamOutputSchema = z.object({
 });
 
 export type WaitTeamOutput = z.infer<typeof WaitTeamOutputSchema>;
-
-function sleep(ms: number): Promise<void> {
-	return new Promise((resolveSleep) => setTimeout(resolveSleep, ms));
-}
 
 function teamWaitTimeoutHint(followNewTasks: boolean, baseHint = WAIT_TIMEOUT_ACTION_HINT): string {
 	if (!followNewTasks) return baseHint;
