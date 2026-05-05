@@ -1,6 +1,12 @@
-import { TeamPositionSchema, TeamStatusSchema, TeamTaskCountsSchema } from "@cuekit/core";
+import {
+	isTerminalTaskStatus,
+	TeamPositionSchema,
+	TeamStatusSchema,
+	TeamTaskCountsSchema,
+} from "@cuekit/core";
 import { getTaskTeamById, listTaskEvents, listTasksByTeam } from "@cuekit/store";
 import { z } from "incur";
+import { cleanupHintForTeam } from "../cleanup-hints.ts";
 import type { CommandContext } from "../command-context.ts";
 import { buildTeamSummary } from "../team-status.ts";
 
@@ -36,6 +42,7 @@ export const GetTeamResultOutputSchema = z.union([
 		task_counts: TeamTaskCountsSchema,
 		final_summary: z.string().optional(),
 		timeline: z.array(TeamResultTimelineEntrySchema),
+		cleanup_hint: z.string().optional(),
 	}),
 	z.object({
 		error: z.object({
@@ -86,6 +93,10 @@ export function runGetTeamResult(
 	);
 	const finalSummary = latestCoordinatorTerminal?.message ?? latestTerminal?.message;
 	const summary = buildTeamSummary(team, [...tasksById.values()]);
+	const cleanupHint = cleanupHintForTeam(
+		team.id,
+		tasks.filter((task) => isTerminalTaskStatus(task.status)).length,
+	);
 
 	return {
 		team_id: team.id,
@@ -94,5 +105,6 @@ export function runGetTeamResult(
 		task_counts: summary.task_counts,
 		...(finalSummary ? { final_summary: finalSummary } : {}),
 		timeline,
+		...(cleanupHint ? { cleanup_hint: cleanupHint } : {}),
 	};
 }

@@ -7,6 +7,7 @@ import {
 } from "@cuekit/core";
 import { getSessionById, getTaskById, listTaskEvents } from "@cuekit/store";
 import { z } from "incur";
+import { cleanupHintForTaskIds } from "../cleanup-hints.ts";
 import type { CommandContext } from "../command-context.ts";
 import { getTaskActivity } from "../task-activity.ts";
 import { withTerminalReportSummaryFallback } from "../task-result-summary.ts";
@@ -76,6 +77,7 @@ export const WaitTasksOutputSchema = z.object({
 	scope: z.object({ session_id: z.string().optional(), cwd: z.string().optional() }),
 	tasks: z.array(WaitTaskSnapshotSchema),
 	next_action_hint: z.string().optional(),
+	cleanup_hint: z.string().optional(),
 	error: JobErrorSchema.optional(),
 });
 
@@ -86,6 +88,25 @@ const DEFAULT_POLL_INTERVAL_MS = 2_000;
 const FAILURE_LIKE_STATUSES = new Set(["failed", "blocked", "timed_out"]);
 export const WAIT_TIMEOUT_ACTION_HINT =
 	"Task is still running; poll again with a short timeout or inspect get_status for attention_hint.";
+
+function waitTimeoutActionHint(snapshots: WaitTasksOutput["tasks"]): string {
+	if (snapshots.some((task) => task.attention_hint === "stop_hook_or_idle_prompt_suspected")) {
+		return `${WAIT_TIMEOUT_ACTION_HINT} One or more tasks appear idle at a prompt or stop hook; consider cuekit_steer asking them to report current status, blockers, and next action.`;
+	}
+	if (snapshots.some((task) => task.attention_hint === "no_recent_activity")) {
+		return `${WAIT_TIMEOUT_ACTION_HINT} One or more tasks have no recent activity; consider cuekit_steer asking for a progress or terminal report, or cancel if no longer needed.`;
+	}
+	if (snapshots.some((task) => task.last_transcript_at || task.last_event_at)) {
+		return `${WAIT_TIMEOUT_ACTION_HINT} Recent activity was observed; if progress stops, steer the task to report status or completion.`;
+	}
+	return WAIT_TIMEOUT_ACTION_HINT;
+}
+
+function cleanupHintForSnapshots(snapshots: WaitTasksOutput["tasks"]): string | undefined {
+	return cleanupHintForTaskIds(
+		snapshots.filter((task) => task.terminal).map((task) => task.task_id),
+	);
+}
 
 function sleep(ms: number): Promise<void> {
 	return new Promise((resolveSleep) => setTimeout(resolveSleep, ms));
@@ -251,18 +272,28 @@ export async function runWaitTasks(
 		}
 		latest = snapshots;
 		if (shouldReturn(snapshots, mode, input.stop_on_failed ?? false)) {
-			return { mode, done: true, timed_out: false, scope, tasks: snapshots };
+			const cleanupHint = cleanupHintForSnapshots(snapshots);
+			return {
+				mode,
+				done: true,
+				timed_out: false,
+				scope,
+				tasks: snapshots,
+				...(cleanupHint ? { cleanup_hint: cleanupHint } : {}),
+			};
 		}
 		if (Date.now() >= deadline) break;
 		await sleep(Math.min(pollIntervalMs, Math.max(0, deadline - Date.now())));
 	}
 
+	const cleanupHint = cleanupHintForSnapshots(latest);
 	return {
 		mode,
 		done: false,
 		timed_out: true,
 		scope,
 		tasks: latest,
-		next_action_hint: WAIT_TIMEOUT_ACTION_HINT,
+		next_action_hint: waitTimeoutActionHint(latest),
+		...(cleanupHint ? { cleanup_hint: cleanupHint } : {}),
 	};
 }

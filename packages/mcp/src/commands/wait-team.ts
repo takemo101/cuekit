@@ -1,7 +1,8 @@
-import { JobErrorSchema, TeamStatusSchema } from "@cuekit/core";
+import { isTerminalTaskStatus, JobErrorSchema, TeamStatusSchema } from "@cuekit/core";
 import { applyTeamWaitDefaults, loadProjectConfig } from "@cuekit/project-config";
 import { getSessionById, getTaskTeamById, listTasksByTeam, type Task } from "@cuekit/store";
 import { z } from "incur";
+import { cleanupHintForTeam } from "../cleanup-hints.ts";
 import type { CommandContext } from "../command-context.ts";
 import {
 	buildTeamRunSummary,
@@ -43,6 +44,7 @@ export const WaitTeamOutputSchema = z.object({
 	tasks: z.array(WaitTaskSnapshotSchema),
 	run_summary: TeamRunSummarySchema,
 	next_action_hint: z.string().optional(),
+	cleanup_hint: z.string().optional(),
 	error: JobErrorSchema.optional(),
 });
 
@@ -52,9 +54,9 @@ function sleep(ms: number): Promise<void> {
 	return new Promise((resolveSleep) => setTimeout(resolveSleep, ms));
 }
 
-function teamWaitTimeoutHint(followNewTasks: boolean): string {
-	if (!followNewTasks) return WAIT_TIMEOUT_ACTION_HINT;
-	return `${WAIT_TIMEOUT_ACTION_HINT} follow_new_tasks is enabled, so call wait again to continue polling current and newly created team tasks.`;
+function teamWaitTimeoutHint(followNewTasks: boolean, baseHint = WAIT_TIMEOUT_ACTION_HINT): string {
+	if (!followNewTasks) return baseHint;
+	return `${baseHint} follow_new_tasks is enabled, so call wait again to continue polling current and newly created team tasks.`;
 }
 
 async function waitCurrentTeamTasks(
@@ -157,6 +159,8 @@ export async function runWaitTeam(
 			tasks.some((snapshotted) => snapshotted.id === task.id),
 		);
 	}
+	const terminalTaskCount = latest.filter((task) => isTerminalTaskStatus(task.status)).length;
+	const cleanupHint = cleanupHintForTeam(team.id, terminalTaskCount);
 	return {
 		team_id: team.id,
 		status: aggregateTeamStatus(latest),
@@ -167,8 +171,14 @@ export async function runWaitTeam(
 		tasks: wait.tasks,
 		run_summary: buildTeamRunSummary(ctx, latest),
 		...(wait.timed_out
-			? { next_action_hint: teamWaitTimeoutHint(input.follow_new_tasks ?? false) }
+			? {
+					next_action_hint: teamWaitTimeoutHint(
+						input.follow_new_tasks ?? false,
+						wait.next_action_hint,
+					),
+				}
 			: {}),
+		...(cleanupHint ? { cleanup_hint: cleanupHint } : {}),
 		...(wait.error ? { error: wait.error } : {}),
 	};
 }
