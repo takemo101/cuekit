@@ -26,7 +26,13 @@ describe("tui task action helpers", () => {
 			attach_hint: undefined,
 			metadata: { tmux_session_name: "cuekit-task-t_1" },
 		};
+		const batchWithMetadata: TaskStatusView = {
+			...withMetadata,
+			supports_attach: false,
+			metadata: { tmux_session_name: "cuekit-task-t_1", adapter_mode: "batch" },
+		};
 
+		expect(canAttach(batchWithMetadata)).toBe(false);
 		expect(canAttach(withHint)).toBe(true);
 		expect(canAttach(withMetadata)).toBe(true);
 	});

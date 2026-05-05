@@ -230,6 +230,8 @@ export function App(props: { ctx: TuiContext; onAttach?: (args: string[]) => voi
 		}
 	});
 
+	const selectedAttachable = detail ? canAttach(detail.status) : false;
+
 	return (
 		<box width="100%" height="100%" flexDirection="column" backgroundColor={theme.bg}>
 			<box flexDirection="row" flexGrow={1} gap={1} backgroundColor={theme.bg}>
@@ -245,7 +247,13 @@ export function App(props: { ctx: TuiContext; onAttach?: (args: string[]) => voi
 			{steerInput !== null ? (
 				<InputDialog title={`Steer ${steerInput.taskId}`} value={steerInput.value} />
 			) : null}
-			<Footer message={message} error={error} loading={loading} terminalWidth={terminal.width} />
+			<Footer
+				message={message}
+				error={error}
+				loading={loading}
+				terminalWidth={terminal.width}
+				attachable={selectedAttachable}
+			/>
 		</box>
 	);
 }

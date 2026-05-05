@@ -10,6 +10,10 @@ export function supportsSteeringForMode(mode: AdapterRunMode): boolean {
 	return mode === "interactive";
 }
 
+export function supportsAttachForMode(mode: AdapterRunMode): boolean {
+	return mode === "interactive";
+}
+
 // Shared adapter option parsing. Permission bypass is enabled by default for
 // delegated panes so unattended child agents don't stall on runtime prompts.
 // The boolean literal `false` is the explicit opt-out; missing, true, strings,

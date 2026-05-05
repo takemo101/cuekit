@@ -33,7 +33,11 @@ import {
 	updateTaskRefs,
 	updateTaskStatus,
 } from "@cuekit/store";
-import { adapterRunModeFor, supportsSteeringForMode } from "./adapter-options.ts";
+import {
+	adapterRunModeFor,
+	supportsAttachForMode,
+	supportsSteeringForMode,
+} from "./adapter-options.ts";
 import { type AdapterSubmitInput, type AgentAdapter, generateTaskId } from "./agent-adapter.ts";
 import type { PaneBackend } from "./pane-backend.ts";
 import { normalizeTaskResult } from "./result-normalizer.ts";
@@ -476,6 +480,7 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 				taskSpecFor(live) ?? { agent_kind: config.kind, objective: live.objective },
 			);
 			const supportsSteering = caps.supports_steering && supportsSteeringForMode(mode);
+			const supportsAttach = caps.supports_attach && supportsAttachForMode(mode);
 			return {
 				task_id,
 				agent_kind: config.kind,
@@ -489,10 +494,10 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 				completed_at: live.completed_at ?? undefined,
 				native_task_id: live.native_task_ref ?? undefined,
 				supports_steering: supportsSteering,
-				supports_attach: caps.supports_attach,
+				supports_attach: supportsAttach,
 				attach_hint: isTerminalTaskStatus(live.status)
 					? undefined
-					: caps.supports_attach
+					: supportsAttach
 						? panes.computeAttachHint(task_id)
 						: undefined,
 				metadata: {
