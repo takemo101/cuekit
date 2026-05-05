@@ -5,6 +5,8 @@ const CHILD_REPORTING_CONTRACT = `Child reporting contract:
 - If MCP is unavailable, use the CLI fallback: cuekit tool report --type <progress|completed|failed|blocked|help_requested|log> --message "...".
 - CUEKIT_TASK_ID and CUEKIT_CHILD_TOKEN are already provided in your environment; do not print or store the token.
 - Report progress when useful, and report completed, failed, or blocked before you finish.
+- As soon as your assigned objective is done or you have no further useful action, immediately send a terminal report (completed, failed, or blocked); do not sit idle at a prompt without reporting your state.
+- If you are waiting on parent input or unsure how to proceed, report help_requested or blocked with the blocker and next action instead of staying silent.
 - Use help_requested when parent input is needed and you can remain resumable.
 - When useful, include simple observability payloads such as {"phase":"testing","files":{"read":["src/a.ts"],"written":["src/a.ts"]}}; report only the main files relevant to coordination/review.
 - transcript markers and direct result.json writes are not the canonical reporting path; SQLite task_events written by report_task_event / cuekit tool report are canonical.

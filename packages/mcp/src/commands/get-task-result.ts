@@ -1,6 +1,7 @@
 import { isTerminalTaskStatus, JobErrorSchema, TaskResultSchema } from "@cuekit/core";
 import { getTaskById } from "@cuekit/store";
 import { z } from "incur";
+import { cleanupHintForTaskId } from "../cleanup-hints.ts";
 import type { CommandContext } from "../command-context.ts";
 import { withTerminalReportSummaryFallback } from "../task-result-summary.ts";
 
@@ -10,8 +11,12 @@ export const GetTaskResultInputSchema = z.object({
 
 export type GetTaskResultInput = z.infer<typeof GetTaskResultInputSchema>;
 
+const TaskResultWithCleanupHintSchema = TaskResultSchema.extend({
+	cleanup_hint: z.string(),
+});
+
 export const GetTaskResultOutputSchema = z.union([
-	TaskResultSchema,
+	TaskResultWithCleanupHintSchema,
 	z.object({ error: JobErrorSchema }),
 ]);
 
@@ -59,5 +64,8 @@ export async function runGetTaskResult(
 	}
 	const result = await adapterRes.value.collect(input.task_id);
 	if (!result.ok) return { error: result.error };
-	return withTerminalReportSummaryFallback(ctx, result.value);
+	return {
+		...withTerminalReportSummaryFallback(ctx, result.value),
+		cleanup_hint: cleanupHintForTaskId(input.task_id),
+	};
 }

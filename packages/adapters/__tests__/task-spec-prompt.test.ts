@@ -51,6 +51,8 @@ describe("renderTaskSpecPrompt", () => {
 		expect(prompt).toContain("transcript markers");
 		expect(prompt).toContain("result.json");
 		expect(prompt).toContain("help_requested when parent input is needed");
+		expect(prompt).toContain("do not sit idle at a prompt without reporting your state");
+		expect(prompt).toContain("report help_requested or blocked with the blocker and next action");
 		expect(prompt).toContain("observability payloads");
 		expect(prompt).toContain(
 			'{"phase":"testing","files":{"read":["src/a.ts"],"written":["src/a.ts"]}}',

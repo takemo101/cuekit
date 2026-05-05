@@ -792,6 +792,8 @@ describe("wait-team and cleanup-team", () => {
 		expect(result.done).toBe(true);
 		expect(result.tasks.map((task) => task.task_id)).toEqual(["t_done"]);
 		expect(result.run_summary.positions.worker[0]?.message).toBe("Worker finished implementation");
+		expect(result.cleanup_hint).toContain("cuekit_cleanup");
+		expect(result.cleanup_hint).toContain("tm_1");
 	});
 
 	it("team defaults: wait-team uses configured wait defaults and explicit input wins", async () => {
@@ -819,6 +821,7 @@ describe("wait-team and cleanup-team", () => {
 			const fromConfig = await runWaitTeam(ctx, { team_id: "tm_wait_defaults" });
 			expect(fromConfig.timed_out).toBe(true);
 			expect(fromConfig.next_action_hint).toContain("poll again");
+			expect(fromConfig.cleanup_hint).toBeUndefined();
 
 			const explicit = await runWaitTeam(ctx, {
 				team_id: "tm_wait_defaults",
@@ -1025,6 +1028,37 @@ describe("team result", () => {
 			"reviewer final report",
 			"coordinator final report",
 		]);
+		expect(result.cleanup_hint).toContain("cuekit_cleanup");
+		expect(result.cleanup_hint).toContain("tm_result");
+	});
+
+	it("omits cleanup hint when a team result has no terminal tasks", () => {
+		createSession(db, {
+			id: "s_team_result_running",
+			project_root: "/p",
+			worktree_path: "/w",
+			parent_agent_kind: "pi",
+		});
+		createTaskTeam(db, {
+			id: "tm_result_running",
+			session_id: "s_team_result_running",
+			title: "Team",
+		});
+		createTask(db, {
+			id: "t_worker_result_running",
+			session_id: "s_team_result_running",
+			team_id: "tm_result_running",
+			team_position: "worker",
+			agent_kind: "claude-code",
+			objective: "work",
+			status: "running",
+		});
+
+		const result = runGetTeamResult(ctx, { team_id: "tm_result_running" });
+
+		expect("error" in result).toBe(false);
+		if ("error" in result) return;
+		expect(result.cleanup_hint).toBeUndefined();
 	});
 
 	it("team result returns team_not_found for unknown teams", () => {
@@ -2017,7 +2051,11 @@ describe("get-task-result", () => {
 		await runCancelTasks(ctx, { task_ids: [submit.task_id] });
 		const result = await runGetTaskResult(ctx, { task_id: submit.task_id });
 		expect("task_id" in result).toBe(true);
-		if ("task_id" in result) expect(result.status).toBe("cancelled");
+		if ("task_id" in result) {
+			expect(result.status).toBe("cancelled");
+			expect(result.cleanup_hint).toContain(submit.task_id);
+			expect(result.cleanup_hint).toContain("cuekit_delete");
+		}
 	});
 
 	it("uses terminal child report message as summary fallback", async () => {
@@ -2357,9 +2395,93 @@ describe("wait-tasks", () => {
 		expect(waited.done).toBe(false);
 		expect(waited.timed_out).toBe(true);
 		expect(waited.next_action_hint).toContain("poll again");
+		expect(waited.cleanup_hint).toBeUndefined();
 		expect(waited.tasks).toHaveLength(1);
 		expect(waited.tasks[0]?.status).toBe("running");
 		expect(getTaskById(db, submitted.task_id)?.status).toBe("running");
+	});
+
+	it("timeout hint recommends steering when a task has no recent activity", async () => {
+		const submitted = await runSubmitTask(ctx, {
+			objective: "x",
+			agent_kind: "claude-code",
+			cwd: "/my/project",
+		});
+		if (!submitted.accepted) throw new Error("setup failed");
+		db.prepare("update tasks set updated_at = ?, started_at = ? where id = ?").run(
+			"2026-01-01T00:00:00.000Z",
+			"2026-01-01T00:00:00.000Z",
+			submitted.task_id,
+		);
+
+		const waited = await runWaitTasks(ctx, {
+			task_ids: [submitted.task_id],
+			session_id: submitted.session_id,
+			timeout_ms: 0,
+			poll_interval_ms: 1,
+		});
+
+		expect(waited.tasks[0]?.attention_hint).toBe("no_recent_activity");
+		expect(waited.next_action_hint).toContain("poll again");
+		expect(waited.next_action_hint).toContain("cuekit_steer");
+		expect(waited.next_action_hint).toContain("progress or terminal report");
+	});
+
+	it("timeout hint prioritizes prompt or stop-hook attention", async () => {
+		const root = mkdtempSync(join(tmpdir(), "cuekit-stop-hook-hint-"));
+		try {
+			const transcript = join(root, "transcript.txt");
+			writeFileSync(transcript, "idle-prompt");
+			const submitted = await runSubmitTask(ctx, {
+				objective: "x",
+				agent_kind: "claude-code",
+				cwd: root,
+			});
+			if (!submitted.accepted) throw new Error("setup failed");
+			db.prepare("update tasks set transcript_ref = ? where id = ?").run(
+				transcript,
+				submitted.task_id,
+			);
+
+			const waited = await runWaitTasks(ctx, {
+				task_ids: [submitted.task_id],
+				session_id: submitted.session_id,
+				timeout_ms: 0,
+				poll_interval_ms: 1,
+			});
+
+			expect(waited.tasks[0]?.attention_hint).toBe("stop_hook_or_idle_prompt_suspected");
+			expect(waited.next_action_hint).toContain("poll again");
+			expect(waited.next_action_hint).toContain("prompt or stop hook");
+			expect(waited.next_action_hint).toContain("cuekit_steer");
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("timeout hint notes recent activity without attention hints", async () => {
+		const submitted = await runSubmitTask(ctx, {
+			objective: "x",
+			agent_kind: "claude-code",
+			cwd: "/my/project",
+		});
+		if (!submitted.accepted) throw new Error("setup failed");
+		appendTaskEvent(db, {
+			id: "e_recent_activity_hint",
+			task_id: submitted.task_id,
+			type: "log",
+			message: "still working",
+		});
+
+		const waited = await runWaitTasks(ctx, {
+			task_ids: [submitted.task_id],
+			session_id: submitted.session_id,
+			timeout_ms: 0,
+			poll_interval_ms: 1,
+		});
+
+		expect(waited.next_action_hint).toContain("poll again");
+		expect(waited.next_action_hint).toContain("Recent activity was observed");
 	});
 
 	it("returns immediately when all scoped tasks are already terminal", async () => {
@@ -2386,6 +2508,8 @@ describe("wait-tasks", () => {
 		expect(waited.tasks[0]?.status).toBe("cancelled");
 		expect(waited.tasks[0]?.terminal).toBe(true);
 		expect(waited.tasks[0]?.result?.status).toBe("cancelled");
+		expect(waited.cleanup_hint).toContain(submitted.task_id);
+		expect(waited.cleanup_hint).toContain("cuekit_delete");
 	});
 
 	it("all mode waits until every task is terminal", async () => {
