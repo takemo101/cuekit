@@ -109,7 +109,7 @@ export function metadataEntries(
 			color: detail?.status.attention_hint ? theme.yellow : theme.muted,
 		});
 	}
-	if (detail?.status.attach_hint) {
+	if (detail?.status.supports_attach === true && detail.status.attach_hint) {
 		entries.push({
 			label: "attach",
 			value: truncateMiddle(detail.status.attach_hint, 96),

@@ -63,6 +63,8 @@ describe("@cuekit/tui package smoke", () => {
 		).text();
 		expect(footer).toContain("↑/↓|j/k");
 		expect(footerLine("Ready", 80).length).toBeLessThanOrEqual(76);
+		expect(footerLine("Ready", 80, { attachable: false })).not.toContain("attach");
+		expect(footerLine("Ready", 80, { attachable: false })).not.toContain("att");
 		expect(
 			footerLine("A very long status message that should be truncated", 80).length,
 		).toBeLessThanOrEqual(76);

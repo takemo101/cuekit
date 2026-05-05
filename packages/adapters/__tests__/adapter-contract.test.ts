@@ -139,7 +139,8 @@ describe.each(CASES)("AgentAdapter contract — $kind", (testCase) => {
 		const view = await adapter.status(result.value.task_id);
 		expect(view.metadata?.adapter_mode).toBe("batch");
 		expect(view.supports_steering).toBe(false);
-		expect(view.supports_attach).toBe(true);
+		expect(view.supports_attach).toBe(false);
+		expect(view.attach_hint).toBeUndefined();
 	});
 
 	it("invalid adapter mode falls back to interactive", async () => {

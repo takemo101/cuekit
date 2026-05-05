@@ -1,5 +1,7 @@
 import { describe, expect, it } from "bun:test";
-import { contextHeight } from "../src/components/task-detail.tsx";
+import type { TaskSummary } from "@cuekit/core";
+import { contextHeight, metadataEntries } from "../src/components/task-detail.tsx";
+import type { TuiTaskDetail } from "../src/data.ts";
 
 describe("TaskDetail contextHeight", () => {
 	it("gives metadata and recent events enough room before transcript output", () => {
@@ -49,5 +51,30 @@ describe("TaskDetail contextHeight", () => {
 		}));
 
 		expect(contextHeight(metadata, events)).toBe(12);
+	});
+
+	it("omits attach metadata when a batch status exposes no attach hint", () => {
+		const task: TaskSummary = {
+			task_id: "t_1",
+			agent_kind: "claude-code",
+			status: "running",
+			updated_at: "2026-05-01T00:00:00.000Z",
+		};
+		const detail: TuiTaskDetail = {
+			status: {
+				task_id: "t_1",
+				agent_kind: "claude-code",
+				status: "running",
+				created_at: "2026-05-01T00:00:00.000Z",
+				updated_at: "2026-05-01T00:00:00.000Z",
+				supports_attach: false,
+				attach_hint: "tmux attach-session -t cuekit-task-t_1",
+				metadata: { adapter_mode: "batch", tmux_session_name: "cuekit-task-t_1" },
+			},
+			events: [],
+			transcriptTail: [],
+		};
+
+		expect(metadataEntries(task, detail).map((entry) => entry.label)).not.toContain("attach");
 	});
 });
