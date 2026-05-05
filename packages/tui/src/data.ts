@@ -1,6 +1,12 @@
 import { closeSync, existsSync, openSync, readSync, statSync } from "node:fs";
 import type { TaskListFilter, TaskStatusView } from "@cuekit/core";
-import type { TuiContext, TuiTaskEvent, TuiTaskListOutput } from "./context.ts";
+import type {
+	TuiContext,
+	TuiManualSteerHint,
+	TuiTaskEvent,
+	TuiTaskListOutput,
+	TuiTeamAttentionItem,
+} from "./context.ts";
 
 type LoadTaskListOptions = Pick<
 	TaskListFilter,
@@ -11,6 +17,9 @@ export type TuiTaskDetail = {
 	status: TaskStatusView;
 	events: TuiTaskEvent[];
 	eventsError?: string;
+	teamAttentionItems?: TuiTeamAttentionItem[];
+	manualSteerHints?: TuiManualSteerHint[];
+	teamStatusError?: string;
 	transcriptPath?: string;
 	transcriptTail: string[];
 };
@@ -31,12 +40,27 @@ export async function loadTaskDetail(
 		ctx.getTaskStatus(taskId),
 		ctx.listTaskEvents(taskId),
 	]);
+	const teamStatusResult =
+		status.team_id && ctx.getTeamStatus ? await ctx.getTeamStatus(status.team_id) : undefined;
 	const transcriptPath = ctx.getTranscriptPath?.(taskId);
 	const eventsError = "events" in eventsResult ? undefined : eventsResult.error.message;
+	const teamStatusError =
+		teamStatusResult && "error" in teamStatusResult ? teamStatusResult.error.message : undefined;
+	const teamRunSummary =
+		teamStatusResult && "run_summary" in teamStatusResult
+			? teamStatusResult.run_summary
+			: undefined;
 	return {
 		status,
 		events: "events" in eventsResult ? eventsResult.events : [],
 		...(eventsError ? { eventsError } : {}),
+		...(teamRunSummary?.attention_items && teamRunSummary.attention_items.length > 0
+			? { teamAttentionItems: teamRunSummary.attention_items }
+			: {}),
+		...(teamRunSummary?.manual_steer_hints && teamRunSummary.manual_steer_hints.length > 0
+			? { manualSteerHints: teamRunSummary.manual_steer_hints }
+			: {}),
+		...(teamStatusError ? { teamStatusError } : {}),
 		...(transcriptPath ? { transcriptPath } : {}),
 		transcriptTail: readTranscriptTail(transcriptPath, options.transcriptLines ?? 80),
 	};

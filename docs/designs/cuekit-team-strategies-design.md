@@ -132,6 +132,62 @@ A strategy may include optional operational slots such as `finisher`. For PR com
 
 Coordinator slots should normally use interactive adapter mode. A strategy may still specify `adapter_options.mode: "batch"`, and callers may explicitly override a coordinator into batch mode, but cuekit should warn because coordinator work is orchestration-heavy and batch mode can stall or be unsteerable. Batch mode remains more appropriate for focused worker/reviewer tasks.
 
+### Semi-automatic slot materialization
+
+To make coordinator-led teams more reliable without turning strategies into workflows, cuekit should support a coordinator-facing helper that materializes `recommended_team` slots into a `submit_team_tasks` skeleton. This is semi-automatic: cuekit prepares structured task drafts, but the coordinator reviews, edits, omits, or adds tasks before submission.
+
+The helper should:
+
+- include slot-derived `position`, `role`, `model`, `adapter_options`, and slot-specific `objective` where configured, mapping the strategy slot field `agent` to the submit-task field `agent_kind`,
+- preserve explicit user/coordinator intent over strategy defaults,
+- generate concise placeholder objectives for slots without an `objective`, derived from the team objective and slot position,
+- mark optional operational slots such as `finisher` as conditional rather than automatically submitted,
+- keep `position` present for slot-derived tasks so worker/reviewer/finisher lanes remain visible, and
+- return data only; it must not submit tasks, schedule dependencies, route messages, or auto-wake the coordinator.
+
+Example skeleton output:
+
+```json
+{
+  "strategy": "docs-polish",
+  "team_id": "tm_123",
+  "tasks": [
+    {
+      "slot": "worker",
+      "position": "worker",
+      "role": "worker",
+      "agent_kind": "pi",
+      "model": "k2p5",
+      "objective": "Apply the requested docs-only improvement with the smallest safe diff."
+    },
+    {
+      "slot": "reviewer",
+      "position": "reviewer",
+      "role": "reviewer",
+      "agent_kind": "claude-code",
+      "model": "sonnet",
+      "objective": "Review the docs-only diff for meaning preservation and unrelated edits."
+    },
+    {
+      "slot": "finisher",
+      "position": "finisher",
+      "role": "pr-finisher",
+      "agent_kind": "claude-code",
+      "model": "sonnet",
+      "objective": "Verify implementation/review prerequisites, finish the requested PR/release/report-back work, and report completion.",
+      "conditional": true,
+      "condition": "Submit only if the parent explicitly requested PR/release finishing."
+    }
+  ],
+  "notes": [
+    "Review and adjust objectives before calling submit_team_tasks.",
+    "Do not submit conditional finisher slots unless PR/release finishing was requested."
+  ]
+}
+```
+
+This should be exposed as a helper/surface the coordinator can call after `start_team_strategy`, or as additional rendered strategy detail. It deliberately stops short of `start_team_strategy` auto-creating workers/reviewers; the coordinator remains responsible for task selection and final reporting.
+
 ### `guardrails`
 
 Constraints the coordinator should preserve while planning and delegating. These are prompt guidance, not hard runtime policy.
@@ -192,7 +248,11 @@ Autonomy:
 - You may add additional workers when useful.
 - Reviewer is required before final completion.
 
-Use cuekit tools to coordinate: submit_team_tasks, wait with follow_new_tasks, steer when needed, get_team_result, and report a final completed event.
+Use cuekit tools to coordinate: inspect the strategy's recommended team skeleton when useful, adjust it, submit_team_tasks, wait with follow_new_tasks, steer when needed, get_team_result, and report a final completed event.
+
+When submitting team tasks, set a clear position whenever the lifecycle lane is known: worker for implementation/investigation, reviewer for review, finisher for PR/release/cleanup finishing, observer for monitoring, and coordinator only for orchestration. Unpositioned team tasks are allowed for ambiguous ad-hoc work, but they will not appear in worker/reviewer/finisher lanes.
+
+When team status or result includes attention_items, inspect them before deciding whether to continue, submit more tasks, steer a task, or emit your final report.
 
 After a `position: finisher` task completes, inspect the team result with get_team_result and immediately emit your own final completed report — do not wait for parent steering. If no finisher was submitted, the coordinator remains responsible for the final durable report.
 ```
@@ -237,6 +297,26 @@ The `team start` / MCP operation should:
 4. return `team_id` and coordinator `task_id`, and
 5. leave worker/reviewer creation to the coordinator unless explicitly requested later.
 
+A follow-up CLI/MCP surface should expose the semi-automatic skeleton without submitting it. Possible shapes:
+
+```sh
+cuekit strategy slots docs-polish --team-id tm_123 --objective "README の wait 説明を改善" --format json
+```
+
+or grouped MCP/list detail output extending the existing strategy detail surface rather than creating a flat standalone MCP tool:
+
+```json
+{
+  "kind": "strategies",
+  "strategy": "docs-polish",
+  "include_task_skeleton": true,
+  "team_id": "tm_123",
+  "objective": "README の wait 説明を改善"
+}
+```
+
+The returned skeleton should be directly usable as a starting point for `submit_team_tasks`, but callers/coordinators must still decide which tasks to submit. If the grouped `cuekit_list kind=strategies` surface becomes too crowded, a human CLI helper such as `cuekit strategy slots` can share the same underlying renderer without adding a new MCP tool.
+
 ## Relationship to Existing Concepts
 
 ### Agent Profiles
@@ -257,7 +337,7 @@ takt-style workflows define executable steps and routing rules. cuekit strategie
 
 ## Open Questions
 
-1. Should the first `team start --strategy` submit only the coordinator, or optionally also seed initial worker/reviewer tasks?
+1. Should slot skeletons be exposed through `strategy show/list`, a dedicated `strategy slots` command, or a grouped MCP operation?
 2. Should `checks` allow structured entries later, e.g. `{ run: "bun test", required: true }`, or remain strings for v1?
 3. Should strategy `recommended_team` slots support multiple reviewers with the same position?
 4. Should `strategy show` render raw config, rendered prompt, or both?
@@ -270,4 +350,5 @@ takt-style workflows define executable steps and routing rules. cuekit strategie
 3. `cuekit strategy list/show`.
 4. `cuekit team start --strategy` that submits a coordinator with rendered strategy guidance.
 5. MCP operation for starting a strategy-backed team.
-6. Dogfood with `docs-polish`, `bugfix`, and `feature` strategies.
+6. Semi-automatic `recommended_team` slot materialization that returns a coordinator-facing `submit_team_tasks` skeleton without submitting it.
+7. Dogfood with `docs-polish`, `bugfix`, and `feature` strategies.

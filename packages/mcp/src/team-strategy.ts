@@ -95,7 +95,9 @@ export function renderTeamStrategyPrompt(input: {
 		renderList("Success criteria", input.strategy.success_criteria),
 		renderList("Checks", input.strategy.checks),
 		renderAutonomy(input.strategy),
-		"Use cuekit tools to coordinate: submit_team_tasks, wait with follow_new_tasks, steer when needed, get_team_result, and report a final completed event.",
+		"Use cuekit tools to coordinate: inspect the strategy's recommended team skeleton when useful, review and adjust it before submit_team_tasks, wait with follow_new_tasks, steer when needed, get_team_result, and report a final completed event. Cuekit will not auto-submit worker/reviewer tasks from the skeleton.",
+		"When submitting team tasks, set a clear position whenever the lifecycle lane is known: worker for implementation/investigation, reviewer for review, finisher for PR/release/cleanup finishing, observer for monitoring, and coordinator only for orchestration. Unpositioned team tasks are allowed for ambiguous ad-hoc work, but they will not appear in worker/reviewer/finisher lanes.",
+		"When team status or result includes attention_items, inspect them before deciding whether to continue, submit more tasks, steer a task, or emit your final report.",
 		"After a `position: finisher` task completes, inspect the team result with get_team_result and immediately emit your own final completed report — do not wait for parent steering. If no finisher was submitted, the coordinator remains responsible for the final durable report.",
 	];
 	return sections.filter((section): section is string => section !== undefined).join("\n\n");

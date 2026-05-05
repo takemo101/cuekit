@@ -2,12 +2,18 @@ import { loadProjectConfig, type TeamStrategy, TeamStrategySchema } from "@cueki
 import { z } from "incur";
 import type { CommandContext } from "../command-context.ts";
 import { renderTeamStrategyPrompt, resolveTeamStrategy } from "../team-strategy.ts";
+import {
+	buildTeamStrategyTaskSkeleton,
+	TeamStrategyTaskSkeletonSchema,
+} from "../team-strategy-slots.ts";
 
 export const ListStrategiesInputSchema = z.object({
 	cwd: z.string().min(1).optional(),
 	strategy: z.string().min(1).optional(),
 	include_prompt: z.boolean().optional(),
+	include_task_skeleton: z.boolean().optional(),
 	objective: z.string().min(1).optional(),
+	team_id: z.string().min(1).optional(),
 });
 export type ListStrategiesInput = z.infer<typeof ListStrategiesInputSchema>;
 
@@ -21,6 +27,7 @@ const StrategySummarySchema = z.object({
 const StrategyDetailSchema = StrategySummarySchema.extend({
 	strategy: TeamStrategySchema,
 	rendered_prompt: z.string().optional(),
+	task_skeleton: TeamStrategyTaskSkeletonSchema.optional(),
 });
 
 export const ListStrategiesOutputSchema = z.union([
@@ -48,11 +55,15 @@ export function runListStrategies(
 	_ctx: CommandContext,
 	input: ListStrategiesInput,
 ): ListStrategiesOutput {
-	if (!input.strategy && (input.include_prompt || input.objective)) {
+	if (
+		!input.strategy &&
+		(input.include_prompt || input.include_task_skeleton || input.objective || input.team_id)
+	) {
 		return {
 			error: {
 				code: "invalid_input",
-				message: "strategy is required when include_prompt or objective is provided",
+				message:
+					"strategy is required when include_prompt, include_task_skeleton, objective, or team_id is provided",
 			},
 		};
 	}
@@ -65,6 +76,7 @@ export function runListStrategies(
 	if (input.strategy) {
 		const resolved = resolveTeamStrategy(loaded.config, input.strategy);
 		if (!resolved.ok) return { error: resolved.error };
+		const objective = input.objective ?? "Review this strategy and coordinate the team.";
 		return {
 			strategy: {
 				...strategySummary(resolved.strategy_name, resolved.strategy),
@@ -74,7 +86,17 @@ export function runListStrategies(
 							rendered_prompt: renderTeamStrategyPrompt({
 								strategy_name: resolved.strategy_name,
 								strategy: resolved.strategy,
-								objective: input.objective ?? "Review this strategy and coordinate the team.",
+								objective,
+							}),
+						}
+					: {}),
+				...(input.include_task_skeleton
+					? {
+							task_skeleton: buildTeamStrategyTaskSkeleton({
+								strategy_name: resolved.strategy_name,
+								strategy: resolved.strategy,
+								objective,
+								...(input.team_id ? { team_id: input.team_id } : {}),
 							}),
 						}
 					: {}),

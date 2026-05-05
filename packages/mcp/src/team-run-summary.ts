@@ -7,11 +7,18 @@ import {
 import { listTaskEvents, type Task } from "@cuekit/store";
 import { z } from "incur";
 import type { CommandContext } from "./command-context.ts";
+import {
+	buildManualSteerHintsFromAttentionItems,
+	buildTeamAttentionItemsFromEvents,
+	ManualSteerHintSchema,
+	TEAM_ATTENTION_MESSAGE_PREVIEW_LENGTH,
+	TeamAttentionItemSchema,
+} from "./team-attention.ts";
 
 const POSITIONS = ["coordinator", "worker", "reviewer", "finisher", "observer"] as const;
 const REPORT_TYPES = new Set(["progress", "completed", "failed", "blocked", "help_requested"]);
 const TERMINAL_REPORT_TYPES = new Set(["completed", "failed", "blocked"]);
-const MAX_MESSAGE_LENGTH = 240;
+const MAX_MESSAGE_LENGTH = TEAM_ATTENTION_MESSAGE_PREVIEW_LENGTH;
 const MAX_ENTRIES_PER_POSITION = 5;
 
 export const TeamRunSummaryEntrySchema = z.object({
@@ -26,6 +33,8 @@ export const TeamRunSummarySchema = z.object({
 	terminal_reports: z.number().int().nonnegative(),
 	latest_terminal_message: z.string().optional(),
 	positions: z.record(TeamPositionSchema, z.array(TeamRunSummaryEntrySchema)),
+	attention_items: z.array(TeamAttentionItemSchema).optional(),
+	manual_steer_hints: z.array(ManualSteerHintSchema).optional(),
 	open_attention: z
 		.array(
 			z.object({
@@ -107,11 +116,16 @@ export function buildTeamRunSummary(ctx: CommandContext, tasks: Task[]): TeamRun
 	const filesRead: string[] = [];
 	const filesWritten: string[] = [];
 	const diagnostics: NonNullable<TeamRunSummary["observability"]>["diagnostics"] = [];
+	const taskEvents = tasks.map((task) => ({ task, events: listTaskEvents(ctx.db, task.id) }));
+	const attentionItems = buildTeamAttentionItemsFromEvents(taskEvents, {
+		includeFullMessage: false,
+	});
+	const manualSteerHints = buildManualSteerHintsFromAttentionItems(attentionItems);
 
-	for (const task of tasks) {
+	for (const { task, events } of taskEvents) {
 		const position = taskPosition(task);
 		let latestMessage: string | undefined;
-		for (const event of listTaskEvents(ctx.db, task.id)) {
+		for (const event of events) {
 			const observability = parseTaskObservabilityPayload(event.payload);
 			appendUnique(filesRead, observability?.files?.read);
 			appendUnique(filesWritten, observability?.files?.written);
@@ -188,6 +202,8 @@ export function buildTeamRunSummary(ctx: CommandContext, tasks: Task[]): TeamRun
 		terminal_reports: terminalReports,
 		...(latestTerminal ? { latest_terminal_message: truncateMessage(latestTerminal.message) } : {}),
 		positions,
+		...(attentionItems.length > 0 ? { attention_items: attentionItems } : {}),
+		...(manualSteerHints.length > 0 ? { manual_steer_hints: manualSteerHints } : {}),
 		...(openAttention.length > 0 ? { open_attention: openAttention } : {}),
 		...(observability ? { observability } : {}),
 	};

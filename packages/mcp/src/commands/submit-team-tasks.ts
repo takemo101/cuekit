@@ -8,10 +8,7 @@ import {
 import { getSessionById, getTaskById, getTaskTeamById } from "@cuekit/store";
 import { z } from "incur";
 import type { CommandContext } from "../command-context.ts";
-import {
-	CoordinatorBatchModeWarningSchema,
-	coordinatorBatchModeWarnings,
-} from "../coordinator-batch-warning.ts";
+import { TeamTaskWarningSchema, teamTaskWarnings } from "../team-task-warnings.ts";
 import { runSubmitTask, SubmitTaskInputSchema } from "./submit-task.ts";
 
 export const SubmitTeamTaskItemSchema = SubmitTaskInputSchema.omit({
@@ -47,7 +44,7 @@ const AcceptedTeamTaskSchema = z.object({
 	role: z.string().optional(),
 	position: TeamPositionSchema.optional(),
 	model: z.string().optional(),
-	warnings: z.array(CoordinatorBatchModeWarningSchema).optional(),
+	warnings: z.array(TeamTaskWarningSchema).optional(),
 });
 
 const RejectedTeamTaskSchema = z.object({
@@ -166,7 +163,7 @@ export async function runSubmitTeamTasks(
 		});
 		if (result.accepted) {
 			const createdTask = getTaskById(ctx.db, result.task_id);
-			const warnings = coordinatorBatchModeWarnings({
+			const warnings = teamTaskWarnings({
 				position: task.position,
 				adapter_options: effectiveTask.adapter_options,
 			});

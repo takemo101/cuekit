@@ -1,10 +1,7 @@
 import { z } from "incur";
+import { COORDINATOR_BATCH_MODE_WARNING, teamTaskWarnings } from "./team-task-warnings.ts";
 
-export const COORDINATOR_BATCH_MODE_WARNING = {
-	code: "coordinator_batch_mode",
-	message:
-		"Coordinator tasks are orchestration-heavy; batch mode may stall or be unsteerable. Prefer interactive mode for coordination and use batch for focused worker/reviewer tasks.",
-} as const;
+export { COORDINATOR_BATCH_MODE_WARNING };
 
 export type CoordinatorBatchModeWarning = typeof COORDINATOR_BATCH_MODE_WARNING;
 
@@ -17,7 +14,8 @@ export function coordinatorBatchModeWarnings(input: {
 	position?: string;
 	adapter_options?: Record<string, unknown>;
 }): CoordinatorBatchModeWarning[] | undefined {
-	if (input.position !== "coordinator") return undefined;
-	if (input.adapter_options?.mode !== "batch") return undefined;
-	return [COORDINATOR_BATCH_MODE_WARNING];
+	const warnings = teamTaskWarnings(input)?.filter(
+		(warning): warning is CoordinatorBatchModeWarning => warning.code === "coordinator_batch_mode",
+	);
+	return warnings && warnings.length > 0 ? warnings : undefined;
 }

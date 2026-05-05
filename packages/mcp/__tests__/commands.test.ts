@@ -174,11 +174,12 @@ describe("team commands", () => {
 			objective: "finish",
 			status: "completed",
 		});
+		const longFinisherMessage = `PR merged and branch cleaned up ${"x".repeat(260)}`;
 		appendTaskEvent(db, {
 			id: "e_finisher_done",
 			task_id: "t_finisher",
 			type: "completed",
-			message: "PR merged and branch cleaned up",
+			message: longFinisherMessage,
 		});
 		appendTaskEvent(db, {
 			id: "e_coord_done",
@@ -224,9 +225,17 @@ describe("team commands", () => {
 		expect(result.run_summary.positions.reviewer[0]?.message).toBe(
 			"Reviewer is checking schema risks",
 		);
-		expect(result.run_summary.positions.finisher[0]?.message).toBe(
-			"PR merged and branch cleaned up",
+		expect(result.run_summary.positions.finisher[0]?.message).toHaveLength(240);
+		expect(result.run_summary.positions.finisher[0]?.message).toEndWith("…");
+		expect(result.run_summary.attention_items?.map((item) => item.position)).toEqual(["finisher"]);
+		expect(result.run_summary.attention_items?.[0]?.message).toHaveLength(240);
+		expect(result.run_summary.attention_items?.[0]?.message).toEndWith("…");
+		expect(result.run_summary.attention_items?.[0]?.message).toBe(
+			result.run_summary.positions.finisher[0]?.message,
 		);
+		expect(
+			result.run_summary.attention_items?.some((item) => item.position === "coordinator"),
+		).toBe(false);
 		expect(result.run_summary.open_attention?.[0]?.task_id).toBe("t_review");
 		expect(result.run_summary.observability).toEqual({
 			files_read: ["packages/mcp/src/team-run-summary.ts", "packages/core/src/team.ts"],
@@ -623,6 +632,31 @@ describe("submit-team-tasks", () => {
 		expect(result.rejected[0]?.error.message).toContain("tasks[0].objective");
 	});
 
+	it("accepts unpositioned team tasks with a warning instead of hard-rejecting", async () => {
+		createSession(db, {
+			id: "s_team_unpositioned",
+			project_root: "/p",
+			worktree_path: "/w",
+			parent_agent_kind: "pi",
+		});
+		createTaskTeam(db, { id: "tm_unpositioned", session_id: "s_team_unpositioned", title: "Team" });
+
+		const result = await runSubmitTeamTasks(ctx, {
+			team_id: "tm_unpositioned",
+			tasks: [{ objective: "Scout without a lane", agent_kind: "claude-code" }],
+		});
+
+		expect("accepted" in result).toBe(true);
+		if (!("accepted" in result)) return;
+		expect(result.rejected).toEqual([]);
+		expect(result.accepted[0]).toMatchObject({
+			index: 0,
+			agent_kind: "claude-code",
+			warnings: [expect.objectContaining({ code: "missing_team_position" })],
+		});
+		expect(result.accepted[0]?.position).toBeUndefined();
+	});
+
 	it("keeps accepted tasks when later task input is malformed", async () => {
 		createSession(db, {
 			id: "s1",
@@ -810,6 +844,13 @@ describe("wait-team and cleanup-team", () => {
 		expect(result.done).toBe(true);
 		expect(result.tasks.map((task) => task.task_id)).toEqual(["t_done"]);
 		expect(result.run_summary.positions.worker[0]?.message).toBe("Worker finished implementation");
+		expect(result.run_summary.attention_items?.[0]).toMatchObject({
+			task_id: "t_done",
+			position: "worker",
+			type: "completed",
+			reason: "terminal_report",
+			message: "Worker finished implementation",
+		});
 		expect(result.cleanup_hint).toContain("cuekit_cleanup");
 		expect(result.cleanup_hint).toContain("tm_1");
 	});
@@ -1019,11 +1060,12 @@ describe("team result", () => {
 			objective: "coordinate",
 			status: "completed",
 		});
+		const longWorkerResultMessage = `worker final report ${"x".repeat(260)}`;
 		appendTaskEvent(db, {
 			id: "e_worker_result",
 			task_id: "t_worker_result",
 			type: "completed",
-			message: "worker final report",
+			message: longWorkerResultMessage,
 		});
 		appendTaskEvent(db, {
 			id: "e_reviewer_result",
@@ -1058,11 +1100,23 @@ describe("team result", () => {
 			"coordinator",
 		]);
 		expect(result.timeline.map((event) => event.message)).toEqual([
-			"worker final report",
+			longWorkerResultMessage,
 			"reviewer final report",
 			"finisher final report",
 			"coordinator final report",
 		]);
+		expect(result.attention_items?.map((item) => item.position)).toEqual([
+			"worker",
+			"reviewer",
+			"finisher",
+		]);
+		expect(result.attention_items?.map((item) => item.message)).toEqual([
+			longWorkerResultMessage,
+			"reviewer final report",
+			"finisher final report",
+		]);
+		expect(result.attention_items?.[0]?.message).toHaveLength(longWorkerResultMessage.length);
+		expect(result.attention_items?.some((item) => item.position === "coordinator")).toBe(false);
 		expect(result.cleanup_hint).toContain("cuekit_cleanup");
 		expect(result.cleanup_hint).toContain("tm_result");
 	});

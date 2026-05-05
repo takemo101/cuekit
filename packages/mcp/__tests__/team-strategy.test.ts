@@ -79,7 +79,15 @@ describe("team strategy helpers", () => {
 		expect(prompt).toContain("Checks:");
 		expect(prompt).toContain("git diff --check");
 		expect(prompt).toContain("submit_team_tasks");
+		expect(prompt).toContain("recommended team skeleton");
+		expect(prompt).toContain("review and adjust it before submit_team_tasks");
+		expect(prompt).toContain("Cuekit will not auto-submit worker/reviewer tasks");
 		expect(prompt).toContain("follow_new_tasks");
+		expect(prompt).toContain("When submitting team tasks, set a clear position");
+		expect(prompt).toContain("worker for implementation/investigation");
+		expect(prompt).toContain("Unpositioned team tasks are allowed");
+		expect(prompt).toContain("attention_items");
+		expect(prompt).toContain("inspect them before deciding whether to continue");
 		expect(prompt).not.toContain("Validation:");
 	});
 
@@ -96,5 +104,22 @@ describe("team strategy helpers", () => {
 		expect(prompt).toContain("After a `position: finisher` task completes");
 		expect(prompt).toContain("get_team_result");
 		expect(prompt).toContain("do not wait for parent steering");
+	});
+
+	it("includes explicit position assignment guidance in coordinator prompt", () => {
+		const result = resolveTeamStrategy(config, "docs-polish");
+		if (!result.ok) throw new Error("setup failed");
+
+		const prompt = renderTeamStrategyPrompt({
+			strategy_name: result.strategy_name,
+			strategy: result.strategy,
+			objective: "Polish README wait guidance.",
+		});
+
+		expect(prompt).toContain("worker for implementation");
+		expect(prompt).toContain("reviewer for review");
+		expect(prompt).toContain("finisher for PR");
+		expect(prompt).toContain("coordinator only for orchestration");
+		expect(prompt).toContain("will not appear in worker/reviewer/finisher lanes");
 	});
 });

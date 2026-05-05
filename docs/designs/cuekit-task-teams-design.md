@@ -76,7 +76,7 @@ Included:
 - `cleanup_team`
 - TUI display-only team and position metadata
 
-Tasks are added manually by passing `team_id` to `submit_task`. `position` is optional but recommended for team tasks.
+Tasks are added manually by passing `team_id` to `submit_task`. `position` is optional but recommended for team tasks. Missing position is not a hard error because ambiguous ad-hoc tasks are valid in Swarm-lite workflows. Phase 2 `submit_team_tasks` should surface a warning because unpositioned tasks do not appear in coordinator/worker/reviewer/finisher/observer lanes.
 
 ### Phase 2: Batch team task submission and prompt context
 
@@ -88,6 +88,7 @@ Included:
 - team-position aware batch submission
 - lightweight team context prompt injection
 - coordinator prompt guidance for using existing MCP tools such as `get_team_status`, `wait_team`, `get_task_result`, `steer_task`, and `submit_team_tasks`
+- coordinator prompt guidance to assign `position` when the lifecycle lane is known (`worker` for implementation/investigation, `reviewer` for review, `finisher` for PR/release/cleanup finishing, `observer` for monitoring, and `coordinator` only for orchestration)
 - coordinator runtime guidance: choose the caller/orchestrator runtime or an equivalent MCP-capable runtime
 
 This keeps `create_team` simple and makes adding more tasks to an existing team natural. Coordinator behavior remains prompt-guided, not runtime-enforced.
@@ -100,6 +101,7 @@ Potential later work:
 - TUI team/collapsible view
 - team create/wait/cleanup actions in TUI
 - team messages or coordinator notes
+- semi-automatic strategy slot materialization: generate a coordinator-facing `submit_team_tasks` skeleton from `.cuekit.yaml` `recommended_team` slots without auto-submitting tasks
 - lightweight conflict hints from declared scopes or git diff
 - optional worktree grouping
 
@@ -485,6 +487,7 @@ Output:
     role?: string;
     position?: TeamPosition;
     model?: string;
+    warnings?: TeamTaskWarning[];
   }>;
   rejected: Array<{
     index: number;
@@ -492,6 +495,23 @@ Output:
   }>;
 }
 ```
+
+`submit_team_tasks` accepted task warnings:
+
+- `missing_team_position`: emitted when a task is accepted without a `position`. The task is not rejected — unpositioned tasks are valid for ambiguous ad-hoc work — but callers should set a position when the lifecycle lane is known. Unpositioned tasks do not appear in coordinator/worker/reviewer/finisher/observer lanes.
+- `coordinator_batch_mode`: emitted when `position: "coordinator"` is combined with `adapter_options.mode: "batch"`. Coordinator tasks are orchestration-heavy and may stall or be unsteerable in batch mode. Prefer interactive mode for coordination; use batch for focused worker/reviewer tasks.
+
+### Role split: parent, coordinator, worker, reviewer, finisher
+
+The intended lifecycle role split for team-based workflows:
+
+- **parent/orchestrator**: the calling agent (e.g., the user or an upstream task). Creates the team, starts a coordinator via `start_team_strategy` or `submit_team_tasks`, then monitors via `wait_team` / `get_team_result`.
+- **coordinator** (`position: coordinator`): leads the team inside the session. Uses cuekit MCP tools to submit workers/reviewers, wait for team progress (using `follow_new_tasks` where available), inspect task results, steer stalled tasks, and emit a final durable completed report.
+- **worker** (`position: worker`): completes a scoped implementation, research, or docs task. Reports progress and completion through cuekit reporting; does not orchestrate the team.
+- **reviewer** (`position: reviewer`): reviews combined team output or a specific worker's output. Produces concrete findings with task/file references.
+- **finisher** (`position: finisher`): owns the final release/report-back lane (PR completion, durable coordinator notification). Runs after implementation/review prerequisites are satisfied. When a finisher completes, the coordinator should immediately call `get_team_result` and emit its own final completed report.
+
+Positions are metadata, not enforcement. Cuekit does not block workers from using coordinator tools or prevent coordinators from doing implementation work. The split is prompt guidance and TUI display convention.
 
 ### Team context prompt injection
 
@@ -686,6 +706,10 @@ Cleanup of an empty team is not an error.
 - task outputs include index and position for stable caller mapping
 - team context prompt is injected before cuekit's final reporting contract
 - coordinator prompt mentions allowed MCP inspection/steering behavior without implying automatic routing
+- coordinator prompt includes explicit position guidance: worker/reviewer/finisher/coordinator lanes and that unpositioned tasks will not appear in those lanes
+- accepted task without position gets `missing_team_position` warning; task is not rejected
+- accepted coordinator task with batch adapter mode gets `coordinator_batch_mode` warning
+- accepted tasks with worker/reviewer/finisher/observer positions get no warnings
 
 ## Compatibility and Migration
 

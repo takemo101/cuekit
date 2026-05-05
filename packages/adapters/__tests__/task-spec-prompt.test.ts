@@ -34,11 +34,32 @@ describe("renderTaskSpecPrompt", () => {
 		expect(prompt).toContain("wait with bounded polling");
 		expect(prompt).toContain("request reviewer tasks");
 		expect(prompt).toContain("steer_task or steer_team");
+		expect(prompt).toContain("When submitting team tasks, set a clear position");
+		expect(prompt).toContain("worker for implementation/investigation");
+		expect(prompt).toContain("Unpositioned team tasks are allowed");
+		expect(prompt).toContain("When team status or result includes attention_items");
+		expect(prompt).toContain("inspect them before deciding whether to continue");
 		expect(prompt).toContain("report a final team summary");
 		expect(prompt).not.toContain("automatically schedules");
 		expect(prompt.indexOf("Team context:")).toBeLessThan(
 			prompt.indexOf("Child reporting contract:"),
 		);
+	});
+
+	it("injects finisher-specific team context", () => {
+		const prompt = renderTaskSpecPrompt({
+			agent_kind: "claude-code",
+			objective: "finish the PR",
+			team_context: {
+				team_id: "tm_1",
+				title: "Launch",
+				position: "finisher",
+			},
+		});
+
+		expect(prompt).toContain("You are the finisher in cuekit team tm_1: Launch.");
+		expect(prompt).toContain("final release, PR, cleanup, or report-back lane");
+		expect(prompt).toContain("emit a durable completed report");
 	});
 
 	it("injects the child reporting contract", () => {

@@ -291,7 +291,13 @@ const ListInputSchema = z
 			.min(1)
 			.optional()
 			.describe("Worktree filter for tasks, teams, and profiles; project root for strategies."),
-		team_id: z.string().min(1).optional().describe("Team filter when kind is tasks."),
+		team_id: z
+			.string()
+			.min(1)
+			.optional()
+			.describe(
+				"Team filter when kind is tasks; echoed into task skeletons when kind is strategies.",
+			),
 		position: z.string().optional().describe("Team position filter when kind is tasks."),
 		limit: z.number().int().positive().optional(),
 		cursor: z.string().optional(),
@@ -302,12 +308,18 @@ const ListInputSchema = z
 			.boolean()
 			.optional()
 			.describe("Include rendered coordinator prompt when kind is strategies and strategy is set."),
+		include_task_skeleton: z
+			.boolean()
+			.optional()
+			.describe(
+				"Include a coordinator-facing submit_team_tasks skeleton when kind is strategies and strategy is set.",
+			),
 		objective: z
 			.string()
 			.min(1)
 			.optional()
 			.describe(
-				"Objective used for rendered_prompt when kind is strategies and include_prompt is true.",
+				"Objective used for rendered_prompt and task_skeleton when kind is strategies and the corresponding include flag is true.",
 			),
 	})
 	.passthrough();
