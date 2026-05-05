@@ -22,6 +22,7 @@ function renderTeamContext(spec: TaskSpec): string | undefined {
 		return `${preamble}
 You are the coordinator for ${header}.
 Use cuekit tools when available. Recommended flow: inspect team status, submit workers for scoped tasks, wait with bounded polling (use follow_new_tasks when you expect to create more tasks), inspect results/events, request reviewer tasks, use steer_task or steer_team for stalled/off-scope work, then report a final team summary.
+When team status or result includes attention_items, inspect them before deciding whether to continue, submit more tasks, steer a task, or emit your final report.
 You are expected to run in the same coding-agent runtime as the caller/orchestrator, or another runtime with equivalent cuekit MCP/CLI access.
 Cuekit will not schedule, route messages, or enforce coordinator authority for you; coordinate explicitly and do not micromanage workers unnecessarily. Do not cleanup tasks unless explicitly requested.`;
 	}

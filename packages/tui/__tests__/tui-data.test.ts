@@ -8,6 +8,7 @@ import {
 	appendTaskEvent,
 	createSession,
 	createTask,
+	createTaskTeam,
 	getTaskById,
 	listTaskEvents,
 	listTasks,
@@ -150,6 +151,65 @@ describe("tui data helpers", () => {
 		expect(detail.status.task_id).toBe(task.id);
 		expect(detail.events).toHaveLength(1);
 		expect(detail.events[0]?.message).toBe("halfway");
+	});
+
+	it("loads team attention items for selected team tasks when team status is available", async () => {
+		const { db, tui } = makeCtx();
+		createSession(db, {
+			id: "s_team_attention",
+			project_root: "/tmp/cuekit-tui-data",
+			worktree_path: "/tmp/cuekit-tui-data",
+			parent_agent_kind: "cli",
+		});
+		createTaskTeam(db, { id: "tm_1", session_id: "s_team_attention", title: "Team" });
+		const task = createTask(db, {
+			id: "t_team_attention",
+			session_id: "s_team_attention",
+			agent_kind: "pi",
+			team_id: "tm_1",
+			team_position: "coordinator",
+			objective: "coordinate",
+			status: "running",
+		});
+		const teamCtx: TuiContext = {
+			...tui,
+			async getTaskStatus(taskId) {
+				const status = await tui.getTaskStatus(taskId);
+				return { ...status, team_id: "tm_1", position: "coordinator" };
+			},
+			async getTeamStatus(teamId) {
+				return {
+					team_id: teamId,
+					run_summary: {
+						attention_items: [
+							{
+								sequence: 1,
+								task_id: "t_worker",
+								position: "worker",
+								type: "help_requested",
+								message_preview: "need input",
+								created_at: "2026-05-01T00:00:00.000Z",
+							},
+						],
+						manual_steer_hints: [
+							{
+								attention_sequence: 1,
+								task_id: "t_worker",
+								position: "worker",
+								tool: "steer_task",
+								suggested_message: "Please clarify",
+								rationale: "Manual helper only",
+							},
+						],
+					},
+				};
+			},
+		};
+
+		const detail = await loadTaskDetail(teamCtx, task.id);
+
+		expect(detail.teamAttentionItems?.[0]?.message_preview).toBe("need input");
+		expect(detail.manualSteerHints?.[0]?.tool).toBe("steer_task");
 	});
 
 	it("keeps status and transcript data when task event loading fails", async () => {

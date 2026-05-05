@@ -34,6 +34,8 @@ describe("renderTaskSpecPrompt", () => {
 		expect(prompt).toContain("wait with bounded polling");
 		expect(prompt).toContain("request reviewer tasks");
 		expect(prompt).toContain("steer_task or steer_team");
+		expect(prompt).toContain("When team status or result includes attention_items");
+		expect(prompt).toContain("inspect them before deciding whether to continue");
 		expect(prompt).toContain("report a final team summary");
 		expect(prompt).not.toContain("automatically schedules");
 		expect(prompt.indexOf("Team context:")).toBeLessThan(

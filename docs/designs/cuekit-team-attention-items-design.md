@@ -48,7 +48,11 @@ type TeamAttentionItem = {
   position?: TeamPosition;
   type: "completed" | "failed" | "blocked" | "help_requested";
   reason: TeamAttentionReason;
+  /** Compatibility alias: full on result surfaces, preview on status/wait summaries. */
   message?: string;
+  message_preview?: string;
+  full_message?: string;
+  steer_target: { task_id: string; event_sequence: number };
   created_at: string;
 };
 ```
@@ -84,7 +88,29 @@ run_summary: {
       type: "completed",
       reason: "terminal_report",
       message: "PR created and checks are green",
+      message_preview: "PR created and checks are green",
+      steer_target: { task_id: "t_finisher", event_sequence: 123 },
       created_at: "2026-05-05T00:00:00.000Z"
+    },
+    {
+      sequence: 124,
+      task_id: "t_worker",
+      position: "worker",
+      type: "blocked",
+      reason: "terminal_report",
+      message: "Need repo context before continuing",
+      message_preview: "Need repo context before continuing",
+      steer_target: { task_id: "t_worker", event_sequence: 124 },
+      created_at: "2026-05-05T00:01:00.000Z"
+    }
+  ],
+  manual_steer_hints: [
+    {
+      attention_sequence: 124,
+      task_id: "t_worker",
+      target: { kind: "task", task_id: "t_worker" },
+      tool: "steer_task",
+      suggested_message: "Please respond to this blocked attention item..."
     }
   ]
 }
@@ -97,11 +123,39 @@ run_summary: {
 ```ts
 {
   timeline: [...],
-  attention_items: [...]
+  attention_items: [
+    {
+      sequence: 124,
+      task_id: "t_worker",
+      position: "worker",
+      type: "blocked",
+      reason: "terminal_report",
+      message: "Full terminal/help report text",
+      message_preview: "Full terminal/help report text",
+      full_message: "Full terminal/help report text",
+      steer_target: { task_id: "t_worker", event_sequence: 124 }
+    }
+  ],
+  manual_steer_hints: [
+    {
+      attention_sequence: 124,
+      task_id: "t_worker",
+      target: { kind: "task", task_id: "t_worker" },
+      tool: "steer_task"
+    }
+  ]
 }
 ```
 
 The full timeline remains the audit trail. Attention items are a concise “look here first” summary.
+
+### Message and manual steer semantics
+
+- `run_summary.attention_items[].message` is summary-safe and may be truncated for status/wait surfaces.
+- `get_team_result.attention_items[].message` preserves the full event message for audit/result inspection.
+- `full_message` is included only on full result surfaces; summary surfaces omit it to keep status/wait compact.
+- `message_preview` is always the concise display string when an event message exists, so clients do not need to invent their own preview policy.
+- `steer_target` and `manual_steer_hints` are manual convenience pointers a parent/coordinator may inspect before calling `steer_task`; they are not a delivery queue, suggested automatic action, auto-steer trigger, or ack/read state.
 
 ## Coordinator Guidance
 
@@ -127,6 +181,7 @@ This is prompt guidance only. The parent or coordinator remains responsible for 
 - The extraction is data-driven by `team_position` and event type; it does not special-case `role: pr-finisher`.
 - Tests cover worker blocked, reviewer failed, finisher completed, help requested, coordinator completed excluded, sequence ordering, and cap behavior.
 - `run_summary.attention_items` and `get_team_result.attention_items` expose the derived items.
+- Attention items include `message_preview` for display, optional `full_message` on result surfaces, and `steer_target`/`manual_steer_hints` for manual inspection/steering workflows without automatic delivery semantics.
 - Coordinator prompt rendering tells coordinators to inspect attention items before deciding the next action.
 
 ## Future Implementation Notes

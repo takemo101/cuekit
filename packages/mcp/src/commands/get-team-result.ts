@@ -8,7 +8,12 @@ import { getTaskTeamById, listTaskEvents, listTasksByTeam } from "@cuekit/store"
 import { z } from "incur";
 import { cleanupHintForTeam } from "../cleanup-hints.ts";
 import type { CommandContext } from "../command-context.ts";
-import { buildTeamAttentionItems, TeamAttentionItemSchema } from "../team-attention.ts";
+import {
+	buildManualSteerHintsFromAttentionItems,
+	buildTeamAttentionItemsFromEvents,
+	ManualSteerHintSchema,
+	TeamAttentionItemSchema,
+} from "../team-attention.ts";
 import { buildTeamSummary } from "../team-status.ts";
 
 const TERMINAL_REPORT_TYPES = new Set(["completed", "failed", "blocked"]);
@@ -44,6 +49,7 @@ export const GetTeamResultOutputSchema = z.union([
 		final_summary: z.string().optional(),
 		timeline: z.array(TeamResultTimelineEntrySchema),
 		attention_items: z.array(TeamAttentionItemSchema).optional(),
+		manual_steer_hints: z.array(ManualSteerHintSchema).optional(),
 		cleanup_hint: z.string().optional(),
 	}),
 	z.object({
@@ -70,10 +76,11 @@ export function runGetTeamResult(
 	}
 
 	const tasks = listTasksByTeam(ctx.db, team.id);
+	const taskEvents = tasks.map((task) => ({ task, events: listTaskEvents(ctx.db, task.id) }));
 	const tasksById = new Map(tasks.map((task) => [task.id, task]));
-	const timeline = tasks
-		.flatMap((task) =>
-			listTaskEvents(ctx.db, task.id)
+	const timeline = taskEvents
+		.flatMap(({ task, events }) =>
+			events
 				.filter((event) => REPORT_TYPES.has(event.type))
 				.map((event) => ({
 					sequence: event.sequence,
@@ -94,7 +101,8 @@ export function runGetTeamResult(
 		(event) => TERMINAL_REPORT_TYPES.has(event.type) && event.message,
 	);
 	const finalSummary = latestCoordinatorTerminal?.message ?? latestTerminal?.message;
-	const attentionItems = buildTeamAttentionItems(ctx.db, tasks);
+	const attentionItems = buildTeamAttentionItemsFromEvents(taskEvents);
+	const manualSteerHints = buildManualSteerHintsFromAttentionItems(attentionItems);
 	const summary = buildTeamSummary(team, [...tasksById.values()]);
 	const cleanupHint = cleanupHintForTeam(
 		team.id,
@@ -109,6 +117,7 @@ export function runGetTeamResult(
 		...(finalSummary ? { final_summary: finalSummary } : {}),
 		timeline,
 		...(attentionItems.length > 0 ? { attention_items: attentionItems } : {}),
+		...(manualSteerHints.length > 0 ? { manual_steer_hints: manualSteerHints } : {}),
 		...(cleanupHint ? { cleanup_hint: cleanupHint } : {}),
 	};
 }

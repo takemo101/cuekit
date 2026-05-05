@@ -8,7 +8,10 @@ import {
 	runMigrations,
 	type Task,
 } from "@cuekit/store";
-import { buildTeamAttentionItems } from "../src/team-attention.ts";
+import {
+	buildManualSteerHintsFromAttentionItems,
+	buildTeamAttentionItems,
+} from "../src/team-attention.ts";
 
 let db: Database;
 let tasks: Task[];
@@ -112,7 +115,59 @@ describe("team attention items", () => {
 			type: "help_requested",
 			reason: "help_requested",
 			message: "need parent input",
+			message_preview: "need parent input",
+			full_message: "need parent input",
+			steer_target: { task_id: "t_worker" },
 		});
+	});
+
+	it("exposes explicit preview and full-message semantics without removing message", () => {
+		task("t_worker", "worker", "blocked");
+		const longMessage = `${"x".repeat(260)} tail`;
+		appendTaskEvent(db, {
+			id: "e_long",
+			task_id: "t_worker",
+			type: "blocked",
+			message: longMessage,
+		});
+
+		const fullItems = buildTeamAttentionItems(db, tasks);
+		const previewItems = buildTeamAttentionItems(db, tasks, { includeFullMessage: false });
+
+		expect(fullItems[0]?.message).toBe(longMessage);
+		expect(fullItems[0]?.full_message).toBe(longMessage);
+		expect(fullItems[0]?.message_preview?.endsWith("…")).toBe(true);
+		expect(previewItems[0]?.message).toBe(previewItems[0]?.message_preview);
+		expect(previewItems[0]?.full_message).toBeUndefined();
+	});
+
+	it("builds manual steer hints as data only for blocked/help attention items", () => {
+		task("t_worker", "worker", "blocked");
+		task("t_done", "finisher", "completed");
+		appendTaskEvent(db, {
+			id: "e_blocked",
+			task_id: "t_worker",
+			type: "blocked",
+			message: "need repo context",
+		});
+		appendTaskEvent(db, {
+			id: "e_done",
+			task_id: "t_done",
+			type: "completed",
+			message: "done",
+		});
+
+		const hints = buildManualSteerHintsFromAttentionItems(buildTeamAttentionItems(db, tasks));
+
+		expect(hints).toHaveLength(1);
+		expect(hints[0]).toMatchObject({
+			task_id: "t_worker",
+			position: "worker",
+			target: { kind: "task", task_id: "t_worker" },
+			tool: "steer_task",
+		});
+		expect(hints[0]?.suggested_message).toContain("need repo context");
+		expect(hints[0]?.rationale).toContain("will not auto-steer");
 	});
 
 	it("sorts globally by event sequence instead of task iteration order", () => {

@@ -47,6 +47,46 @@ function detailTitle(task: TaskSummary, status: TaskStatus): string {
 }
 
 type MetadataEntry = { label: string; value: string; color?: string };
+type AttentionEntry = { sequence: number; type: string; message: string; color?: string };
+
+const ATTENTION_EVENT_TYPES = new Set(["completed", "failed", "blocked", "help_requested"]);
+
+export function attentionEntries(detail: TuiTaskDetail | undefined): AttentionEntry[] {
+	if (detail?.teamStatusError) {
+		return [
+			{
+				sequence: 0,
+				type: "team_status",
+				message: `team status error: ${detail.teamStatusError}`,
+				color: theme.red,
+			},
+		];
+	}
+	if (detail?.teamAttentionItems && detail.teamAttentionItems.length > 0) {
+		return detail.teamAttentionItems.slice(-3).map((item) => {
+			const hasManualSteerHint = detail.manualSteerHints?.some(
+				(hint) => hint.attention_sequence === item.sequence,
+			);
+			const message = item.message_preview ?? item.message ?? item.full_message ?? "";
+			return {
+				sequence: item.sequence,
+				type: item.type,
+				message: `${item.position ? `${item.position}: ` : ""}${message}${hasManualSteerHint ? " ↪ steer hint" : ""}`,
+				color: eventTypeColor(item.type),
+			};
+		});
+	}
+	if (!detail || detail.status.position === "coordinator") return [];
+	return detail.events
+		.filter((event) => ATTENTION_EVENT_TYPES.has(event.type))
+		.slice(-3)
+		.map((event) => ({
+			sequence: event.sequence,
+			type: event.type,
+			message: event.message ?? "",
+			color: eventTypeColor(event.type),
+		}));
+}
 
 export function metadataEntries(
 	task: TaskSummary,
@@ -80,6 +120,13 @@ export function metadataEntries(
 	}
 	if (teamId) {
 		entries.push({ label: "team", value: teamId, color: theme.purple });
+	}
+	if (detail?.teamStatusError) {
+		entries.push({
+			label: "team status",
+			value: truncateEnd(detail.teamStatusError, 110),
+			color: theme.red,
+		});
 	}
 	if (position) {
 		entries.push({ label: "position", value: position, color: theme.purple });
@@ -134,9 +181,14 @@ function eventTypeColor(type: string): string {
 	return theme.purple;
 }
 
-export function contextHeight(metadata: MetadataEntry[], events: TuiTaskEvent[]): number {
+export function contextHeight(
+	metadata: MetadataEntry[],
+	events: TuiTaskEvent[],
+	attention: AttentionEntry[] = [],
+): number {
 	const eventRows = Math.max(1, events.length * 2);
-	return Math.min(12, Math.max(4, metadata.length + 1 + eventRows));
+	const attentionRows = attention.length > 0 ? attention.length + 1 : 0;
+	return Math.min(12, Math.max(4, metadata.length + 1 + eventRows + attentionRows));
 }
 
 function terminalEvent(detail: TuiTaskDetail | undefined): TuiTaskEvent | undefined {
@@ -174,6 +226,24 @@ function EventHeader(props: { count: number; error?: string }): ReactNode {
 	);
 }
 
+function AttentionHeader(props: { count: number }): ReactNode {
+	return (
+		<box backgroundColor={theme.panelAlt} height={1}>
+			<text fg={theme.yellow}>{`ATTENTION (${props.count} shown)`}</text>
+		</box>
+	);
+}
+
+function AttentionRow(props: { entry: AttentionEntry }): ReactNode {
+	return (
+		<box flexDirection="row" height={1}>
+			<text fg={theme.muted} width={7}>{`#${props.entry.sequence}`}</text>
+			<text fg={props.entry.color ?? theme.yellow} width={13}>{props.entry.type}</text>
+			<text fg={theme.text}>{truncateEnd(props.entry.message, 110)}</text>
+		</box>
+	);
+}
+
 function EventRow(props: { event: TuiTaskEvent }): ReactNode {
 	return (
 		<box flexDirection="row" height={1}>
@@ -186,13 +256,22 @@ function EventRow(props: { event: TuiTaskEvent }): ReactNode {
 
 function ContextPanel(props: {
 	metadata: MetadataEntry[];
+	attention: AttentionEntry[];
 	events: TuiTaskEvent[];
 	error?: string;
 }): ReactNode {
 	return (
-		<scrollbox height={contextHeight(props.metadata, props.events)} flexShrink={1} viewportCulling>
+		<scrollbox
+			height={contextHeight(props.metadata, props.events, props.attention)}
+			flexShrink={1}
+			viewportCulling
+		>
 			{props.metadata.map((entry) => (
 				<MetadataRow key={entry.label} entry={entry} />
+			))}
+			{props.attention.length > 0 ? <AttentionHeader count={props.attention.length} /> : null}
+			{props.attention.map((entry) => (
+				<AttentionRow key={entry.sequence} entry={entry} />
 			))}
 			<EventHeader count={props.events.length} error={props.error} />
 			{props.error ? <text fg={theme.red}>{truncateEnd(props.error, 128)}</text> : null}
@@ -219,6 +298,7 @@ export function TaskDetail(props: { task?: TaskSummary; detail?: TuiTaskDetail }
 	const lines = outputLines(detail);
 	const isTerminal = ["completed", "failed", "cancelled", "timed_out", "blocked"].includes(status);
 	const metadata = metadataEntries(task, detail);
+	const attention = attentionEntries(detail);
 
 	return (
 		<box
@@ -230,7 +310,12 @@ export function TaskDetail(props: { task?: TaskSummary; detail?: TuiTaskDetail }
 			padding={1}
 			flexDirection="column"
 		>
-			<ContextPanel metadata={metadata} events={events} error={detail?.eventsError} />
+			<ContextPanel
+				metadata={metadata}
+				attention={attention}
+				events={events}
+				error={detail?.eventsError}
+			/>
 			{isTerminal ? (
 				<>
 					<box backgroundColor={theme.panelAlt} height={1} flexShrink={0}>
