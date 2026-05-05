@@ -100,6 +100,7 @@ list_team_events({
 
 ## Future Implementation Notes
 
+- The recommended next slice is [Team attention items](cuekit-team-attention-items-design.md): a derived important-event summary over `task_events` for `get_team_status`, `wait_team`, and `get_team_result`.
 - Keep any future event-listing enhancements read/query-oriented before considering wake/steer behavior.
 - If a `list_team_events` query is added, use an opaque cursor and keep `task_events` as the canonical durable stream.
 - Do not add separate delivery queues, ack state, push subscriptions, or automatic coordinator actions without a new design slice.
