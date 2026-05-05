@@ -1,4 +1,9 @@
-import { TaskStatusSchema, TeamPositionSchema } from "@cuekit/core";
+import {
+	intersectObservedFiles,
+	parseTaskObservabilityPayload,
+	TaskStatusSchema,
+	TeamPositionSchema,
+} from "@cuekit/core";
 import { listTaskEvents, type Task } from "@cuekit/store";
 import { z } from "incur";
 import type { CommandContext } from "./command-context.ts";
@@ -31,6 +36,28 @@ export const TeamRunSummarySchema = z.object({
 			}),
 		)
 		.optional(),
+	observability: z
+		.object({
+			files_read: z.array(z.string()),
+			files_written: z.array(z.string()),
+			diagnostics: z.array(
+				z.object({
+					task_id: z.string(),
+					kind: z.string(),
+					message: z.string().optional(),
+				}),
+			),
+			warnings: z
+				.array(
+					z.object({
+						kind: z.literal("stale_read"),
+						message: z.string(),
+						paths: z.array(z.string()),
+					}),
+				)
+				.optional(),
+		})
+		.optional(),
 });
 
 export type TeamRunSummary = z.infer<typeof TeamRunSummarySchema>;
@@ -54,6 +81,16 @@ function taskPosition(task: Task): (typeof POSITIONS)[number] | undefined {
 	return POSITIONS.find((position) => position === task.team_position);
 }
 
+function appendUnique(target: string[], values: string[] | undefined): void {
+	if (!values) return;
+	const seen = new Set(target);
+	for (const value of values) {
+		if (seen.has(value)) continue;
+		seen.add(value);
+		target.push(value);
+	}
+}
+
 export function emptyTeamRunSummary(): TeamRunSummary {
 	return {
 		terminal_reports: 0,
@@ -66,11 +103,27 @@ export function buildTeamRunSummary(ctx: CommandContext, tasks: Task[]): TeamRun
 	let terminalReports = 0;
 	let latestTerminalMessage: string | undefined;
 	const openAttention: NonNullable<TeamRunSummary["open_attention"]> = [];
+	const filesRead: string[] = [];
+	const filesWritten: string[] = [];
+	const diagnostics: NonNullable<TeamRunSummary["observability"]>["diagnostics"] = [];
 
 	for (const task of tasks) {
 		const position = taskPosition(task);
 		let latestMessage: string | undefined;
 		for (const event of listTaskEvents(ctx.db, task.id)) {
+			const observability = parseTaskObservabilityPayload(event.payload);
+			appendUnique(filesRead, observability?.files?.read);
+			appendUnique(filesWritten, observability?.files?.written);
+			if (observability?.diagnostic) {
+				diagnostics.push({
+					task_id: task.id,
+					kind: observability.diagnostic.kind,
+					...(observability.diagnostic.message
+						? { message: observability.diagnostic.message }
+						: {}),
+				});
+			}
+
 			if (!event.message || !REPORT_TYPES.has(event.type)) continue;
 			latestMessage = event.message;
 			const entry = {
@@ -106,6 +159,28 @@ export function buildTeamRunSummary(ctx: CommandContext, tasks: Task[]): TeamRun
 			.slice(-MAX_ENTRIES_PER_POSITION);
 	}
 
+	const staleReadPaths = intersectObservedFiles(filesRead, filesWritten);
+	const observability =
+		filesRead.length > 0 || filesWritten.length > 0 || diagnostics.length > 0
+			? {
+					files_read: filesRead,
+					files_written: filesWritten,
+					diagnostics,
+					...(staleReadPaths.length > 0
+						? {
+								warnings: [
+									{
+										kind: "stale_read" as const,
+										message:
+											"Some tasks read files that were also written by team tasks; re-read may be needed.",
+										paths: staleReadPaths,
+									},
+								],
+							}
+						: {}),
+				}
+			: undefined;
+
 	return {
 		terminal_reports: terminalReports,
 		...(latestTerminalMessage
@@ -113,5 +188,6 @@ export function buildTeamRunSummary(ctx: CommandContext, tasks: Task[]): TeamRun
 			: {}),
 		positions,
 		...(openAttention.length > 0 ? { open_attention: openAttention } : {}),
+		...(observability ? { observability } : {}),
 	};
 }

@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { createSession, runMigrations } from "@cuekit/store";
+import { createSession, listTaskEvents, runMigrations } from "@cuekit/store";
 import {
 	buildOpenCodeLaunchCommand,
 	buildOpenCodeRunLaunchCommand,
@@ -139,6 +139,13 @@ describe("createPiAdapter (truthful stub)", () => {
 		const view = await adapter.status(result.value.task_id);
 		expect(view.status).toBe("timed_out");
 		expect(runner.knownSessions()).not.toContain(`cuekit-task-${result.value.task_id}`);
+		const events = listTaskEvents(db, result.value.task_id);
+		expect(events).toHaveLength(1);
+		expect(events[0]?.type).toBe("log");
+		expect(events[0]?.message).toContain("task timed out after 1ms");
+		expect(events[0]?.payload).toEqual({
+			diagnostic: { kind: "timeout", message: "timed out after 1ms" },
+		});
 	});
 
 	it("prefers completed sentinel over timeout when a pane already exited", async () => {

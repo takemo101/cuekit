@@ -12,6 +12,7 @@ export * from "./task-handle.ts";
 export * from "./task-lifecycle.ts";
 export * from "./task-list-cursor.ts";
 export * from "./task-list-filter.ts";
+export * from "./task-observability.ts";
 export * from "./task-refs.ts";
 export * from "./task-result.ts";
 export * from "./task-spec.ts";
