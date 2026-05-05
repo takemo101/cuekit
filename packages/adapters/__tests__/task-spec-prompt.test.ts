@@ -51,6 +51,10 @@ describe("renderTaskSpecPrompt", () => {
 		expect(prompt).toContain("transcript markers");
 		expect(prompt).toContain("result.json");
 		expect(prompt).toContain("help_requested when parent input is needed");
+		expect(prompt).toContain("observability payloads");
+		expect(prompt).toContain(
+			'{"phase":"testing","files":{"read":["src/a.ts"],"written":["src/a.ts"]}}',
+		);
 		expect(prompt).toContain("does not automatically close");
 	});
 });

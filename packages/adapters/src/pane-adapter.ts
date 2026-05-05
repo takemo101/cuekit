@@ -1,5 +1,5 @@
 import type { Database } from "bun:sqlite";
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
@@ -20,6 +20,7 @@ import {
 	validateSpecAgainstCapabilities,
 } from "@cuekit/core";
 import {
+	appendTaskEvent,
 	completeTask,
 	createTask,
 	getSessionById,
@@ -436,11 +437,20 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 						if (config.onTerminal) config.onTerminal(completed, db);
 					}
 				} else if (hasTimedOut(live)) {
+					const timeoutMs = timeoutMsFor(live);
+					const timeoutMessage = `timed out after ${timeoutMs}ms`;
 					await panes.killTask(task_id);
+					appendTaskEvent(db, {
+						id: `e_${randomUUID()}`,
+						task_id,
+						type: "log",
+						message: `task ${timeoutMessage}`,
+						payload: { diagnostic: { kind: "timeout", message: timeoutMessage } },
+					});
 					const completed = completeTask(db, {
 						id: task_id,
 						status: "timed_out",
-						summary: `timed out after ${timeoutMsFor(live)}ms`,
+						summary: timeoutMessage,
 					});
 					if (completed) {
 						live = completed;

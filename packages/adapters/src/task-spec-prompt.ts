@@ -6,6 +6,7 @@ const CHILD_REPORTING_CONTRACT = `Child reporting contract:
 - CUEKIT_TASK_ID and CUEKIT_CHILD_TOKEN are already provided in your environment; do not print or store the token.
 - Report progress when useful, and report completed, failed, or blocked before you finish.
 - Use help_requested when parent input is needed and you can remain resumable.
+- When useful, include simple observability payloads such as {"phase":"testing","files":{"read":["src/a.ts"],"written":["src/a.ts"]}}; report only the main files relevant to coordination/review.
 - transcript markers and direct result.json writes are not the canonical reporting path; SQLite task_events written by report_task_event / cuekit tool report are canonical.
 - Reporting does not automatically close your pane or process; finish normally after reporting.`;
 

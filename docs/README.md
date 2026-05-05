@@ -20,6 +20,7 @@ Stable feature documentation and design notes:
 - [Project config guide](guides/project-config.md) — `.cuekit.yaml` identity, defaults, scopes, and safety rules.
 - [Task teams design](designs/cuekit-task-teams-design.md) — lightweight session-scoped teams.
 - [Team strategies design](designs/cuekit-team-strategies-design.md) — coordinator strategy playbooks.
+- [Task observability design](designs/cuekit-task-observability-design.md) — child file self-reporting, timeout diagnostics, and conservative team stale-read warnings.
 - [Adapter run modes design](designs/cuekit-adapter-run-modes-design.md) — interactive/batch adapter behavior.
 - [jcode adapter design](designs/cuekit-jcode-repl-adapter-design.md) and [guide](guides/jcode-adapter.md) — `jcode repl` tmux adapter.
 - [TUI task cockpit design](designs/cuekit-tui-task-cockpit-design.md) — human-facing OpenTUI interface.

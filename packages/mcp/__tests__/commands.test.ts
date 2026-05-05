@@ -177,6 +177,23 @@ describe("team commands", () => {
 			type: "progress",
 			message: "Reviewer is checking schema risks",
 		});
+		appendTaskEvent(db, {
+			id: "e_coord_files",
+			task_id: "t_coord",
+			type: "log",
+			message: "Coordinator file report",
+			payload: { files: { written: ["packages/mcp/src/team-run-summary.ts"] } },
+		});
+		appendTaskEvent(db, {
+			id: "e_review_files",
+			task_id: "t_review",
+			type: "log",
+			message: "Reviewer file report",
+			payload: {
+				files: { read: ["packages/mcp/src/team-run-summary.ts", "packages/core/src/team.ts"] },
+				diagnostic: { kind: "timeout", message: "timed out after 100ms" },
+			},
+		});
 
 		const result = runGetTeamStatus(ctx, { team_id: "tm_summary" });
 
@@ -193,6 +210,19 @@ describe("team commands", () => {
 			"Reviewer is checking schema risks",
 		);
 		expect(result.run_summary.open_attention?.[0]?.task_id).toBe("t_review");
+		expect(result.run_summary.observability).toEqual({
+			files_read: ["packages/mcp/src/team-run-summary.ts", "packages/core/src/team.ts"],
+			files_written: ["packages/mcp/src/team-run-summary.ts"],
+			diagnostics: [{ task_id: "t_review", kind: "timeout", message: "timed out after 100ms" }],
+			warnings: [
+				{
+					kind: "stale_read",
+					message:
+						"Some tasks read files that were also written by team tasks; re-read may be needed.",
+					paths: ["packages/mcp/src/team-run-summary.ts"],
+				},
+			],
+		});
 	});
 
 	it("get-team-status team run summaries prefer durable events over transcript noise", () => {
@@ -266,6 +296,7 @@ describe("team commands", () => {
 		expect(result.status).toBe("empty");
 		expect(result.task_counts.total).toBe(0);
 		expect(result.tasks).toEqual([]);
+		expect(result.run_summary.observability).toBeUndefined();
 	});
 
 	it("get-team-status returns team_not_found", () => {
