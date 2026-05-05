@@ -8,7 +8,7 @@ import { listTaskEvents, type Task } from "@cuekit/store";
 import { z } from "incur";
 import type { CommandContext } from "./command-context.ts";
 
-const POSITIONS = ["coordinator", "worker", "reviewer", "observer"] as const;
+const POSITIONS = ["coordinator", "worker", "reviewer", "finisher", "observer"] as const;
 const REPORT_TYPES = new Set(["progress", "completed", "failed", "blocked", "help_requested"]);
 const TERMINAL_REPORT_TYPES = new Set(["completed", "failed", "blocked"]);
 const MAX_MESSAGE_LENGTH = 240;
@@ -73,6 +73,7 @@ function emptyPositions(): TeamRunSummary["positions"] {
 		coordinator: [],
 		worker: [],
 		reviewer: [],
+		finisher: [],
 		observer: [],
 	};
 }

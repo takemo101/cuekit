@@ -74,6 +74,7 @@ teams:
     coordinator: planner
     worker: worker
     reviewer: reviewer
+    finisher: pr-finisher
     observer: scout
   cleanup: keep-team # keep-team | delete-empty-team
   wait:
@@ -167,6 +168,7 @@ teams:
     coordinator: planner
     worker: worker
     reviewer: reviewer
+    finisher: pr-finisher
     observer: scout
   cleanup: keep-team
   wait:
@@ -180,6 +182,7 @@ Examples:
 
 - `position: coordinator` + no `role` -> `role: planner`
 - `position: reviewer` + no `role` -> `role: reviewer`
+- `position: finisher` + no `role` -> `role: pr-finisher`
 
 `teams.wait` provides defaults for `wait_team` when omitted.
 
@@ -337,6 +340,7 @@ teams:
     coordinator: planner
     worker: worker
     reviewer: reviewer
+    finisher: pr-finisher
   wait:
     # Defaults for wait_team unless request fields override them.
     timeout_ms: 300000
@@ -355,7 +359,7 @@ Notes:
 
 - `project.id` should be derived from the current directory name and sanitized to the existing project id pattern.
 - Include commented `submit` defaults to make the default role/agent/model/timeout behavior discoverable; explicit submit request fields still win.
-- Include commented Task Teams role and wait defaults so initialized projects are ready for coordinator/worker/reviewer teams.
+- Include commented Task Teams role and wait defaults so initialized projects are ready for coordinator/worker/reviewer/finisher teams.
 - Do not generate `permissions: bypass` unless `cuekit init --unsafe-bypass` is explicitly requested.
 - `teams.cleanup: delete-empty-team` must not be generated while `delete_team` does not exist.
 

@@ -17,6 +17,13 @@ const config: CuekitProjectConfig = {
 					model: "sonnet",
 					objective: "Review the docs-only diff.",
 				},
+				finisher: {
+					position: "finisher",
+					role: "pr-finisher",
+					agent: "claude-code",
+					model: "sonnet",
+					objective: "Finish PR flow after validation and review.",
+				},
 			},
 			guardrails: ["Keep changes docs-only."],
 			success_criteria: ["Meaning is preserved."],
@@ -65,6 +72,7 @@ describe("team strategy helpers", () => {
 		expect(prompt).toContain("Objective:\nPolish README wait guidance.");
 		expect(prompt).toContain("Intent:");
 		expect(prompt).toContain("Recommended team:");
+		expect(prompt).toContain("finisher: position finisher, role pr-finisher");
 		expect(prompt).toContain("worker: position worker, role worker, agent pi, model k2p5");
 		expect(prompt).toContain("Guardrails:");
 		expect(prompt).toContain("Success criteria:");
@@ -85,7 +93,7 @@ describe("team strategy helpers", () => {
 			objective: "Polish README wait guidance.",
 		});
 
-		expect(prompt).toContain("After a finisher or pr-finisher task completes");
+		expect(prompt).toContain("After a `position: finisher` task completes");
 		expect(prompt).toContain("get_team_result");
 		expect(prompt).toContain("do not wait for parent steering");
 	});

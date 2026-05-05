@@ -4,7 +4,13 @@ export const ProjectIdSchema = z.string().regex(/^[A-Za-z0-9._-]+$/);
 export const TuiScopeSchema = z.enum(["project", "path"]);
 export const TeamCleanupSchema = z.enum(["keep-team", "delete-empty-team"]);
 export const AdapterPermissionSchema = z.enum(["prompt", "bypass"]);
-export const StrategyPositionSchema = z.enum(["coordinator", "worker", "reviewer", "observer"]);
+export const StrategyPositionSchema = z.enum([
+	"coordinator",
+	"worker",
+	"reviewer",
+	"finisher",
+	"observer",
+]);
 
 export const TeamStrategySlotSchema = z
 	.object({
@@ -69,6 +75,7 @@ export const CuekitProjectConfigSchema = z
 						coordinator: z.string().min(1).optional(),
 						worker: z.string().min(1).optional(),
 						reviewer: z.string().min(1).optional(),
+						finisher: z.string().min(1).optional(),
 						observer: z.string().min(1).optional(),
 					})
 					.strict()

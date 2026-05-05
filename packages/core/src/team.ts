@@ -1,6 +1,12 @@
 import { z } from "zod";
 
-export const TeamPositionSchema = z.enum(["coordinator", "worker", "reviewer", "observer"]);
+export const TeamPositionSchema = z.enum([
+	"coordinator",
+	"worker",
+	"reviewer",
+	"finisher",
+	"observer",
+]);
 export type TeamPosition = z.infer<typeof TeamPositionSchema>;
 
 export const TeamStatusSchema = z.enum([

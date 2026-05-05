@@ -66,7 +66,7 @@ export function applySafeAdapterOptions(spec: Partial<TaskSpec>): Partial<TaskSp
 	};
 }
 
-export type TeamPosition = "coordinator" | "worker" | "reviewer" | "observer";
+export type TeamPosition = "coordinator" | "worker" | "reviewer" | "finisher" | "observer";
 
 export function applyTeamRoleDefault(
 	input: { role?: string; position?: TeamPosition },

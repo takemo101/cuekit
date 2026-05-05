@@ -165,6 +165,15 @@ describe("team commands", () => {
 			objective: "review",
 			status: "running",
 		});
+		createTask(db, {
+			id: "t_finisher",
+			session_id: "s_summary",
+			agent_kind: "claude-code",
+			team_id: "tm_summary",
+			team_position: "finisher",
+			objective: "finish",
+			status: "completed",
+		});
 		appendTaskEvent(db, {
 			id: "e_coord_done",
 			task_id: "t_coord",
@@ -176,6 +185,12 @@ describe("team commands", () => {
 			task_id: "t_review",
 			type: "progress",
 			message: "Reviewer is checking schema risks",
+		});
+		appendTaskEvent(db, {
+			id: "e_finisher_done",
+			task_id: "t_finisher",
+			type: "completed",
+			message: "PR merged and branch cleaned up",
 		});
 		appendTaskEvent(db, {
 			id: "e_coord_files",
@@ -199,15 +214,16 @@ describe("team commands", () => {
 
 		expect("team_id" in result).toBe(true);
 		if (!("team_id" in result)) return;
-		expect(result.run_summary.terminal_reports).toBe(1);
-		expect(result.run_summary.latest_terminal_message).toBe(
-			"Coordinator proposed the small safe extraction",
-		);
+		expect(result.run_summary.terminal_reports).toBe(2);
+		expect(result.run_summary.latest_terminal_message).toBe("PR merged and branch cleaned up");
 		expect(result.run_summary.positions.coordinator[0]?.message).toBe(
 			"Coordinator proposed the small safe extraction",
 		);
 		expect(result.run_summary.positions.reviewer[0]?.message).toBe(
 			"Reviewer is checking schema risks",
+		);
+		expect(result.run_summary.positions.finisher[0]?.message).toBe(
+			"PR merged and branch cleaned up",
 		);
 		expect(result.run_summary.open_attention?.[0]?.task_id).toBe("t_review");
 		expect(result.run_summary.observability).toEqual({
@@ -984,6 +1000,15 @@ describe("team result", () => {
 			status: "completed",
 		});
 		createTask(db, {
+			id: "t_finisher_result",
+			session_id: "s_team_result",
+			team_id: "tm_result",
+			team_position: "finisher",
+			agent_kind: "claude-code",
+			objective: "finish",
+			status: "completed",
+		});
+		createTask(db, {
 			id: "t_coordinator_result",
 			session_id: "s_team_result",
 			team_id: "tm_result",
@@ -1005,6 +1030,12 @@ describe("team result", () => {
 			message: "reviewer final report",
 		});
 		appendTaskEvent(db, {
+			id: "e_finisher_result",
+			task_id: "t_finisher_result",
+			type: "completed",
+			message: "finisher final report",
+		});
+		appendTaskEvent(db, {
 			id: "e_coordinator_result",
 			task_id: "t_coordinator_result",
 			type: "completed",
@@ -1016,16 +1047,18 @@ describe("team result", () => {
 		expect("error" in result).toBe(false);
 		if ("error" in result) return;
 		expect(result.status).toBe("completed");
-		expect(result.task_counts.completed).toBe(3);
+		expect(result.task_counts.completed).toBe(4);
 		expect(result.final_summary).toContain("coordinator final report");
 		expect(result.timeline.map((event) => event.position)).toEqual([
 			"worker",
 			"reviewer",
+			"finisher",
 			"coordinator",
 		]);
 		expect(result.timeline.map((event) => event.message)).toEqual([
 			"worker final report",
 			"reviewer final report",
+			"finisher final report",
 			"coordinator final report",
 		]);
 		expect(result.cleanup_hint).toContain("cuekit_cleanup");

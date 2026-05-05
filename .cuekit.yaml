@@ -51,7 +51,7 @@ strategies:
         agent: claude-code
         model: sonnet
       finisher:
-        position: reviewer
+        position: finisher
         role: pr-finisher
         agent: claude-code
         model: sonnet
@@ -104,7 +104,7 @@ strategies:
         agent: opencode
         objective: "When multi-angle review is useful, provide an independent review focused on edge cases, API compatibility, and maintainability."
       finisher:
-        position: reviewer
+        position: finisher
         role: pr-finisher
         agent: claude-code
         model: sonnet
@@ -151,7 +151,7 @@ strategies:
         agent: opencode
         objective: "When multi-angle review is useful, provide an independent review focused on architecture fit, user-facing behavior, and test gaps."
       finisher:
-        position: reviewer
+        position: finisher
         role: pr-finisher
         agent: claude-code
         model: sonnet
@@ -194,7 +194,7 @@ strategies:
         agent: claude-code
         model: sonnet
       finisher:
-        position: reviewer
+        position: finisher
         role: pr-finisher
         agent: claude-code
         model: sonnet
@@ -280,7 +280,7 @@ strategies:
         agent: opencode
         objective: "When multi-angle review is useful, provide an independent review focused on dogfood UX gaps and workflow friction."
       finisher:
-        position: reviewer
+        position: finisher
         role: pr-finisher
         agent: claude-code
         model: sonnet

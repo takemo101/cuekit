@@ -20,7 +20,7 @@ const ZERO_COUNTS: TeamTaskCounts = {
 	blocked: 0,
 };
 
-const POSITIONS: TeamPosition[] = ["coordinator", "worker", "reviewer", "observer"];
+const POSITIONS: TeamPosition[] = ["coordinator", "worker", "reviewer", "finisher", "observer"];
 
 export function aggregateTeamStatus(tasks: Pick<Task, "status">[]): TeamStatus {
 	if (tasks.length === 0) return "empty";
@@ -47,6 +47,7 @@ export function groupTasksByPosition(tasks: TaskSummary[]): Record<TeamPosition,
 		coordinator: [],
 		worker: [],
 		reviewer: [],
+		finisher: [],
 		observer: [],
 	};
 	for (const task of tasks) {

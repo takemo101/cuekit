@@ -126,6 +126,21 @@ describe("CuekitProjectConfigSchema", () => {
 		).toThrow();
 	});
 
+	it("accepts finisher position in teams.roles and strategy recommended_team", () => {
+		const parsed = CuekitProjectConfigSchema.parse({
+			teams: { roles: { finisher: "pr-finisher" } },
+			strategies: {
+				dogfood: {
+					recommended_team: {
+						finisher: { position: "finisher", role: "pr-finisher" },
+					},
+				},
+			},
+		});
+		expect(parsed.teams?.roles?.finisher).toBe("pr-finisher");
+		expect(parsed.strategies?.dogfood?.recommended_team?.finisher?.position).toBe("finisher");
+	});
+
 	it("rejects unknown top-level keys", () => {
 		expect(() => CuekitProjectConfigSchema.parse({ unknown: true })).toThrow();
 	});

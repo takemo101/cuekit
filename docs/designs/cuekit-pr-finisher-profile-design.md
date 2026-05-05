@@ -2,7 +2,7 @@
 
 ## Status
 
-Draft design note for a focused builtin profile and strategy slot convention.
+Draft design note for a focused builtin profile and first-class finisher strategy slot convention.
 
 ## Problem
 
@@ -20,14 +20,13 @@ Today the parent agent usually performs this manually. That creates repeated boi
 
 ## Design Goal
 
-Add a **`pr-finisher` builtin Agent Profile** and recommend a **`finisher` strategy slot** for strategies that commonly end in PR creation or merge.
+Add a **`pr-finisher` builtin Agent Profile** and recommend a **`finisher` strategy slot** using `position: finisher` for strategies that commonly end in PR creation, merge, cleanup, or report-back.
 
 The profile should act as a release/PR completion checklist runner, not as an implementation worker. It should be used after implementation and review are complete, when the user or coordinator expects the work to be committed, pushed, PR'd, and possibly merged.
 
 ## Non-Goals
 
 - Do not make cuekit automatically create or merge PRs.
-- Do not add a new team position enum such as `finisher` in this slice.
 - Do not require GitButler for users who do not have it installed.
 - Do not bypass project/user VCS instructions.
 - Do not merge PRs when validation failed, CI is failing, the branch is dirty, or required credentials/tools are missing.
@@ -99,14 +98,14 @@ Add an optional `finisher` slot to strategies where PR completion is a common fi
 
 ```yaml
 finisher:
-  position: reviewer
+  position: finisher
   role: pr-finisher
   agent: claude-code
   model: sonnet
   objective: "After implementation, validation, and review are complete, finish the PR flow requested by the parent."
 ```
 
-Use `position: reviewer` rather than adding a new enum. The semantic role comes from `role: pr-finisher`; the existing position keeps schema and aggregation behavior stable.
+Use `position: finisher` rather than overloading `position: reviewer`. The position marks a first-class finalization lane for team status, prompt context, and run-summary grouping; the `role: pr-finisher` Agent Profile supplies PR-specific instructions.
 
 Recommended initial strategies:
 
@@ -124,7 +123,7 @@ The strategy slot is a recommendation. The coordinator should submit the finishe
 
 Update `cuekit-dogfood` guidance:
 
-- For cuekit repo work where the user expects PR creation/merge, ask the strategy coordinator to use the `finisher` slot or submit a `role: pr-finisher` task after implementation and review are complete.
+- For cuekit repo work where the user expects PR creation/merge, ask the strategy coordinator to use the `finisher` slot or submit a `position: finisher`, `role: pr-finisher` task after implementation and review are complete.
 - The parent should still verify final evidence and `cuekit_get_team_result` before final reporting.
 - The finisher should not cleanup or delete tasks/teams beyond terminal cleanup targets unless requested.
 
@@ -135,6 +134,7 @@ Implementation should update:
 - builtin profile catalog tests to include `pr-finisher`,
 - builtin instruction quality tests,
 - optional auto-selection tests if `selectAgentProfile` gains PR-finish-specific keywords,
+- team/core schema and run-summary tests to include `position: finisher`,
 - project config/schema tests if `.cuekit.yaml` strategy slots are expanded,
 - docs index links.
 

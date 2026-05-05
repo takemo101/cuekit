@@ -8,7 +8,8 @@ Use these notes when working on an existing cuekit feature area. For current ope
 
 - [`cuekit-agent-profiles-design.md`](cuekit-agent-profiles-design.md) — agent profile framework for role-based task submission and automatic role selection.
 - [`cuekit-project-config-design.md`](cuekit-project-config-design.md) — `.cuekit.yaml` project identity, defaults, scopes, and safety rules.
-- [`cuekit-pr-finisher-profile-design.md`](cuekit-pr-finisher-profile-design.md) — builtin `pr-finisher` agent profile and strategy slot convention for safe PR creation, merge, sync, and cleanup.
+- [`cuekit-pr-finisher-profile-design.md`](cuekit-pr-finisher-profile-design.md) — builtin `pr-finisher` agent profile and first-class `position: finisher` strategy slot convention for safe PR creation, merge, sync, and cleanup.
+- [`cuekit-coordinator-notifications-routing-design.md`](cuekit-coordinator-notifications-routing-design.md) — durable coordinator notification/report-back routing built on `position: finisher`, intentionally before auto-steer/wake.
 - [`cuekit-task-teams-design.md`](cuekit-task-teams-design.md) — lightweight session-scoped task teams for multi-task coding workflows.
 - [`cuekit-team-strategies-design.md`](cuekit-team-strategies-design.md) — project-local strategy profiles that guide coordinator-led teams without becoming rigid workflows.
 - [`cuekit-task-observability-design.md`](cuekit-task-observability-design.md) — minimal task event payloads for child file self-reporting, diagnostics, and team stale-read warnings.

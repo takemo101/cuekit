@@ -22,6 +22,7 @@ describe("Team schemas", () => {
 		expect(TeamPositionSchema.safeParse("coordinator").success).toBe(true);
 		expect(TeamPositionSchema.safeParse("worker").success).toBe(true);
 		expect(TeamPositionSchema.safeParse("reviewer").success).toBe(true);
+		expect(TeamPositionSchema.safeParse("finisher").success).toBe(true);
 		expect(TeamPositionSchema.safeParse("observer").success).toBe(true);
 		expect(TeamPositionSchema.safeParse("manager").success).toBe(false);
 

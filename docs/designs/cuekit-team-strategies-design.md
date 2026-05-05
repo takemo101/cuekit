@@ -63,6 +63,12 @@ strategies:
         role: reviewer
         agent: claude-code
         model: sonnet
+      finisher:
+        position: finisher
+        role: pr-finisher
+        agent: claude-code
+        model: sonnet
+        objective: "親が PR 作成/merge を明示した場合のみ、検証とレビュー後に最終処理を行う"
 
     guardrails:
       - "docs-only に限定する"
@@ -113,7 +119,7 @@ The mission-level goal. This should be rendered near the top of the coordinator 
 
 Named slots for suggested participants. Slot names are project-defined (`worker`, `reviewer`, `investigator`, `frontend_reviewer`, etc.). Each slot may include:
 
-- `position`: cuekit team position (`coordinator`, `worker`, `reviewer`, `observer`)
+- `position`: cuekit team position (`coordinator`, `worker`, `reviewer`, `finisher`, `observer`)
 - `role`: Agent Profile id
 - `agent`: adapter kind (`pi`, `claude-code`, `opencode`, `jcode`, ...)
 - `model`: adapter model
@@ -122,7 +128,7 @@ Named slots for suggested participants. Slot names are project-defined (`worker`
 
 The strategy does not automatically submit all slots unless a command explicitly chooses that behavior. In the first slice, the strategy primarily informs the coordinator prompt; the coordinator decides what to submit.
 
-A strategy may include optional operational slots such as `finisher`. For PR completion, use a `finisher` slot with `position: reviewer` and `role: pr-finisher` rather than introducing a new team position enum. The semantic role comes from `role: pr-finisher`; the existing position keeps schema and aggregation behavior stable. The coordinator should submit this slot only when the parent/user expects PR creation, merge, sync, or cleanup after implementation and review.
+A strategy may include optional operational slots such as `finisher`. For PR completion or durable report-back routing, use a `finisher` slot with `position: finisher`; for PR flows set `role: pr-finisher`. The position describes the team's finalization lane and is grouped separately in team status/run summaries; the role still selects the Agent Profile instructions. The coordinator should submit this slot only when the parent/user expects PR creation, merge, sync, cleanup, or explicit final report-back after implementation and review.
 
 Coordinator slots should normally use interactive adapter mode. A strategy may still specify `adapter_options.mode: "batch"`, and callers may explicitly override a coordinator into batch mode, but cuekit should warn because coordinator work is orchestration-heavy and batch mode can stall or be unsteerable. Batch mode remains more appropriate for focused worker/reviewer tasks.
 
@@ -167,6 +173,7 @@ Intent:
 Recommended team:
 - worker: position worker, role worker, agent pi, model k2p5
 - reviewer: position reviewer, role reviewer, agent claude-code, model sonnet
+- finisher: position finisher, role pr-finisher, agent claude-code, model sonnet
 
 Guardrails:
 - docs-only に限定する
@@ -187,7 +194,7 @@ Autonomy:
 
 Use cuekit tools to coordinate: submit_team_tasks, wait with follow_new_tasks, steer when needed, get_team_result, and report a final completed event.
 
-After a finisher or pr-finisher task completes, inspect the team result with get_team_result and immediately emit your own final completed report — do not wait for parent steering.
+After a `position: finisher` task completes, inspect the team result with get_team_result and immediately emit your own final completed report — do not wait for parent steering. If no finisher was submitted, the coordinator remains responsible for the final durable report.
 ```
 
 ## Resolution and Precedence
