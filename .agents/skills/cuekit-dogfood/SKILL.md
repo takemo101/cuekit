@@ -203,7 +203,7 @@ cuekit strategy --help
 
 - Treat cuekit child outputs as inputs, not authoritative truth. Verify important claims before editing or finalizing.
 - Always integrate findings into your own final answer.
-- For implementation work, keep normal project practices: tests first for behavior changes, focused diffs, and code review before merge.
+- For implementation work, keep normal project practices: tests first for behavior changes, focused diffs, and code review before merge. When the user expects PR creation or merge, ask the strategy coordinator to use the strategy `finisher` slot or submit a `role: pr-finisher` task after implementation, validation, and review are complete.
 - If cuekit delegation fails, report the failure, what fallback was attempted, and whether direct work continued.
 - For dogfood tasks, capture UX gaps as focused follow-up ideas rather than broad rewrites.
 - After a strategy/team dogfood run, explicitly confirm whether coordinator, worker/reviewer, reporting events, wait, steering, and `get_team_result` worked.
@@ -218,6 +218,14 @@ When you need investigation-only behavior:
 - If delegation is still useful, use scout/reviewer roles and state `Do not edit files` prominently in the objective and constraints.
 - Check `but status -fv` after the child finishes or if it behaves unexpectedly.
 - If strict read-only execution is required, say that cuekit does not currently guarantee it without an external sandbox/read-only worktree mechanism.
+
+## PR Finisher
+
+When PR creation, merge, or branch cleanup is requested during a dogfood run, use the `pr-finisher` role for the finisher task rather than embedding ad-hoc PR instructions in the objective.
+
+- Submit the finisher task only after all worker and reviewer tasks have completed and approved.
+- Pass branch context and any relevant reviewer outcomes in the task objective so the finisher has the information it needs.
+- Do not create or merge PRs without explicit parent or user authorization.
 
 ## Safety Rules
 

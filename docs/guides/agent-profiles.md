@@ -6,7 +6,7 @@ Agent profiles let callers describe the child agent's role with `role` instead o
 
 cuekit discovers profiles in three scopes and merges them by precedence:
 
-1. **builtin** — packaged profiles (`worker`, `reviewer`, `planner`, `scout`, `debugger`, `docs-writer`)
+1. **builtin** — packaged profiles (`worker`, `reviewer`, `planner`, `scout`, `debugger`, `docs-writer`, `pr-finisher`)
 2. **user** — `~/.cuekit/agents/*.md`
 3. **project** — `<project-root>/.cuekit/agents/*.md`
 
@@ -167,6 +167,7 @@ Use `role: "auto"` to let cuekit choose a role deterministically from the object
 
 MVP selection is rule-based and explainable:
 
+- finish/create/merge PR → `pr-finisher`
 - review/diff/PR → `reviewer`
 - plan/design/spec → `planner`
 - bug/debug/failing/test failure → `debugger`

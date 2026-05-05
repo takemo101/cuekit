@@ -74,6 +74,13 @@ describe("CuekitProjectConfigSchema", () => {
 							objective: "Review the docs-only diff.",
 							adapter_options: { mode: "batch" },
 						},
+						finisher: {
+							position: "reviewer",
+							role: "pr-finisher",
+							agent: "claude-code",
+							model: "sonnet",
+							objective: "Finish the PR flow when requested.",
+						},
 					},
 					guardrails: ["docs-only"],
 					success_criteria: ["meaning preserved"],
@@ -93,6 +100,12 @@ describe("CuekitProjectConfigSchema", () => {
 			"bun run check",
 		]);
 		expect(parsed.strategies?.["docs-polish"]?.recommended_team?.reviewer?.position).toBe(
+			"reviewer",
+		);
+		expect(parsed.strategies?.["docs-polish"]?.recommended_team?.finisher?.role).toBe(
+			"pr-finisher",
+		);
+		expect(parsed.strategies?.["docs-polish"]?.recommended_team?.finisher?.position).toBe(
 			"reviewer",
 		);
 	});

@@ -2,7 +2,15 @@ import { describe, expect, it } from "bun:test";
 import { BUILTIN_AGENT_PROFILE_MARKDOWN } from "../src/builtins.ts";
 import { parseAgentProfileMarkdown } from "../src/frontmatter.ts";
 
-const expectedBuiltinIds = ["worker", "reviewer", "planner", "scout", "debugger", "docs-writer"];
+const expectedBuiltinIds = [
+	"worker",
+	"reviewer",
+	"planner",
+	"scout",
+	"debugger",
+	"docs-writer",
+	"pr-finisher",
+];
 
 function instructionsFor(id: string): string {
 	const markdown = BUILTIN_AGENT_PROFILE_MARKDOWN[id];
@@ -26,5 +34,14 @@ describe("builtin agent profiles", () => {
 			expect(instructions).toContain("Do not override cuekit's final reporting contract");
 			expect(instructions.split(/\s+/).filter(Boolean).length).toBeGreaterThanOrEqual(120);
 		}
+	});
+
+	it("pr-finisher instructions mention required tool keywords", () => {
+		const instructions = instructionsFor("pr-finisher");
+		expect(instructions).toContain("but");
+		expect(instructions).toContain("gh");
+		expect(instructions).toContain("gh pr view");
+		expect(instructions).toContain("blocked");
+		expect(instructions).toContain("PR");
 	});
 });

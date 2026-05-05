@@ -50,6 +50,12 @@ strategies:
         role: reviewer
         agent: claude-code
         model: sonnet
+      finisher:
+        position: reviewer
+        role: pr-finisher
+        agent: claude-code
+        model: sonnet
+        objective: "When PR creation or merge is requested after implementation, validation, and review, finish the PR flow safely."
     guardrails:
       - "Keep changes limited to README/docs unless the parent explicitly expands scope."
       - "Preserve existing design decisions and terminology."
@@ -97,6 +103,12 @@ strategies:
         position: reviewer
         agent: opencode
         objective: "When multi-angle review is useful, provide an independent review focused on edge cases, API compatibility, and maintainability."
+      finisher:
+        position: reviewer
+        role: pr-finisher
+        agent: claude-code
+        model: sonnet
+        objective: "When PR creation or merge is requested after implementation, validation, and review, finish the PR flow safely."
     guardrails:
       - "Confirm the root cause before changing production code."
       - "Prefer a failing regression test before the fix."
@@ -138,6 +150,12 @@ strategies:
         position: reviewer
         agent: opencode
         objective: "When multi-angle review is useful, provide an independent review focused on architecture fit, user-facing behavior, and test gaps."
+      finisher:
+        position: reviewer
+        role: pr-finisher
+        agent: claude-code
+        model: sonnet
+        objective: "When PR creation or merge is requested after implementation, validation, and review, finish the PR flow safely."
     guardrails:
       - "Check relevant docs/issues/design notes before implementing."
       - "Prefer TDD for behavior changes."
@@ -175,6 +193,12 @@ strategies:
         role: reviewer
         agent: claude-code
         model: sonnet
+      finisher:
+        position: reviewer
+        role: pr-finisher
+        agent: claude-code
+        model: sonnet
+        objective: "When PR creation or merge is requested after implementation, validation, and review, finish the PR flow safely."
     guardrails:
       - "No intentional behavior changes."
       - "Keep diffs focused and reversible."
@@ -255,6 +279,12 @@ strategies:
         position: reviewer
         agent: opencode
         objective: "When multi-angle review is useful, provide an independent review focused on dogfood UX gaps and workflow friction."
+      finisher:
+        position: reviewer
+        role: pr-finisher
+        agent: claude-code
+        model: sonnet
+        objective: "When PR creation or merge is requested after dogfood validation and review, finish the PR flow safely."
     guardrails:
       - "Actually use cuekit tools rather than only reasoning about them."
       - "Use wait with follow_new_tasks for coordinator-led teams."
