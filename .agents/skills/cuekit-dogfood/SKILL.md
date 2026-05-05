@@ -81,7 +81,7 @@ Choose by `description` and `intent`, not by name alone. Current common mappings
 | Docs-only improvements | `docs-polish` |
 | Validating cuekit MCP/team/TUI/adapters | `dogfood` |
 
-If no strategy matches, use a single `submit_task` or create a team and submit concrete tasks manually.
+For non-trivial changes (implementation, behavior, UX, MCP, adapter, TUI, docs-design), a strategy-backed team is required even when no exact strategy matches—pick the closest strategy or create a team and submit concrete tasks manually. Do not fall back to a single `submit_task` for these cases; see the narrow exceptions below.
 
 ## MCP Workflows
 
@@ -132,7 +132,13 @@ Use `cuekit_submit_team_tasks` when you already have a team and concrete task sp
 
 ### Submit a single task
 
-Use `cuekit_submit_task` for focused scout/reviewer/worker tasks where a full strategy team is unnecessary.
+`cuekit_submit_task` is acceptable only for narrow exceptions:
+
+- Pure investigation/scout with no file edits (read-only research, grep, inspection).
+- A single self-contained trivial edit (one file, no behavior change, no public surface touched).
+- The user explicitly requested no team for this specific task.
+
+For any non-trivial implementation, behavior, UX, MCP, adapter, TUI, or docs-design change, use a strategy-backed team instead. If you choose `submit_task` over a strategy team, state the exception reason explicitly in your progress report before submitting.
 
 ### Steering stalled work
 
