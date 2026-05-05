@@ -8,6 +8,8 @@ const profiles = discovered.profiles;
 
 describe("selectAgentProfile", () => {
 	it.each([
+		["finish the PR by creating and merging it after validation", "pr-finisher"],
+		["open a PR after the reviewer approves", "pr-finisher"],
 		["review this diff before PR", "reviewer"],
 		["write an implementation plan from this spec", "planner"],
 		["debug this failing test", "debugger"],

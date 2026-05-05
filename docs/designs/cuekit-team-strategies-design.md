@@ -122,6 +122,8 @@ Named slots for suggested participants. Slot names are project-defined (`worker`
 
 The strategy does not automatically submit all slots unless a command explicitly chooses that behavior. In the first slice, the strategy primarily informs the coordinator prompt; the coordinator decides what to submit.
 
+A strategy may include optional operational slots such as `finisher`. For PR completion, use a `finisher` slot with `position: reviewer` and `role: pr-finisher` rather than introducing a new team position enum. The semantic role comes from `role: pr-finisher`; the existing position keeps schema and aggregation behavior stable. The coordinator should submit this slot only when the parent/user expects PR creation, merge, sync, or cleanup after implementation and review.
+
 Coordinator slots should normally use interactive adapter mode. A strategy may still specify `adapter_options.mode: "batch"`, and callers may explicitly override a coordinator into batch mode, but cuekit should warn because coordinator work is orchestration-heavy and batch mode can stall or be unsteerable. Batch mode remains more appropriate for focused worker/reviewer tasks.
 
 ### `guardrails`

@@ -13,6 +13,23 @@ export interface SelectAgentProfileResult {
 
 const RULES: Array<{ id: string; keywords: string[]; reason: string }> = [
 	{
+		id: "pr-finisher",
+		keywords: [
+			"finish pr",
+			"finish the pr",
+			"merge pr",
+			"merge the pr",
+			"create pr",
+			"create and merge",
+			"open pr",
+			"open a pr",
+			"open the pr",
+			"pr merge",
+			"release finish",
+		],
+		reason: "matched PR finish/create/merge keywords",
+	},
+	{
 		id: "reviewer",
 		keywords: ["review", "diff", "pr", "pull request", "code review"],
 		reason: "matched review/diff/PR keywords",

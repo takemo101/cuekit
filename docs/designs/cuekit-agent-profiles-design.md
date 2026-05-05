@@ -188,6 +188,7 @@ Start with a small, practical set:
 | `scout` | Fast codebase reconnaissance | `claude-code` | `haiku` |
 | `debugger` | Systematic bug/test failure investigation | `claude-code` | `sonnet` |
 | `docs-writer` | Documentation/changelog writing | `claude-code` | `haiku` |
+| `pr-finisher` | Safe PR creation/merge/sync/cleanup after validation | `claude-code` | `sonnet` |
 
 The exact model names must remain compatible with each adapter's advertised `available_models`. Builtin profiles should therefore use current cuekit adapter model names (`haiku`, `sonnet`, `opus`) for `claude-code`.
 
