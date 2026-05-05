@@ -80,6 +80,8 @@ describe("team strategy helpers", () => {
 		expect(prompt).toContain("git diff --check");
 		expect(prompt).toContain("submit_team_tasks");
 		expect(prompt).toContain("follow_new_tasks");
+		expect(prompt).toContain("attention_items");
+		expect(prompt).toContain("inspect them before deciding whether to continue");
 		expect(prompt).not.toContain("Validation:");
 	});
 

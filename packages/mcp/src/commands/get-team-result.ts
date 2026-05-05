@@ -8,6 +8,7 @@ import { getTaskTeamById, listTaskEvents, listTasksByTeam } from "@cuekit/store"
 import { z } from "incur";
 import { cleanupHintForTeam } from "../cleanup-hints.ts";
 import type { CommandContext } from "../command-context.ts";
+import { buildTeamAttentionItems, TeamAttentionItemSchema } from "../team-attention.ts";
 import { buildTeamSummary } from "../team-status.ts";
 
 const TERMINAL_REPORT_TYPES = new Set(["completed", "failed", "blocked"]);
@@ -42,6 +43,7 @@ export const GetTeamResultOutputSchema = z.union([
 		task_counts: TeamTaskCountsSchema,
 		final_summary: z.string().optional(),
 		timeline: z.array(TeamResultTimelineEntrySchema),
+		attention_items: z.array(TeamAttentionItemSchema).optional(),
 		cleanup_hint: z.string().optional(),
 	}),
 	z.object({
@@ -92,6 +94,7 @@ export function runGetTeamResult(
 		(event) => TERMINAL_REPORT_TYPES.has(event.type) && event.message,
 	);
 	const finalSummary = latestCoordinatorTerminal?.message ?? latestTerminal?.message;
+	const attentionItems = buildTeamAttentionItems(ctx.db, tasks);
 	const summary = buildTeamSummary(team, [...tasksById.values()]);
 	const cleanupHint = cleanupHintForTeam(
 		team.id,
@@ -105,6 +108,7 @@ export function runGetTeamResult(
 		task_counts: summary.task_counts,
 		...(finalSummary ? { final_summary: finalSummary } : {}),
 		timeline,
+		...(attentionItems.length > 0 ? { attention_items: attentionItems } : {}),
 		...(cleanupHint ? { cleanup_hint: cleanupHint } : {}),
 	};
 }

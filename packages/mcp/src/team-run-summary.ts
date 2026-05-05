@@ -7,6 +7,7 @@ import {
 import { listTaskEvents, type Task } from "@cuekit/store";
 import { z } from "incur";
 import type { CommandContext } from "./command-context.ts";
+import { buildTeamAttentionItems, TeamAttentionItemSchema } from "./team-attention.ts";
 
 const POSITIONS = ["coordinator", "worker", "reviewer", "finisher", "observer"] as const;
 const REPORT_TYPES = new Set(["progress", "completed", "failed", "blocked", "help_requested"]);
@@ -26,6 +27,7 @@ export const TeamRunSummarySchema = z.object({
 	terminal_reports: z.number().int().nonnegative(),
 	latest_terminal_message: z.string().optional(),
 	positions: z.record(TeamPositionSchema, z.array(TeamRunSummaryEntrySchema)),
+	attention_items: z.array(TeamAttentionItemSchema).optional(),
 	open_attention: z
 		.array(
 			z.object({
@@ -68,6 +70,12 @@ function truncateMessage(message: string): string {
 		: `${message.slice(0, MAX_MESSAGE_LENGTH - 1)}…`;
 }
 
+function truncateAttentionItem(
+	item: z.infer<typeof TeamAttentionItemSchema>,
+): z.infer<typeof TeamAttentionItemSchema> {
+	return item.message ? { ...item, message: truncateMessage(item.message) } : item;
+}
+
 function emptyPositions(): TeamRunSummary["positions"] {
 	return {
 		coordinator: [],
@@ -107,6 +115,7 @@ export function buildTeamRunSummary(ctx: CommandContext, tasks: Task[]): TeamRun
 	const filesRead: string[] = [];
 	const filesWritten: string[] = [];
 	const diagnostics: NonNullable<TeamRunSummary["observability"]>["diagnostics"] = [];
+	const attentionItems = buildTeamAttentionItems(ctx.db, tasks);
 
 	for (const task of tasks) {
 		const position = taskPosition(task);
@@ -188,6 +197,9 @@ export function buildTeamRunSummary(ctx: CommandContext, tasks: Task[]): TeamRun
 		terminal_reports: terminalReports,
 		...(latestTerminal ? { latest_terminal_message: truncateMessage(latestTerminal.message) } : {}),
 		positions,
+		...(attentionItems.length > 0
+			? { attention_items: attentionItems.map(truncateAttentionItem) }
+			: {}),
 		...(openAttention.length > 0 ? { open_attention: openAttention } : {}),
 		...(observability ? { observability } : {}),
 	};

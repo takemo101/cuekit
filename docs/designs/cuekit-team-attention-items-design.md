@@ -2,7 +2,7 @@
 
 ## Status
 
-Draft design note for the next Swarm-lite UX slice after first-class `position: finisher`. This is design guidance only; no implementation is included in the current slice.
+Foundation implemented: cuekit derives `attention_items` from existing `task_events` and exposes them in team status/wait run summaries and team results. Delivery, ack/read state, auto-steer, and auto-wake remain out of scope.
 
 ## Problem
 
@@ -69,7 +69,7 @@ This intentionally treats attention items as **important-event excerpts**, not a
 
 ### 1. Team run summary
 
-`get_team_status` and `wait_team` should include attention items inside `run_summary`:
+`get_team_status` and `wait_team` include attention items inside `run_summary`:
 
 ```ts
 run_summary: {
@@ -92,7 +92,7 @@ run_summary: {
 
 ### 2. Team result
 
-`get_team_result` should include the same attention item shape next to the full timeline:
+`get_team_result` includes the same attention item shape next to the full timeline:
 
 ```ts
 {
@@ -105,7 +105,7 @@ The full timeline remains the audit trail. Attention items are a concise “look
 
 ## Coordinator Guidance
 
-Coordinator prompts should include a short instruction:
+Coordinator prompts include a short instruction:
 
 ```text
 When team status or result includes attention_items, inspect them before deciding whether to continue, submit more tasks, steer a task, or emit your final report.
@@ -115,17 +115,22 @@ This is prompt guidance only. The parent or coordinator remains responsible for 
 
 ## Relationship to Existing Designs
 
-- Existing `run_summary.open_attention`: tracks currently non-terminal tasks that need attention, such as running or blocked tasks. `attention_items` should be historical/event-based excerpts from `task_events`, including terminal reports and help requests. A later implementation should keep this distinction explicit or rename one surface before shipping if overlap becomes confusing.
+- Existing `run_summary.open_attention`: tracks currently non-terminal tasks that need attention, such as running or blocked tasks. `attention_items` are historical/event-based excerpts from `task_events`, including terminal reports and help requests. Keep this distinction explicit; if overlap becomes confusing in real use, rename or reshape one surface in a later UX slice.
 - [Task teams design](cuekit-task-teams-design.md): attention items are an event-first team summary, not a scheduler feature.
 - [Coordinator notifications and report-back routing](cuekit-coordinator-notifications-routing-design.md): attention items are the recommended next guidance-first step before any notification delivery, auto-steer, or wake design.
 - [Team strategies design](cuekit-team-strategies-design.md): strategy prompts should tell coordinators to inspect attention items as part of normal team orchestration.
 - [ADR 001](../decisions/001-child-reporting-surface.md): `task_events` remains the canonical durable report stream; no `parent_notifications` table is introduced.
 
-## Implementation Notes for a Later Slice
+## Implemented Foundation
 
-- Add a small helper, likely `packages/mcp/src/team-attention.ts`, that derives attention items from team tasks and `task_events`.
-- Reuse `TeamPositionSchema` and existing task event schemas where possible.
-- Keep extraction data-driven by `team_position` and event type; do not special-case `role: pr-finisher`.
-- Add tests for worker blocked, reviewer failed, finisher completed, help requested, and coordinator completed excluded.
-- Add schema tests for both `run_summary.attention_items` and `get_team_result.attention_items`.
-- Keep any future acknowledgement or delivery semantics out of this helper; those require a separate design.
+- `packages/mcp/src/team-attention.ts` derives attention items from team tasks and `task_events`.
+- The extraction is data-driven by `team_position` and event type; it does not special-case `role: pr-finisher`.
+- Tests cover worker blocked, reviewer failed, finisher completed, help requested, coordinator completed excluded, sequence ordering, and cap behavior.
+- `run_summary.attention_items` and `get_team_result.attention_items` expose the derived items.
+- Coordinator prompt rendering tells coordinators to inspect attention items before deciding the next action.
+
+## Future Implementation Notes
+
+- Keep any future acknowledgement or delivery semantics out of the helper; those require a separate design.
+- If attention items and `open_attention` feel overlapping in real use, rename or reshape one surface in a dedicated UX slice rather than adding hidden delivery state.
+- Do not add auto-steer, auto-wake, push subscriptions, or ack/read state without a new design.
