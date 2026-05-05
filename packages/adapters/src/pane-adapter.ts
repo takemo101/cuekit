@@ -25,6 +25,7 @@ import {
 	createTask,
 	getSessionById,
 	getTaskById,
+	listTaskEvents,
 	listTasks,
 	type Task,
 	updateTaskChildTokenHash,
@@ -135,12 +136,20 @@ function timeoutMsFor(task: Task): number | null {
 	return spec?.timeout_ms ?? null;
 }
 
-function hasTimedOut(task: Task, nowMs = Date.now()): boolean {
+function hasTimedOut(task: Task, nowMs = Date.now()): { timedOut: true; timeoutMs: number } | null {
 	const timeoutMs = timeoutMsFor(task);
-	if (timeoutMs === null) return false;
+	if (timeoutMs === null) return null;
 	const anchor = Date.parse(task.started_at ?? task.created_at);
-	if (!Number.isFinite(anchor)) return false;
-	return nowMs - anchor >= timeoutMs;
+	if (!Number.isFinite(anchor)) return null;
+	return nowMs - anchor >= timeoutMs ? { timedOut: true, timeoutMs } : null;
+}
+
+function hasTimeoutDiagnosticEvent(task: Task, db: Database): boolean {
+	return listTaskEvents(db, task.id).some(
+		(event) =>
+			event.type === "log" &&
+			(event.payload as { diagnostic?: { kind?: string } } | null)?.diagnostic?.kind === "timeout",
+	);
 }
 
 function generateChildToken(): string {
@@ -436,25 +445,29 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 						live = completed;
 						if (config.onTerminal) config.onTerminal(completed, db);
 					}
-				} else if (hasTimedOut(live)) {
-					const timeoutMs = timeoutMsFor(live);
-					const timeoutMessage = `timed out after ${timeoutMs}ms`;
-					await panes.killTask(task_id);
-					appendTaskEvent(db, {
-						id: `e_${randomUUID()}`,
-						task_id,
-						type: "log",
-						message: `task ${timeoutMessage}`,
-						payload: { diagnostic: { kind: "timeout", message: timeoutMessage } },
-					});
-					const completed = completeTask(db, {
-						id: task_id,
-						status: "timed_out",
-						summary: timeoutMessage,
-					});
-					if (completed) {
-						live = completed;
-						if (config.onTerminal) config.onTerminal(completed, db);
+				} else {
+					const timeout = hasTimedOut(live);
+					if (timeout) {
+						const timeoutMessage = `timed out after ${timeout.timeoutMs}ms`;
+						await panes.killTask(task_id);
+						const completed = completeTask(db, {
+							id: task_id,
+							status: "timed_out",
+							summary: timeoutMessage,
+						});
+						if (completed && !hasTimeoutDiagnosticEvent(completed, db)) {
+							appendTaskEvent(db, {
+								id: `e_${randomUUID()}`,
+								task_id,
+								type: "log",
+								message: `task ${timeoutMessage}`,
+								payload: { diagnostic: { kind: "timeout", message: timeoutMessage } },
+							});
+						}
+						if (completed) {
+							live = completed;
+							if (config.onTerminal) config.onTerminal(completed, db);
+						}
 					}
 				}
 			}
