@@ -175,22 +175,22 @@ describe("team commands", () => {
 			status: "completed",
 		});
 		appendTaskEvent(db, {
+			id: "e_finisher_done",
+			task_id: "t_finisher",
+			type: "completed",
+			message: "PR merged and branch cleaned up",
+		});
+		appendTaskEvent(db, {
 			id: "e_coord_done",
 			task_id: "t_coord",
 			type: "completed",
-			message: "Coordinator proposed the small safe extraction",
+			message: "Coordinator integrated the finisher report",
 		});
 		appendTaskEvent(db, {
 			id: "e_review_progress",
 			task_id: "t_review",
 			type: "progress",
 			message: "Reviewer is checking schema risks",
-		});
-		appendTaskEvent(db, {
-			id: "e_finisher_done",
-			task_id: "t_finisher",
-			type: "completed",
-			message: "PR merged and branch cleaned up",
 		});
 		appendTaskEvent(db, {
 			id: "e_coord_files",
@@ -215,9 +215,11 @@ describe("team commands", () => {
 		expect("team_id" in result).toBe(true);
 		if (!("team_id" in result)) return;
 		expect(result.run_summary.terminal_reports).toBe(2);
-		expect(result.run_summary.latest_terminal_message).toBe("PR merged and branch cleaned up");
+		expect(result.run_summary.latest_terminal_message).toBe(
+			"Coordinator integrated the finisher report",
+		);
 		expect(result.run_summary.positions.coordinator[0]?.message).toBe(
-			"Coordinator proposed the small safe extraction",
+			"Coordinator integrated the finisher report",
 		);
 		expect(result.run_summary.positions.reviewer[0]?.message).toBe(
 			"Reviewer is checking schema risks",

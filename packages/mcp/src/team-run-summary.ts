@@ -102,7 +102,7 @@ export function emptyTeamRunSummary(): TeamRunSummary {
 export function buildTeamRunSummary(ctx: CommandContext, tasks: Task[]): TeamRunSummary {
 	const positions = emptyPositions();
 	let terminalReports = 0;
-	let latestTerminalMessage: string | undefined;
+	let latestTerminal: { sequence: number; message: string } | undefined;
 	const openAttention: NonNullable<TeamRunSummary["open_attention"]> = [];
 	const filesRead: string[] = [];
 	const filesWritten: string[] = [];
@@ -137,7 +137,9 @@ export function buildTeamRunSummary(ctx: CommandContext, tasks: Task[]): TeamRun
 			if (position) positions[position].push(entry);
 			if (TERMINAL_REPORT_TYPES.has(event.type)) {
 				terminalReports += 1;
-				latestTerminalMessage = event.message;
+				if (!latestTerminal || event.sequence > latestTerminal.sequence) {
+					latestTerminal = { sequence: event.sequence, message: event.message };
+				}
 			}
 		}
 		if (
@@ -184,9 +186,7 @@ export function buildTeamRunSummary(ctx: CommandContext, tasks: Task[]): TeamRun
 
 	return {
 		terminal_reports: terminalReports,
-		...(latestTerminalMessage
-			? { latest_terminal_message: truncateMessage(latestTerminalMessage) }
-			: {}),
+		...(latestTerminal ? { latest_terminal_message: truncateMessage(latestTerminal.message) } : {}),
 		positions,
 		...(openAttention.length > 0 ? { open_attention: openAttention } : {}),
 		...(observability ? { observability } : {}),
