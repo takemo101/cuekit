@@ -4,16 +4,16 @@ Status: proposed
 
 ## Summary
 
-Task teams add a small collaboration layer on top of existing cuekit sessions and tasks. A team represents one user-level objective that may require several child-agent tasks, such as planning, implementation, review, and docs. Each team task can also carry a `position` such as `coordinator`, `worker`, or `reviewer` so callers and prompts can distinguish team leadership from specialist Agent Profiles.
+Task teams add a small collaboration layer on top of existing cuekit sessions and tasks. A team represents one user-level objective that may require several child-agent tasks, such as planning, implementation, review, and docs. Each team task can also carry a `position` such as `coordinator`, `worker`, `reviewer`, or `finisher` so callers and prompts can distinguish team leadership, implementation, review, and release/report-back work from specialist Agent Profiles.
 
-The design intentionally avoids a full swarm runtime: no scheduler, no DAG, no file locking, no agent-to-agent chat, no automatic report routing, and no worktree manager in the MVP. The goal is to provide a practical Swarm-lite workflow without making cuekit's core model complex.
+The design intentionally avoids a full swarm runtime: no scheduler, no DAG, no file locking, no agent-to-agent chat, no automatic report routing, and no worktree manager in the MVP. The goal is to provide a practical Swarm-lite workflow without making cuekit's core model complex. Future coordinator report-back improvements should start as durable event summaries and guidance over `task_events`, not automatic wake/steer behavior.
 
 ## Goals
 
 - Let callers attach related tasks to one `team_id`.
 - Keep teams scoped to an existing cuekit session.
 - Distinguish Agent Profile `role` from team `position`.
-- Support lightweight coordinator/worker/reviewer workflows without a scheduler.
+- Support lightweight coordinator/worker/reviewer/finisher workflows without a scheduler.
 - Keep team status truthful by deriving it from member tasks instead of storing it separately.
 - Support team-level status, wait, and cleanup operations.
 - Allow `submit_task` to attach a new task to a team.
@@ -40,12 +40,12 @@ The public concept is `team`, not `swarm` or `group`.
 Rationale:
 
 - The feature is intentionally smaller than jcode Swarm.
-- `team` accurately describes the intended workflow: related tasks under one objective with optional coordinator/worker/reviewer positions.
+- `team` accurately describes the intended workflow: related tasks under one objective with optional coordinator/worker/reviewer/finisher positions.
 - It avoids implying automatic conflict resolution or autonomous spawning.
 
 Internal names should use `TaskTeam` / `task_teams` for clarity.
 
-`role` remains the existing Agent Profile field (`planner`, `worker`, `reviewer`, `debugger`, etc.). `position` is the task's place inside a team (`coordinator`, `worker`, `reviewer`, or `observer`).
+`role` remains the existing Agent Profile field (`planner`, `worker`, `reviewer`, `debugger`, `pr-finisher`, etc.). `position` is the task's place inside a team (`coordinator`, `worker`, `reviewer`, `finisher`, or `observer`).
 
 Example:
 
@@ -107,7 +107,7 @@ Coordinator-led dogfood follow-ups (2026-05-04):
 
 - Dynamic team waiting: default `wait_team` remains snapshot-based, but coordinator-led workflows can use `follow_new_tasks` so waits include workers/reviewers created by the coordinator after the wait begins.
 - Coordinator prompt guidance: coordinator tasks should get a concise recipe for using cuekit tools to submit workers, wait with bounded polling, request review, steer stalled work, and report a final team summary. This is prompt guidance only, not scheduler enforcement.
-- Team result/timeline: parents need an event-first team result view that highlights coordinator, worker, and reviewer terminal reports without reading noisy runtime transcripts.
+- Team result/timeline: parents need an event-first team result view that highlights coordinator, worker, reviewer, and finisher terminal reports without reading noisy runtime transcripts.
 - Empty team deletion: `cleanup_team` removes terminal tasks but intentionally keeps the team row; add an explicit empty-team deletion policy/operation.
 - Steering surface review: `steer_team` is useful for broadcasting one instruction to all non-terminal team tasks. Before API stabilization, decide whether to keep `steer_task`/`steer_team` or introduce a grouped `steer({ kind })` operation.
 - Event-first display: team summaries should prefer durable `task_events`; transcript tails remain useful for task detail/debugging, but TUI/transcript noise should not be the primary team result surface.
@@ -157,7 +157,7 @@ Notes:
 - A team may have zero or more tasks.
 - `team_position` is stored separately from Agent Profile `role` to avoid semantic confusion.
 - The public API field is `position`; the store column may use `team_position` for clarity.
-- Valid positions are `coordinator`, `worker`, `reviewer`, and `observer`.
+- Valid positions are `coordinator`, `worker`, `reviewer`, `finisher`, and `observer`.
 - `position` should normally be present only when `team_id` is present. If a caller provides `position` without `team_id`, return `invalid_input`.
 - Deleting a team requires the team to be empty. Use `cleanup_team` / task deletion first, then `team delete` or grouped `delete({ kind: "team" })`.
 - Task deletion naturally removes that task from aggregate team status.
@@ -167,7 +167,7 @@ Notes:
 `position` describes a task's place inside a team. It is not an Agent Profile.
 
 ```ts
-type TeamPosition = "coordinator" | "worker" | "reviewer" | "observer";
+type TeamPosition = "coordinator" | "worker" | "reviewer" | "finisher" | "observer";
 ```
 
 Recommended meaning:
@@ -175,9 +175,10 @@ Recommended meaning:
 - `coordinator`: leads the team, checks team status/results, steers workers when needed, and produces integration summaries.
 - `worker`: completes a scoped implementation/research/docs task.
 - `reviewer`: reviews combined team output or a specific team member's output.
+- `finisher`: owns the final release/report-back lane after implementation and review, such as PR completion or durable coordinator notification routing. A finisher is not a reviewer; it should be grouped separately in status and run summaries.
 - `observer`: watches or reports without owning implementation.
 
-Cuekit does not enforce special permissions for positions in Phase 1/2. A coordinator is a normal cuekit task with coordinator-oriented metadata and prompt context. If its runtime has MCP access, it can use existing tools to inspect the team and steer workers; cuekit does not automatically wake it, route reports to it, or require workers to obey it.
+Cuekit does not enforce special permissions for positions in Phase 1/2. A coordinator is a normal cuekit task with coordinator-oriented metadata and prompt context. If its runtime has MCP access, it can use existing tools to inspect the team and steer workers; cuekit does not automatically wake it, route reports to it, or require workers to obey it. A finisher is likewise a normal task with finisher-oriented metadata; durable notification/report-back designs should build on its `position: finisher` events before adding any automatic wake or steering behavior.
 
 A coordinator should normally use the same coding-agent runtime as the caller/orchestrator, or at least a runtime with equivalent cuekit MCP access. In dogfood runs where only the caller's runtime has cuekit MCP configured, the coordinator should use that same runtime. Coordinator tasks should also normally use interactive adapter mode: coordination is multi-step, may need steering, and can stall in non-interactive batch mode. cuekit allows explicit coordinator batch mode for compatibility, but should warn callers that batch is better suited to focused worker/reviewer tasks. Workers and reviewers may use other adapters because they can complete scoped work and report results without orchestrating the team.
 
@@ -518,6 +519,13 @@ Reviewer prompt context should say, in substance:
 ```text
 You are a reviewer in cuekit team <team_id>: <title>.
 Review the relevant team outputs or final combined changes. Prefer concrete findings with task/file references.
+```
+
+Finisher prompt context should say, in substance:
+
+```text
+You are the finisher in cuekit team <team_id>: <title>.
+Run only after implementation/review prerequisites are satisfied. Complete the requested finalization or report-back lane, emit durable cuekit reports with evidence, and do not create/merge PRs or cleanup tasks unless the parent/user explicitly requested that scope.
 ```
 
 Observer prompt context should say, in substance:

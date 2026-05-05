@@ -91,12 +91,35 @@ describe("team status aggregation", () => {
 			{ task_id: "t2", agent_kind: "pi", status: "running", position: "worker", updated_at: now },
 			{ task_id: "t3", agent_kind: "pi", status: "running", position: "reviewer", updated_at: now },
 			{ task_id: "t4", agent_kind: "pi", status: "running", position: "observer", updated_at: now },
+			{
+				task_id: "t5",
+				agent_kind: "pi",
+				status: "completed",
+				position: "finisher",
+				updated_at: now,
+			},
 		]);
 
 		expect(grouped.coordinator.map((item) => item.task_id)).toEqual(["t1"]);
 		expect(grouped.worker.map((item) => item.task_id)).toEqual(["t2"]);
 		expect(grouped.reviewer.map((item) => item.task_id)).toEqual(["t3"]);
+		expect(grouped.finisher.map((item) => item.task_id)).toEqual(["t5"]);
 		expect(grouped.observer.map((item) => item.task_id)).toEqual(["t4"]);
+	});
+
+	it("groupTasksByPosition returns finisher: [] when no finisher tasks are present", () => {
+		const grouped = groupTasksByPosition([
+			{
+				task_id: "t1",
+				agent_kind: "pi",
+				status: "running",
+				position: "coordinator",
+				updated_at: now,
+			},
+			{ task_id: "t2", agent_kind: "pi", status: "completed", position: "worker", updated_at: now },
+		]);
+
+		expect(grouped.finisher).toEqual([]);
 	});
 
 	it("builds a team summary", () => {

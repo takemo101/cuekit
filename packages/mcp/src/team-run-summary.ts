@@ -8,7 +8,7 @@ import { listTaskEvents, type Task } from "@cuekit/store";
 import { z } from "incur";
 import type { CommandContext } from "./command-context.ts";
 
-const POSITIONS = ["coordinator", "worker", "reviewer", "observer"] as const;
+const POSITIONS = ["coordinator", "worker", "reviewer", "finisher", "observer"] as const;
 const REPORT_TYPES = new Set(["progress", "completed", "failed", "blocked", "help_requested"]);
 const TERMINAL_REPORT_TYPES = new Set(["completed", "failed", "blocked"]);
 const MAX_MESSAGE_LENGTH = 240;
@@ -73,6 +73,7 @@ function emptyPositions(): TeamRunSummary["positions"] {
 		coordinator: [],
 		worker: [],
 		reviewer: [],
+		finisher: [],
 		observer: [],
 	};
 }
@@ -101,7 +102,7 @@ export function emptyTeamRunSummary(): TeamRunSummary {
 export function buildTeamRunSummary(ctx: CommandContext, tasks: Task[]): TeamRunSummary {
 	const positions = emptyPositions();
 	let terminalReports = 0;
-	let latestTerminalMessage: string | undefined;
+	let latestTerminal: { sequence: number; message: string } | undefined;
 	const openAttention: NonNullable<TeamRunSummary["open_attention"]> = [];
 	const filesRead: string[] = [];
 	const filesWritten: string[] = [];
@@ -136,7 +137,9 @@ export function buildTeamRunSummary(ctx: CommandContext, tasks: Task[]): TeamRun
 			if (position) positions[position].push(entry);
 			if (TERMINAL_REPORT_TYPES.has(event.type)) {
 				terminalReports += 1;
-				latestTerminalMessage = event.message;
+				if (!latestTerminal || event.sequence > latestTerminal.sequence) {
+					latestTerminal = { sequence: event.sequence, message: event.message };
+				}
 			}
 		}
 		if (
@@ -183,9 +186,7 @@ export function buildTeamRunSummary(ctx: CommandContext, tasks: Task[]): TeamRun
 
 	return {
 		terminal_reports: terminalReports,
-		...(latestTerminalMessage
-			? { latest_terminal_message: truncateMessage(latestTerminalMessage) }
-			: {}),
+		...(latestTerminal ? { latest_terminal_message: truncateMessage(latestTerminal.message) } : {}),
 		positions,
 		...(openAttention.length > 0 ? { open_attention: openAttention } : {}),
 		...(observability ? { observability } : {}),

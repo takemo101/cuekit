@@ -283,14 +283,14 @@ Top-level keys are strict: unknown top-level keys are rejected.
 - `submit.model`: optional adapter model
 - `submit.timeout_ms`: positive integer
 - `submit.priority`: `low`, `normal`, or `high`
-- `teams.roles`: optional role defaults for `coordinator`, `worker`, `reviewer`, `observer`
+- `teams.roles`: optional role defaults for `coordinator`, `worker`, `reviewer`, `finisher`, `observer`
 - `teams.wait.timeout_ms`: integer `>= 0`
 - `teams.wait.poll_interval_ms`: positive integer
 - `teams.cleanup`: currently `keep-team` only in practice; `delete-empty-team` is reserved/planned
 - `adapters.<agent>.permissions`: `prompt` or `bypass`
 - `strategies.<name>.description`: optional display label
 - `strategies.<name>.intent`: optional mission goal
-- `strategies.<name>.recommended_team.<slot>.position`: `coordinator`, `worker`, `reviewer`, or `observer`
+- `strategies.<name>.recommended_team.<slot>.position`: `coordinator`, `worker`, `reviewer`, `finisher`, or `observer`
 - `strategies.<name>.recommended_team.<slot>.role`: optional Agent Profile id
 - `strategies.<name>.recommended_team.<slot>.agent`: optional adapter kind
 - `strategies.<name>.recommended_team.<slot>.model`: optional adapter model

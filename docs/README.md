@@ -17,7 +17,9 @@ Stable feature documentation and design notes:
 - [Agent profiles design](designs/cuekit-agent-profiles-design.md) — role-based task submission framework.
 - [Agent profiles guide](guides/agent-profiles.md) — end-user documentation and usage examples.
 - [Project config design](designs/cuekit-project-config-design.md) — `.cuekit.yaml` design background.
-- [PR finisher profile design](designs/cuekit-pr-finisher-profile-design.md) — builtin `pr-finisher` profile and strategy slot convention.
+- [PR finisher profile design](designs/cuekit-pr-finisher-profile-design.md) — builtin `pr-finisher` profile and first-class `position: finisher` strategy slot convention.
+- [Coordinator notifications routing design](designs/cuekit-coordinator-notifications-routing-design.md) — guidance-first report-back routing built on `position: finisher`.
+- [Team attention items design](designs/cuekit-team-attention-items-design.md) — derived important-event summaries before notification delivery or auto-wake.
 - [Project config guide](guides/project-config.md) — `.cuekit.yaml` identity, defaults, scopes, and safety rules.
 - [Task teams design](designs/cuekit-task-teams-design.md) — lightweight session-scoped teams.
 - [Team strategies design](designs/cuekit-team-strategies-design.md) — coordinator strategy playbooks.

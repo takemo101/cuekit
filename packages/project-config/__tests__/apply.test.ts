@@ -133,6 +133,15 @@ describe("applyTeamRoleDefault", () => {
 			),
 		).toEqual({ role: "explicit", role_from_team_config: false });
 	});
+
+	it("resolves finisher position role default", () => {
+		expect(
+			applyTeamRoleDefault(
+				{ position: "finisher" },
+				{ teams: { roles: { finisher: "pr-finisher" } } },
+			),
+		).toEqual({ role: "pr-finisher", role_from_team_config: true });
+	});
 });
 
 describe("applyTeamWaitDefaults", () => {
