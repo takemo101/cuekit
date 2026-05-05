@@ -8,6 +8,10 @@ import {
 import { getSessionById, getTaskById, getTaskTeamById } from "@cuekit/store";
 import { z } from "incur";
 import type { CommandContext } from "../command-context.ts";
+import {
+	CoordinatorBatchModeWarningSchema,
+	coordinatorBatchModeWarnings,
+} from "../coordinator-batch-warning.ts";
 import { runSubmitTask, SubmitTaskInputSchema } from "./submit-task.ts";
 
 export const SubmitTeamTaskItemSchema = SubmitTaskInputSchema.omit({
@@ -43,6 +47,7 @@ const AcceptedTeamTaskSchema = z.object({
 	role: z.string().optional(),
 	position: TeamPositionSchema.optional(),
 	model: z.string().optional(),
+	warnings: z.array(CoordinatorBatchModeWarningSchema).optional(),
 });
 
 const RejectedTeamTaskSchema = z.object({
@@ -161,6 +166,10 @@ export async function runSubmitTeamTasks(
 		});
 		if (result.accepted) {
 			const createdTask = getTaskById(ctx.db, result.task_id);
+			const warnings = coordinatorBatchModeWarnings({
+				position: task.position,
+				adapter_options: effectiveTask.adapter_options,
+			});
 			accepted.push({
 				index,
 				task_id: result.task_id,
@@ -168,6 +177,7 @@ export async function runSubmitTeamTasks(
 				...(result.role ? { role: result.role } : {}),
 				...(result.position ? { position: result.position } : {}),
 				...(createdTask?.model ? { model: createdTask.model } : {}),
+				...(warnings ? { warnings } : {}),
 			});
 		} else {
 			rejected.push({ index, error: result.error });

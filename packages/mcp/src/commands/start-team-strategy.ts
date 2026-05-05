@@ -5,6 +5,10 @@ import {
 } from "@cuekit/project-config";
 import { z } from "incur";
 import type { CommandContext } from "../command-context.ts";
+import {
+	CoordinatorBatchModeWarningSchema,
+	coordinatorBatchModeWarnings,
+} from "../coordinator-batch-warning.ts";
 import { renderTeamStrategyPrompt, resolveTeamStrategy } from "../team-strategy.ts";
 import { runCreateTeam } from "./create-team.ts";
 import { runSubmitTask } from "./submit-task.ts";
@@ -54,6 +58,7 @@ export const StartTeamStrategyOutputSchema = z.discriminatedUnion("accepted", [
 		agent_kind: z.string(),
 		role: z.string().optional(),
 		model: z.string().optional(),
+		warnings: z.array(CoordinatorBatchModeWarningSchema).optional(),
 	}),
 	z.object({
 		accepted: z.literal(false),
@@ -161,6 +166,11 @@ export async function runStartTeamStrategy(
 		return failure("coordinator_submit_failed", submitted.error.message);
 	}
 
+	const warnings = coordinatorBatchModeWarnings({
+		position: "coordinator",
+		adapter_options,
+	});
+
 	return {
 		accepted: true,
 		team_id: team.team_id,
@@ -169,5 +179,6 @@ export async function runStartTeamStrategy(
 		agent_kind: submitted.agent_kind,
 		...(submitted.role ? { role: submitted.role } : {}),
 		...(model ? { model } : {}),
+		...(warnings ? { warnings } : {}),
 	};
 }

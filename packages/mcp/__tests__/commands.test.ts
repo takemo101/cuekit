@@ -418,6 +418,65 @@ describe("submit-team-tasks", () => {
 		}
 	});
 
+	it("warns when a team coordinator task explicitly uses batch mode", async () => {
+		createSession(db, {
+			id: "s_team_batch_coord",
+			project_root: "/p",
+			worktree_path: "/w",
+			parent_agent_kind: "pi",
+		});
+		createTaskTeam(db, { id: "tm_batch_coord", session_id: "s_team_batch_coord", title: "Team" });
+
+		const result = await runSubmitTeamTasks(ctx, {
+			team_id: "tm_batch_coord",
+			tasks: [
+				{
+					objective: "Coordinate",
+					agent_kind: "claude-code",
+					position: "coordinator",
+					adapter_options: { mode: "batch" },
+				},
+				{
+					objective: "Work",
+					agent_kind: "claude-code",
+					position: "worker",
+					adapter_options: { mode: "batch" },
+				},
+				{
+					objective: "Review",
+					agent_kind: "claude-code",
+					position: "reviewer",
+					adapter_options: { mode: "batch" },
+				},
+				{
+					objective: "Observe",
+					agent_kind: "claude-code",
+					position: "observer",
+					adapter_options: { mode: "batch" },
+				},
+				{
+					objective: "Coordinate interactively",
+					agent_kind: "claude-code",
+					position: "coordinator",
+				},
+			],
+		});
+
+		expect("accepted" in result).toBe(true);
+		if (!("accepted" in result)) return;
+		expect(result.accepted[0]?.warnings).toEqual([
+			{
+				code: "coordinator_batch_mode",
+				message:
+					"Coordinator tasks are orchestration-heavy; batch mode may stall or be unsteerable. Prefer interactive mode for coordination and use batch for focused worker/reviewer tasks.",
+			},
+		]);
+		expect(result.accepted[1]?.warnings).toBeUndefined();
+		expect(result.accepted[2]?.warnings).toBeUndefined();
+		expect(result.accepted[3]?.warnings).toBeUndefined();
+		expect(result.accepted[4]?.warnings).toBeUndefined();
+	});
+
 	it("team defaults: applies configured roles by position and safe permissions", async () => {
 		const root = mkdtempSync(join(tmpdir(), "cuekit-team-defaults-"));
 		try {
@@ -1200,6 +1259,88 @@ strategies:
 			expect(spec.team_context?.position).toBe("coordinator");
 			expect(spec.context).toContain("Team strategy: docs-polish");
 			expect(spec.context).toContain("Checks:");
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("warns when a strategy coordinator explicitly uses batch mode", async () => {
+		const root = mkdtempSync(join(tmpdir(), "cuekit-start-strategy-batch-warning-"));
+		try {
+			writeFileSync(
+				join(root, ".cuekit.yaml"),
+				`strategies:
+  docs-polish:
+    recommended_team:
+      coordinator:
+        position: coordinator
+        role: planner
+        agent: claude-code
+        model: sonnet
+`,
+			);
+
+			const result = await runStartTeamStrategy(ctx, {
+				cwd: root,
+				strategy: "docs-polish",
+				objective: "Polish README",
+				coordinator: { adapter_options: { mode: "batch" } },
+			});
+
+			expect(result.accepted).toBe(true);
+			if (!result.accepted) return;
+			expect(result.warnings).toEqual([
+				{
+					code: "coordinator_batch_mode",
+					message:
+						"Coordinator tasks are orchestration-heavy; batch mode may stall or be unsteerable. Prefer interactive mode for coordination and use batch for focused worker/reviewer tasks.",
+				},
+			]);
+			const task = getTaskById(db, result.coordinator_task_id);
+			const spec = JSON.parse(task?.spec_json ?? "{}");
+			expect(spec.adapter_options?.mode).toBe("batch");
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("warns when a strategy coordinator slot uses batch mode", async () => {
+		const root = mkdtempSync(join(tmpdir(), "cuekit-start-strategy-slot-batch-warning-"));
+		try {
+			writeFileSync(
+				join(root, ".cuekit.yaml"),
+				`strategies:
+  docs-polish:
+    recommended_team:
+      coordinator:
+        position: coordinator
+        role: planner
+        agent: claude-code
+        model: sonnet
+        adapter_options:
+          mode: batch
+`,
+			);
+
+			const result = await runStartTeamStrategy(ctx, {
+				cwd: root,
+				strategy: "docs-polish",
+				objective: "Polish README",
+			});
+
+			expect(result.accepted).toBe(true);
+			if (!result.accepted) return;
+			expect(result.warnings).toEqual([
+				{
+					code: "coordinator_batch_mode",
+					message:
+						"Coordinator tasks are orchestration-heavy; batch mode may stall or be unsteerable. Prefer interactive mode for coordination and use batch for focused worker/reviewer tasks.",
+				},
+			]);
+			const task = getTaskById(db, result.coordinator_task_id);
+			const spec = JSON.parse(task?.spec_json ?? "{}");
+			expect(spec.adapter_options?.mode).toBe("batch");
+			expect(spec.adapter_options?.dangerously_skip_permissions).toBe(false);
 		} finally {
 			rmSync(root, { recursive: true, force: true });
 		}
