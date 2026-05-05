@@ -148,6 +148,34 @@ describe("createPiAdapter (truthful stub)", () => {
 		});
 	});
 
+	it("records one timeout diagnostic when concurrent status polls observe the timeout", async () => {
+		const adapter = createPiAdapter(db, panes, {
+			launchCommandOverride: () => "sleep 60",
+		});
+		const result = await adapter.submit({
+			spec: { agent_kind: "pi", objective: "investigate", timeout_ms: 1 },
+			session_id: "s1",
+		});
+		expect(result.ok).toBe(true);
+		if (!result.ok) return;
+		await Bun.sleep(5);
+
+		const [first, second] = await Promise.all([
+			adapter.status(result.value.task_id),
+			adapter.status(result.value.task_id),
+		]);
+
+		expect(first.status).toBe("timed_out");
+		expect(second.status).toBe("timed_out");
+		const timeoutEvents = listTaskEvents(db, result.value.task_id).filter(
+			(event) =>
+				event.type === "log" &&
+				(event.payload as { diagnostic?: { kind?: string } } | null)?.diagnostic?.kind ===
+					"timeout",
+		);
+		expect(timeoutEvents).toHaveLength(1);
+	});
+
 	it("prefers completed sentinel over timeout when a pane already exited", async () => {
 		const tmp = mkdtempSync(join(tmpdir(), "cuekit-timeout-"));
 		try {
