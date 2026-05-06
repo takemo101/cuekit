@@ -179,7 +179,7 @@ function normalizeCuekitArgv(): string[] | undefined {
 	return undefined;
 }
 
-async function main(): Promise<void> {
+export async function runCuekitMcpBin(): Promise<void> {
 	// Construct the logger before any fallible startup work so the catch
 	// block can use it uniformly. parseLogLevel guards against typos in
 	// CUEKIT_LOG_LEVEL (unknown values fall back to "warn" instead of
@@ -307,4 +307,6 @@ async function main(): Promise<void> {
 	}
 }
 
-await main();
+if (import.meta.main) {
+	await runCuekitMcpBin();
+}
