@@ -134,6 +134,7 @@ function renderDoctor(checks: DoctorCheck[]): string {
 		"",
 		"Next:",
 		"  cuekit mcp config",
+		"  cuekit update",
 		"",
 	].join("\n");
 }
