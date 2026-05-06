@@ -419,7 +419,7 @@ describe("createCli", () => {
 	});
 
 	it("serves top-level help with human-only commands", async () => {
-		const proc = Bun.spawn(["bun", "packages/mcp/src/bin.ts", "-h"], {
+		const proc = Bun.spawn(["bun", "packages/cli/src/bin.ts", "-h"], {
 			cwd: WORKSPACE_ROOT,
 			env: { ...process.env, CUEKIT_DB_PATH: ":memory:" },
 			stderr: "pipe",
@@ -439,7 +439,7 @@ describe("createCli", () => {
 	});
 
 	it("serves tui help as a human-only command outside MCP operations", async () => {
-		const proc = Bun.spawn(["bun", "packages/mcp/src/bin.ts", "tui", "--help"], {
+		const proc = Bun.spawn(["bun", "packages/cli/src/bin.ts", "tui", "--help"], {
 			cwd: WORKSPACE_ROOT,
 			env: { ...process.env, CUEKIT_DB_PATH: ":memory:" },
 			stderr: "pipe",
@@ -464,7 +464,7 @@ describe("createCli", () => {
 	it("serves init as a human-only command before opening the database", async () => {
 		const tmpRoot = mkdtempSync(`${tmpdir()}/cuekit-init-cli-`);
 		try {
-			const binPath = resolve(WORKSPACE_ROOT, "packages/mcp/src/bin.ts");
+			const binPath = resolve(WORKSPACE_ROOT, "packages/cli/src/bin.ts");
 			const proc = Bun.spawn(["bun", binPath, "init"], {
 				cwd: tmpRoot,
 				env: { ...process.env, CUEKIT_DB_PATH: "/nonexistent-dir/cuekit/state.db" },
@@ -493,7 +493,7 @@ describe("createCli", () => {
 	it("serves init help before opening the database", async () => {
 		const tmpRoot = mkdtempSync(`${tmpdir()}/cuekit-init-help-`);
 		try {
-			const binPath = resolve(WORKSPACE_ROOT, "packages/mcp/src/bin.ts");
+			const binPath = resolve(WORKSPACE_ROOT, "packages/cli/src/bin.ts");
 			const proc = Bun.spawn(["bun", binPath, "init", "--help"], {
 				cwd: tmpRoot,
 				env: { ...process.env, CUEKIT_DB_PATH: "/nonexistent-dir/cuekit/state.db" },
@@ -518,7 +518,7 @@ describe("createCli", () => {
 	it("init dry-run writes no files", async () => {
 		const tmpRoot = mkdtempSync(`${tmpdir()}/cuekit-init-dry-run-`);
 		try {
-			const binPath = resolve(WORKSPACE_ROOT, "packages/mcp/src/bin.ts");
+			const binPath = resolve(WORKSPACE_ROOT, "packages/cli/src/bin.ts");
 			const proc = Bun.spawn(["bun", binPath, "init", "--dry-run"], {
 				cwd: tmpRoot,
 				env: { ...process.env },
@@ -543,7 +543,7 @@ describe("createCli", () => {
 	it("init refuses existing config unless forced", async () => {
 		const tmpRoot = mkdtempSync(`${tmpdir()}/cuekit-init-force-`);
 		try {
-			const binPath = resolve(WORKSPACE_ROOT, "packages/mcp/src/bin.ts");
+			const binPath = resolve(WORKSPACE_ROOT, "packages/cli/src/bin.ts");
 			writeFileSync(`${tmpRoot}/.cuekit.yaml`, "project:\n  id: existing\n");
 
 			const refused = Bun.spawn(["bun", binPath, "init"], {
@@ -575,7 +575,7 @@ describe("createCli", () => {
 	it("init can generate unsafe bypass permissions when explicitly requested", async () => {
 		const tmpRoot = mkdtempSync(`${tmpdir()}/cuekit-init-unsafe-bypass-`);
 		try {
-			const binPath = resolve(WORKSPACE_ROOT, "packages/mcp/src/bin.ts");
+			const binPath = resolve(WORKSPACE_ROOT, "packages/cli/src/bin.ts");
 			const proc = Bun.spawn(["bun", binPath, "init", "--unsafe-bypass"], {
 				cwd: tmpRoot,
 				env: { ...process.env },
@@ -600,7 +600,7 @@ describe("createCli", () => {
 	it("init can skip gitignore updates", async () => {
 		const tmpRoot = mkdtempSync(`${tmpdir()}/cuekit-init-no-gitignore-`);
 		try {
-			const binPath = resolve(WORKSPACE_ROOT, "packages/mcp/src/bin.ts");
+			const binPath = resolve(WORKSPACE_ROOT, "packages/cli/src/bin.ts");
 			const proc = Bun.spawn(["bun", binPath, "init", "--no-gitignore"], {
 				cwd: tmpRoot,
 				env: { ...process.env },
@@ -616,7 +616,7 @@ describe("createCli", () => {
 	});
 
 	it("serves tui help before opening the database", async () => {
-		const proc = Bun.spawn(["bun", "packages/mcp/src/bin.ts", "tui", "--help"], {
+		const proc = Bun.spawn(["bun", "packages/cli/src/bin.ts", "tui", "--help"], {
 			cwd: WORKSPACE_ROOT,
 			env: { ...process.env, CUEKIT_DB_PATH: "/nonexistent-dir/cuekit/state.db" },
 			stderr: "pipe",
@@ -681,7 +681,7 @@ describe("createCli", () => {
 	it("registers MCP for pi in the shared global MCP config", async () => {
 		const tmpRoot = mkdtempSync(`${tmpdir()}/cuekit-pi-mcp-add-`);
 		try {
-			const proc = Bun.spawn(["bun", "packages/mcp/src/bin.ts", "mcp", "add", "--agent", "pi"], {
+			const proc = Bun.spawn(["bun", "packages/cli/src/bin.ts", "mcp", "add", "--agent", "pi"], {
 				cwd: WORKSPACE_ROOT,
 				env: {
 					...process.env,
@@ -714,7 +714,7 @@ describe("createCli", () => {
 			const proc = Bun.spawn(
 				[
 					"bun",
-					`${WORKSPACE_ROOT}/packages/mcp/src/bin.ts`,
+					`${WORKSPACE_ROOT}/packages/cli/src/bin.ts`,
 					"mcp",
 					"add",
 					"--agent",
@@ -753,7 +753,7 @@ describe("createCli", () => {
 			mkdirSync(`${tmpRoot}/.config/mcp`, { recursive: true });
 			writeFileSync(configPath, JSON.stringify({ mcpServers: {} }));
 			chmodSync(configPath, 0o600);
-			const proc = Bun.spawn(["bun", "packages/mcp/src/bin.ts", "mcp", "add", "--agent", "pi"], {
+			const proc = Bun.spawn(["bun", "packages/cli/src/bin.ts", "mcp", "add", "--agent", "pi"], {
 				cwd: WORKSPACE_ROOT,
 				env: {
 					...process.env,
