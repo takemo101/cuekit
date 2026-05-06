@@ -99,6 +99,21 @@ describe("cuekit doctor", () => {
 		expect(result.stdout).toContain("✓ adapter jcode: jcode found");
 	});
 
+	it("treats matching package versions and v-prefixed release tags as up to date", async () => {
+		const result = await runDoctor({
+			cwd: "/repo",
+			env: {},
+			exec: okExec,
+			checkWritableState: async () => ({ ok: true, path: "~/.cuekit/state.db" }),
+			loadProjectConfig: () => ({ ok: true, source: "config", path: "/repo/.cuekit.yaml" }),
+			getCurrentVersion: () => "0.0.1",
+			getLatestRelease: async () => ({ ok: true, tag: "v0.0.1" }),
+		});
+
+		expect(result.exitCode).toBe(0);
+		expect(result.stdout).toContain("✓ update: up to date");
+	});
+
 	it("suggests the implemented update command as a next step", async () => {
 		const result = await runDoctor({
 			cwd: "/repo",

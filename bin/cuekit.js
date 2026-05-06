@@ -44621,6 +44621,9 @@ async function defaultGetLatestRelease() {
 function trimVersionOutput(value) {
   return value.trim().split(/\s+/).join(" ");
 }
+function normalizeReleaseVersion(value) {
+  return value.trim().replace(/^v/, "");
+}
 var ADAPTER_EXECUTABLES = [
   { kind: "claude-code", command: "claude" },
   { kind: "pi", command: "pi" },
@@ -44684,7 +44687,7 @@ async function runDoctor(options = {}) {
   const latest = await (options.getLatestRelease ?? defaultGetLatestRelease)();
   if (!latest.ok) {
     checks3.push({ level: "warn", label: "update", detail: `skipped (${latest.reason})` });
-  } else if (currentVersion && currentVersion === latest.tag) {
+  } else if (currentVersion && normalizeReleaseVersion(currentVersion) === normalizeReleaseVersion(latest.tag)) {
     checks3.push({ level: "ok", label: "update", detail: "up to date" });
   } else {
     checks3.push({ level: "warn", label: "update", detail: `${latest.tag} available` });
