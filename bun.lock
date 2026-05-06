@@ -9,6 +9,14 @@
         "@types/bun": "latest",
         "typescript": "^5.8.0",
       },
+      "optionalDependencies": {
+        "@opentui/core-darwin-arm64": "0.2.1",
+        "@opentui/core-darwin-x64": "0.2.1",
+        "@opentui/core-linux-arm64": "0.2.1",
+        "@opentui/core-linux-x64": "0.2.1",
+        "@opentui/core-win32-arm64": "0.2.1",
+        "@opentui/core-win32-x64": "0.2.1",
+      },
     },
     "packages/adapters": {
       "name": "@cuekit/adapters",

@@ -13,8 +13,8 @@ describe("tui package boundary", () => {
 		const mcpSource = await Bun.file(new URL("../src/bin.ts", import.meta.url)).text();
 		const cliSource = await Bun.file(new URL("../../cli/src/bin.ts", import.meta.url)).text();
 		expect(mcpSource).not.toContain("@cuekit/tui");
-		expect(cliSource).toContain('const TUI_PACKAGE_NAME = "@cuekit/tui";');
-		expect(cliSource).toContain("await import(TUI_PACKAGE_NAME)");
+		expect(cliSource).toContain('await import("@cuekit/tui")');
+		expect(cliSource).not.toContain("await import(TUI_PACKAGE_NAME)");
 		expect(cliSource).not.toContain('from "./tui/index.tsx"');
 	});
 });

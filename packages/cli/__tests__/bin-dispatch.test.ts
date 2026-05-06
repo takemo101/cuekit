@@ -37,6 +37,9 @@ describe("cuekit CLI binary dispatch", () => {
 		const bundledBin = readFileSync(resolve(workspaceRoot, "bin/cuekit.js"), "utf8");
 		expect(bundledBin).toContain("#!/usr/bin/env bun");
 		expect(bundledBin).toContain("cuekit doctor");
+		expect(bundledBin).toContain("runTuiLoop");
+		expect(bundledBin).not.toContain('var TUI_PACKAGE_NAME = "@cuekit/tui"');
+		expect(bundledBin).not.toContain("await import(TUI_PACKAGE_NAME)");
 		expect(cliPackage.bin?.cuekit).toBe("./src/bin.ts");
 		expect(cliPackage.dependencies?.["@cuekit/mcp"]).toBe("workspace:*");
 		expect(mcpPackage.bin?.cuekit).toBeUndefined();

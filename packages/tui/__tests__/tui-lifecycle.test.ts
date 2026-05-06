@@ -22,9 +22,9 @@ describe("tui argv lifecycle", () => {
 		expect(returnIndex).toBeGreaterThan(closeIndex);
 	});
 
-	it("lazy-loads the TUI package from the TUI branch", async () => {
+	it("lazy-loads the TUI package from a bundler-visible literal import", async () => {
 		const source = await Bun.file(BIN_SOURCE).text();
-		expect(source).toContain('const TUI_PACKAGE_NAME = "@cuekit/tui";');
-		expect(source).toContain("await import(TUI_PACKAGE_NAME)");
+		expect(source).toContain('await import("@cuekit/tui")');
+		expect(source).not.toContain("await import(TUI_PACKAGE_NAME)");
 	});
 });
