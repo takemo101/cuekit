@@ -62,7 +62,7 @@ export function createTuiContext(ctx: CommandContext, scope: TuiScopeOptions = {
 				message: `Cleaned up ${result.deleted.length} terminal task(s).`,
 			};
 		},
-		deleteTeam: (teamId: string) => {
+		deleteTeam: async (teamId: string) => {
 			const result = runDeleteTeam(ctx, { team_id: teamId });
 			if ("error" in result) {
 				return {
