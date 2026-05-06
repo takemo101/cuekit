@@ -39,7 +39,7 @@ export function TeamDetail(props: {
 	const { team, detail, selectedMemberIndex, focus } = props;
 	if (!team) {
 		return (
-			<box title="Team Detail" borderStyle="single" borderColor={theme.border} backgroundColor={theme.panel} flexGrow={1} padding={1}>
+			<box title="Detail" borderStyle="single" borderColor={theme.border} backgroundColor={theme.panel} flexGrow={1} padding={1}>
 				<text fg={theme.muted}>No team selected.</text>
 			</box>
 		);
@@ -49,7 +49,7 @@ export function TeamDetail(props: {
 	const hints = detail?.manualSteerHints ?? [];
 	return (
 		<box
-			title="Team Detail"
+			title="Detail"
 			borderStyle="single"
 			borderColor={focus === "members" ? theme.cyan : theme.border}
 			backgroundColor={theme.panel}
