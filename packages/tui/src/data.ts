@@ -6,6 +6,7 @@ import type {
 	TuiTaskEvent,
 	TuiTaskListOutput,
 	TuiTeamAttentionItem,
+	TuiTeamListInput,
 	TuiTeamListOutput,
 	TuiTeamStatusOutput,
 } from "./context.ts";
@@ -35,15 +36,7 @@ export async function loadTaskList(
 
 export async function loadTeamList(
 	ctx: TuiContext,
-	options: {
-		session_id?: string;
-		cwd?: string;
-		project_root?: string;
-		project_scope?: { project_uid?: string; project_root: string };
-		project_uid?: string;
-		limit?: number;
-		cursor?: string;
-	} = {},
+	options: TuiTeamListInput = {},
 ): Promise<TuiTeamListOutput> {
 	if (!ctx.listTeams) return { teams: [], has_more: false };
 	return ctx.listTeams({ ...options, limit: options.limit ?? 100 });

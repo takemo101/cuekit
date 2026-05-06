@@ -2,7 +2,7 @@ import type { TaskSummary, TeamSummary } from "@cuekit/core";
 import type { ReactNode } from "react";
 import type { TuiTeamDetail } from "../data.ts";
 import { truncateEnd } from "../format.ts";
-import type { TeamFocus } from "../task-actions.ts";
+import type { TeamFocus } from "../tui-state.ts";
 import { statusAccent, statusGlyph, theme } from "../theme.ts";
 
 const LANE_ORDER = ["coordinator", "worker", "reviewer", "finisher", "observer", "unpositioned"];

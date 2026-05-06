@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { truncateEnd } from "../format.ts";
-import type { TeamFocus } from "../task-actions.ts";
+import type { TeamFocus } from "../tui-state.ts";
 import type { TuiMode } from "../tui-state.ts";
 import { theme } from "../theme.ts";
 

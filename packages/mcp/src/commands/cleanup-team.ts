@@ -6,6 +6,7 @@ import {
 } from "@cuekit/core";
 import { deleteTask, getTaskTeamById, listTasksByTeam } from "@cuekit/store";
 import { z } from "incur";
+import { cleanupAdapterTask } from "../adapter-cleanup.ts";
 import type { CommandContext } from "../command-context.ts";
 import { countTeamTasks } from "../team-status.ts";
 
@@ -52,8 +53,8 @@ export async function runCleanupTeam(
 	const terminalTasks = tasks.filter((task) => isTerminalTaskStatus(task.status));
 	if (!dryRun) {
 		for (const task of terminalTasks) {
-			const adapter = ctx.registry.get(task.agent_kind);
-			await adapter?.cleanup?.(task.id).catch(() => {});
+			const cleanup = await cleanupAdapterTask(ctx, task);
+			if (!cleanup.ok) return { error: cleanup.error };
 			deleteTask(ctx.db, task.id);
 		}
 	}

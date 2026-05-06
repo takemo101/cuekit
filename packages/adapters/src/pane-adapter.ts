@@ -602,11 +602,7 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 		},
 
 		async cleanup(task_id: string) {
-			try {
-				await panes.killTask(task_id);
-			} catch {
-				// best-effort — a missing tmux session is not an error here
-			}
+			await panes.killTask(task_id);
 		},
 
 		async list(filter?: TaskListFilter): Promise<TaskSummary[]> {

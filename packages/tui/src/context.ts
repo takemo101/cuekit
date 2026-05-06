@@ -76,17 +76,19 @@ export type TuiTeamListOutput =
 	| { teams: TeamSummary[]; has_more: boolean; next_cursor?: string }
 	| { error: JobError };
 
+export type TuiTeamListInput = {
+	session_id?: string;
+	cwd?: string;
+	project_root?: string;
+	project_scope?: { project_uid?: string; project_root: string };
+	project_uid?: string;
+	limit?: number;
+	cursor?: string;
+};
+
 export type TuiContext = {
 	listTasks(input: TaskListFilter): Promise<TuiTaskListOutput>;
-	listTeams?(input: {
-		session_id?: string;
-		cwd?: string;
-		project_root?: string;
-		project_scope?: { project_uid?: string; project_root: string };
-		project_uid?: string;
-		limit?: number;
-		cursor?: string;
-	}): Promise<TuiTeamListOutput>;
+	listTeams?(input: TuiTeamListInput): Promise<TuiTeamListOutput>;
 	getTaskStatus(taskId: string): Promise<TaskStatusView>;
 	getTeamStatus?(teamId: string): Promise<TuiTeamStatusOutput>;
 	listTaskEvents(taskId: string): Promise<TuiListTaskEventsOutput>;

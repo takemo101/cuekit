@@ -1,6 +1,7 @@
 import { isTerminalTaskStatus, JobErrorSchema } from "@cuekit/core";
 import { deleteTask, getTaskById } from "@cuekit/store";
 import { z } from "incur";
+import { cleanupAdapterTask } from "../adapter-cleanup.ts";
 import type { CommandContext } from "../command-context.ts";
 import { findFirstDuplicate } from "./_duplicates.ts";
 
@@ -76,8 +77,11 @@ export async function runDeleteTasks(
 			continue;
 		}
 
-		const adapter = ctx.registry.get(task.agent_kind);
-		await adapter?.cleanup?.(taskId).catch(() => {});
+		const cleanup = await cleanupAdapterTask(ctx, task);
+		if (!cleanup.ok) {
+			results.push({ task_id: taskId, ok: false, error: cleanup.error });
+			continue;
+		}
 		deleteTask(ctx.db, taskId);
 		results.push({ task_id: taskId, ok: true, message: `deleted task '${taskId}'` });
 	}

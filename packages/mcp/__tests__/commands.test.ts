@@ -3313,6 +3313,26 @@ describe("cleanup-tasks", () => {
 		expect(getTaskById(db, submit.task_id)).not.toBeNull();
 	});
 
+	it("returns a structured error when adapter cleanup fails", async () => {
+		const submit = await runSubmitTask(ctx, {
+			objective: "x",
+			agent_kind: "claude-code",
+			cwd: "/tmp",
+		});
+		if (!submit.accepted) throw new Error("setup failed");
+		await runCancelTasks(ctx, { task_ids: [submit.task_id] });
+		runner.queueResponse({ stdout: "", stderr: "permission denied", exitCode: 1 });
+
+		const ack = await runCleanupTasks(ctx, { session_id: submit.session_id });
+
+		expect(ack.ok).toBe(false);
+		if (!ack.ok) {
+			expect(ack.error.code).toBe("runtime_crash");
+			expect(ack.error.message).toContain(submit.task_id);
+		}
+		expect(getTaskById(db, submit.task_id)).not.toBeNull();
+	});
+
 	it("requires exactly one cleanup scope", async () => {
 		const noScope = await runCleanupTasks(ctx, {});
 		expect(noScope.ok).toBe(false);

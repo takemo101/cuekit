@@ -69,7 +69,9 @@ export function TeamList(props: {
 					);
 				})
 			)}
-			{end < teams.length ? <text fg={theme.muted}>{`… ${teams.length - end} more`}</text> : null}
+			{needsMoreRow && end < teams.length ? (
+				<text fg={theme.muted}>{`… ${teams.length - end} more`}</text>
+			) : null}
 		</box>
 	);
 }

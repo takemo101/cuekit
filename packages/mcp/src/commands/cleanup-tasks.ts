@@ -2,6 +2,7 @@ import { resolve } from "node:path";
 import { isTerminalTaskStatus, JobErrorSchema, TaskStatusSchema } from "@cuekit/core";
 import { deleteTask, listSessionsByWorktree, listTasksBySession } from "@cuekit/store";
 import { z } from "incur";
+import { cleanupAdapterTask } from "../adapter-cleanup.ts";
 import type { CommandContext } from "../command-context.ts";
 
 const TerminalTaskStatusSchema = z.enum([
@@ -96,8 +97,8 @@ export async function runCleanupTasks(
 	const results: z.infer<typeof CleanupTaskItemSchema>[] = [];
 	for (const task of tasks) {
 		if (!dryRun) {
-			const adapter = ctx.registry.get(task.agent_kind);
-			await adapter?.cleanup?.(task.id).catch(() => {});
+			const cleanup = await cleanupAdapterTask(ctx, task);
+			if (!cleanup.ok) return { ok: false, error: cleanup.error };
 			deleteTask(ctx.db, task.id);
 		}
 		results.push({
