@@ -4,9 +4,10 @@ import {
 	classifyCuekitCommand,
 	printDoctorHelp,
 	printMainHelp,
-	printReservedHumanCommand,
+	printUpdateHelp,
 } from "./dispatch.ts";
 import { runDoctor } from "./doctor.ts";
+import { runUpdate } from "./update.ts";
 
 export async function runCuekitCliBin(): Promise<void> {
 	const argv = process.argv.slice(2);
@@ -25,9 +26,15 @@ export async function runCuekitCliBin(): Promise<void> {
 		if (result.stderr) process.stderr.write(result.stderr);
 		process.exit(result.exitCode);
 	}
-	if (classification.kind === "reserved-human") {
-		process.stderr.write(printReservedHumanCommand(classification.command));
-		process.exit(1);
+	if (classification.kind === "update") {
+		if (argv.includes("--help") || argv.includes("-h")) {
+			process.stdout.write(printUpdateHelp());
+			return;
+		}
+		const result = await runUpdate();
+		process.stdout.write(result.stdout);
+		if (result.stderr) process.stderr.write(result.stderr);
+		process.exit(result.exitCode);
 	}
 	await runCuekitMcpBin();
 }

@@ -1,7 +1,7 @@
 export type CuekitCommandClassification =
 	| { kind: "help" }
 	| { kind: "doctor" }
-	| { kind: "reserved-human"; command: "update" }
+	| { kind: "update" }
 	| { kind: "delegate" };
 
 export function classifyCuekitCommand(argv: string[]): CuekitCommandClassification {
@@ -13,7 +13,7 @@ export function classifyCuekitCommand(argv: string[]): CuekitCommandClassificati
 		return { kind: "doctor" };
 	}
 	if (command === "update") {
-		return { kind: "reserved-human", command };
+		return { kind: "update" };
 	}
 	return { kind: "delegate" };
 }
@@ -28,6 +28,7 @@ export function printMainHelp(): string {
 		"  cuekit init    Create .cuekit.yaml and update .gitignore",
 		"  cuekit tui     Open the interactive task cockpit",
 		"  cuekit doctor  Diagnose local cuekit setup",
+		"  cuekit update  Show the latest Bun/GitHub install command",
 		"",
 		"Command groups:",
 		"  task, team, adapter, agent, session, tool, mcp",
@@ -56,6 +57,20 @@ export function printDoctorHelp(): string {
 	].join("\n");
 }
 
-export function printReservedHumanCommand(command: "update"): string {
-	return `cuekit ${command} is reserved for a future human CLI command and is not implemented yet.\n`;
+export function printUpdateHelp(): string {
+	return [
+		"cuekit update — check for a newer cuekit release",
+		"",
+		"Usage: cuekit update [options]",
+		"",
+		"Options:",
+		"  -h, --help  Show this help message",
+		"",
+		"Prints the current installed version and the latest stable release tag from",
+		"GitHub, then shows the exact bun command to upgrade.",
+		"",
+		"Update is advisory only: it never runs bun install automatically.",
+		"After upgrading, restart any MCP client that uses cuekit.",
+		"",
+	].join("\n");
 }

@@ -75,7 +75,7 @@ describe("cuekit doctor", () => {
 		});
 	});
 
-	it("does not suggest unimplemented update command as a next step", async () => {
+	it("suggests the implemented update command as a next step", async () => {
 		const result = await runDoctor({
 			cwd: "/repo",
 			env: {},
@@ -86,6 +86,6 @@ describe("cuekit doctor", () => {
 			getLatestRelease: async () => ({ ok: true, tag: "v0.1.1" }),
 		});
 
-		expect(result.stdout).not.toContain("Next:\n  cuekit update");
+		expect(result.stdout).toContain("  cuekit update");
 	});
 });
