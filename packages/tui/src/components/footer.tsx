@@ -1,42 +1,75 @@
 import type { ReactNode } from "react";
 import { truncateEnd } from "../format.ts";
+import type { TeamFocus } from "../task-actions.ts";
+import type { TuiMode } from "../tui-state.ts";
 import { theme } from "../theme.ts";
 
-const BASE_FULL_HOTKEYS = ["↑/↓|j/k select", "r refresh"];
-const ATTACH_FULL_HOTKEY = "a attach";
-const TRAILING_FULL_HOTKEYS = ["s steer", "c cancel", "d delete", "q quit", "auto 3s"];
+const TASK_FULL_HOTKEYS = ["↑/↓|j/k select", "r refresh"];
+const TASK_ATTACH_FULL_HOTKEY = "a attach";
+const TASK_TRAILING_FULL_HOTKEYS = ["t teams", "s steer", "c cancel", "d delete", "q quit", "auto 3s"];
 
-const BASE_COMPACT_HOTKEYS = "↑/↓|j/k sel  r ref";
-const ATTACH_COMPACT_HOTKEY = "a att";
-const TRAILING_COMPACT_HOTKEYS = "s steer  c cancel  d del  q quit  auto3s";
+const TASK_COMPACT_HOTKEYS = "↑/↓|j/k sel  r ref";
+const TASK_ATTACH_COMPACT_HOTKEY = "a att";
+const TASK_TRAILING_COMPACT_HOTKEYS = "t teams  s steer  c cancel  d del  q quit  auto3s";
 const COMPACT_SELECTION_WIDTH = 72;
 
-function fullHotkeys(attachable: boolean): string {
+function taskFullHotkeys(attachable: boolean): string {
 	return [
-		...BASE_FULL_HOTKEYS,
-		...(attachable ? [ATTACH_FULL_HOTKEY] : []),
-		...TRAILING_FULL_HOTKEYS,
+		...TASK_FULL_HOTKEYS,
+		...(attachable ? [TASK_ATTACH_FULL_HOTKEY] : []),
+		...TASK_TRAILING_FULL_HOTKEYS,
 	].join("   ");
 }
 
-function compactHotkeys(attachable: boolean): string {
+function taskCompactHotkeys(attachable: boolean): string {
 	return [
-		BASE_COMPACT_HOTKEYS,
-		...(attachable ? [ATTACH_COMPACT_HOTKEY] : []),
-		TRAILING_COMPACT_HOTKEYS,
+		TASK_COMPACT_HOTKEYS,
+		...(attachable ? [TASK_ATTACH_COMPACT_HOTKEY] : []),
+		TASK_TRAILING_COMPACT_HOTKEYS,
 	].join("  ");
+}
+
+function teamHotkeys(focus: TeamFocus, attachable: boolean, compact: boolean): string {
+	if (compact) {
+		return focus === "members"
+			? `${attachable ? "a att  " : ""}esc list  j/k member  r ref  t tasks  q quit  auto3s`
+			: "j/k team  enter members  t tasks  r ref  q quit  auto3s";
+	}
+	return focus === "members"
+		? [
+				...(attachable ? ["a attach member"] : []),
+				"esc team list",
+				"↑/↓|j/k member",
+				"r refresh",
+				"t tasks",
+				"q quit",
+				"auto 3s",
+			].join("   ")
+		: ["↑/↓|j/k team", "enter members", "t tasks", "r refresh", "q quit", "auto 3s"].join(
+				"   ",
+			);
+}
+
+function fullHotkeys(mode: TuiMode, attachable: boolean, teamFocus: TeamFocus): string {
+	return mode === "teams" ? teamHotkeys(teamFocus, attachable, false) : taskFullHotkeys(attachable);
+}
+
+function compactHotkeys(mode: TuiMode, attachable: boolean, teamFocus: TeamFocus): string {
+	return mode === "teams" ? teamHotkeys(teamFocus, attachable, true) : taskCompactHotkeys(attachable);
 }
 
 export function footerLine(
 	status: string,
 	terminalWidth: number,
-	options: { attachable?: boolean } = {},
+	options: { attachable?: boolean; mode?: TuiMode; teamFocus?: TeamFocus } = {},
 ): string {
 	const available = Math.max(0, terminalWidth - 4);
 	if (available === 0) return "";
 	const attachable = options.attachable ?? true;
-	const full = fullHotkeys(attachable);
-	const compact = compactHotkeys(attachable);
+	const mode = options.mode ?? "tasks";
+	const teamFocus = options.teamFocus ?? "list";
+	const full = fullHotkeys(mode, attachable, teamFocus);
+	const compact = compactHotkeys(mode, attachable, teamFocus);
 	const hotkeys = full.length + status.length + 3 <= available ? full : compact;
 	const candidate = available >= COMPACT_SELECTION_WIDTH ? `${hotkeys} — ${status}` : `${compact} — ${status}`;
 	return truncateEnd(candidate, available);
@@ -48,13 +81,19 @@ export function Footer(props: {
 	loading?: boolean;
 	terminalWidth?: number;
 	attachable?: boolean;
+	mode?: TuiMode;
+	teamFocus?: TeamFocus;
 }): ReactNode {
 	const status = props.error ?? props.message ?? (props.loading ? "Loading..." : "Ready");
 	const terminalWidth = props.terminalWidth ?? 80;
 	return (
 		<box borderStyle="single" borderColor={theme.border} backgroundColor={theme.panel} paddingX={1} height={3}>
 			<text fg={props.error ? theme.red : theme.cyan}>
-				{footerLine(status, terminalWidth, { attachable: props.attachable })}
+				{footerLine(status, terminalWidth, {
+					attachable: props.attachable,
+					mode: props.mode,
+					teamFocus: props.teamFocus,
+				})}
 			</text>
 		</box>
 	);
