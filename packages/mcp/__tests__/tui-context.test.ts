@@ -217,13 +217,49 @@ describe("createTuiContext", () => {
 			objective: "done",
 			status: "completed",
 		});
+		createTask(db, {
+			id: "t_keep_running",
+			session_id: "s_cleanup_team",
+			agent_kind: "claude-code",
+			team_id: "tm_cleanup",
+			objective: "running",
+			status: "running",
+		});
 
 		const cleanup = await tui.cleanupTeam("tm_cleanup");
 		expect(cleanup.ok).toBe(true);
 		expect(getTaskById(db, "t_cleanup")).toBeNull();
+		expect(getTaskById(db, "t_keep_running")?.status).toBe("running");
 
-		const deleted = await tui.deleteTeam("tm_cleanup");
+		const notEmptyDelete = await tui.deleteTeam("tm_cleanup");
+		expect(notEmptyDelete.ok).toBe(false);
+		if (!notEmptyDelete.ok) expect(notEmptyDelete.error.code).toBe("invalid_state");
+	});
+
+	it("returns TUI ack errors for unknown team actions", async () => {
+		const { tui } = makeHarness();
+
+		const cleanup = await tui.cleanupTeam("tm_missing");
+		expect(cleanup.ok).toBe(false);
+		if (!cleanup.ok) expect(cleanup.error.code).toBe("team_not_found");
+
+		const deleted = await tui.deleteTeam("tm_missing");
+		expect(deleted.ok).toBe(false);
+		if (!deleted.ok) expect(deleted.error.code).toBe("team_not_found");
+	});
+
+	it("deletes empty teams through the TUI context", async () => {
+		const { db, tui } = makeHarness();
+		createSession(db, {
+			id: "s_delete_team",
+			project_root: "/repo",
+			worktree_path: "/repo",
+			parent_agent_kind: "pi",
+		});
+		createTaskTeam(db, { id: "tm_delete", session_id: "s_delete_team", title: "Delete" });
+
+		const deleted = await tui.deleteTeam("tm_delete");
 		expect(deleted.ok).toBe(true);
-		expect(getTaskTeamById(db, "tm_cleanup")).toBeNull();
+		expect(getTaskTeamById(db, "tm_delete")).toBeNull();
 	});
 });

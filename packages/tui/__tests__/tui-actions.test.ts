@@ -128,6 +128,7 @@ describe("tui task action helpers", () => {
 	});
 
 	it("allows team cleanup only when terminal member tasks exist", () => {
+		expect(canCleanupTeam(undefined)).toBe(false);
 		expect(
 			canCleanupTeam({
 				total: 2,
@@ -157,6 +158,7 @@ describe("tui task action helpers", () => {
 	});
 
 	it("allows team delete only for empty teams", () => {
+		expect(canDeleteTeam(undefined)).toBe(false);
 		expect(
 			canDeleteTeam({
 				total: 0,

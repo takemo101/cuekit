@@ -406,6 +406,10 @@ export function App(props: {
 					setError("Selected team has no terminal tasks to cleanup.");
 					return;
 				}
+				if (!props.ctx.cleanupTeam) {
+					setError("Team cleanup is not available.");
+					return;
+				}
 				setPendingConfirm({ kind: "cleanup-team", teamId: selectedTeam.team_id });
 				return;
 			}
@@ -424,6 +428,10 @@ export function App(props: {
 				}
 				if (!canDeleteTeam(selectedTeamCounts)) {
 					setError("Selected team must be empty before deletion.");
+					return;
+				}
+				if (!props.ctx.deleteTeam) {
+					setError("Team delete is not available.");
 					return;
 				}
 				setPendingConfirm({ kind: "delete-team", teamId: selectedTeam.team_id });
