@@ -1,20 +1,40 @@
 import type { Database } from "bun:sqlite";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-
-const MIGRATIONS_DIR = join(import.meta.dir, "sql");
+// @ts-expect-error Bun text loader imports SQL migration assets for bundled installs.
+import initSql from "./sql/001-init.sql" with { type: "text" };
+// @ts-expect-error Bun text loader imports SQL migration assets for bundled installs.
+import tasksUpdatedAtIndexSql from "./sql/002-tasks-updated-at-index.sql" with { type: "text" };
+// @ts-expect-error Bun text loader imports SQL migration assets for bundled installs.
+import tasksStartedAtSql from "./sql/003-tasks-started-at.sql" with { type: "text" };
+// @ts-expect-error Bun text loader imports SQL migration assets for bundled installs.
+import tasksRenameTargetAgentKindSql from "./sql/004-tasks-rename-target-agent-kind.sql" with {
+	type: "text",
+};
+// @ts-expect-error Bun text loader imports SQL migration assets for bundled installs.
+import tasksSpecJsonSql from "./sql/005-tasks-spec-json.sql" with { type: "text" };
+// @ts-expect-error Bun text loader imports SQL migration assets for bundled installs.
+import childReportingSql from "./sql/006-child-reporting.sql" with { type: "text" };
+// @ts-expect-error Bun text loader imports SQL migration assets for bundled installs.
+import taskEventsDeleteCascadeSql from "./sql/007-task-events-delete-cascade.sql" with {
+	type: "text",
+};
+// @ts-expect-error Bun text loader imports SQL migration assets for bundled installs.
+import taskRoleMetadataSql from "./sql/008-task-role-metadata.sql" with { type: "text" };
+// @ts-expect-error Bun text loader imports SQL migration assets for bundled installs.
+import taskTeamsSql from "./sql/009-task-teams.sql" with { type: "text" };
+// @ts-expect-error Bun text loader imports SQL migration assets for bundled installs.
+import projectConfigIdentitySql from "./sql/010-project-config-identity.sql" with { type: "text" };
 
 const MIGRATIONS = [
-	"001-init.sql",
-	"002-tasks-updated-at-index.sql",
-	"003-tasks-started-at.sql",
-	"004-tasks-rename-target-agent-kind.sql",
-	"005-tasks-spec-json.sql",
-	"006-child-reporting.sql",
-	"007-task-events-delete-cascade.sql",
-	"008-task-role-metadata.sql",
-	"009-task-teams.sql",
-	"010-project-config-identity.sql",
+	["001-init.sql", initSql],
+	["002-tasks-updated-at-index.sql", tasksUpdatedAtIndexSql],
+	["003-tasks-started-at.sql", tasksStartedAtSql],
+	["004-tasks-rename-target-agent-kind.sql", tasksRenameTargetAgentKindSql],
+	["005-tasks-spec-json.sql", tasksSpecJsonSql],
+	["006-child-reporting.sql", childReportingSql],
+	["007-task-events-delete-cascade.sql", taskEventsDeleteCascadeSql],
+	["008-task-role-metadata.sql", taskRoleMetadataSql],
+	["009-task-teams.sql", taskTeamsSql],
+	["010-project-config-identity.sql", projectConfigIdentitySql],
 ] as const;
 
 // Bootstrap table created outside the migration files so it can be relied on
@@ -33,11 +53,10 @@ export function runMigrations(db: Database): void {
 		const recordApplied = db.prepare(
 			"insert into schema_migrations (version, applied_at) values (?, ?)",
 		);
-		for (const file of MIGRATIONS) {
-			if (checkApplied.get(file)) continue;
-			const sql = readFileSync(join(MIGRATIONS_DIR, file), "utf8");
+		for (const [version, sql] of MIGRATIONS) {
+			if (checkApplied.get(version)) continue;
 			db.exec(sql);
-			recordApplied.run(file, new Date().toISOString());
+			recordApplied.run(version, new Date().toISOString());
 		}
 	})();
 }

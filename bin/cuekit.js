@@ -32807,9 +32807,9 @@ function shouldDangerouslySkipPermissions(spec) {
 
 // packages/adapters/src/pane-adapter.ts
 import { createHash, randomBytes, randomUUID } from "crypto";
-import { mkdirSync as mkdirSync2, readFileSync as readFileSync2, rmSync } from "fs";
+import { mkdirSync as mkdirSync2, readFileSync, rmSync } from "fs";
 import { homedir as homedir2 } from "os";
-import { dirname as dirname2, join as join5 } from "path";
+import { dirname as dirname2, join as join4 } from "path";
 
 // node_modules/.bun/zod@4.3.6/node_modules/zod/index.js
 init_external();
@@ -33354,21 +33354,217 @@ function openDatabase(options = {}) {
   db.exec("pragma foreign_keys = ON;");
   return db;
 }
+// packages/store/src/sql/001-init.sql
+var _001_init_default = `create table if not exists sessions (
+  id text primary key,
+  project_root text not null,
+  worktree_path text not null,
+  parent_agent_kind text not null,
+  parent_session_ref text,
+  status text not null,
+  created_at text not null,
+  updated_at text not null,
+  ended_at text
+);
+
+create table if not exists tasks (
+  id text primary key,
+  session_id text not null,
+  parent_task_id text,
+  target_agent_kind text not null,
+  model text,
+  objective text not null,
+  status text not null,
+  native_task_ref text,
+  summary text,
+  result_ref text,
+  transcript_ref text,
+  created_at text not null,
+  updated_at text not null,
+  completed_at text,
+  foreign key(session_id) references sessions(id)
+);
+
+create index if not exists idx_sessions_project_root on sessions(project_root);
+create index if not exists idx_sessions_worktree_path on sessions(worktree_path);
+create index if not exists idx_sessions_status on sessions(status);
+
+create index if not exists idx_tasks_session_id on tasks(session_id);
+create index if not exists idx_tasks_parent_task_id on tasks(parent_task_id);
+create index if not exists idx_tasks_status on tasks(status);
+create index if not exists idx_tasks_target_agent_kind on tasks(target_agent_kind);
+`;
+
+// packages/store/src/sql/002-tasks-updated-at-index.sql
+var _002_tasks_updated_at_index_default = `-- Keyset pagination over \`listTasks\` walks rows in (updated_at DESC, id ASC).
+-- Without this composite index every paged read over the whole table
+-- full-scans then sorts. Matching the index direction keeps the seek O(log N).
+create index if not exists idx_tasks_updated_at_id on tasks(updated_at desc, id asc);
+`;
+
+// packages/store/src/sql/003-tasks-started-at.sql
+var _003_tasks_started_at_default = `-- \`TaskStatusView.started_at\` was always in the protocol schema (it's the
+-- one timestamp callers need for "how long has this been running?") but
+-- there was no DB column to persist it and no write-path. Added now so
+-- the schema stops lying to MCP clients. Nullable because queued tasks
+-- haven't started yet; populated on the first queued\u2192running transition
+-- and preserved across subsequent status updates.
+alter table tasks add column started_at text;
+`;
+
+// packages/store/src/sql/004-tasks-rename-target-agent-kind.sql
+var _004_tasks_rename_target_agent_kind_default = `-- Rename \`tasks.target_agent_kind\` \u2192 \`tasks.agent_kind\` so the DB column
+-- name matches the protocol field. The pre-rename name was historical:
+-- it tried to disambiguate from \`sessions.parent_agent_kind\`, but in
+-- practice every store\u2192protocol projection had to hand-rename, and the
+-- duplication was a recurring foot-bullet (Oracle review P2-9).
+--
+-- SQLite \u22653.25 supports \`ALTER TABLE ... RENAME COLUMN\` natively. Bun's
+-- bundled SQLite is well past that threshold. The corresponding index
+-- (idx_tasks_target_agent_kind from 001-init.sql) is automatically
+-- updated to point at the new column; we drop and recreate it under
+-- the matching name for clarity.
+alter table tasks rename column target_agent_kind to agent_kind;
+
+drop index if exists idx_tasks_target_agent_kind;
+create index if not exists idx_tasks_agent_kind on tasks(agent_kind);
+`;
+
+// packages/store/src/sql/005-tasks-spec-json.sql
+var _005_tasks_spec_json_default = `-- Persist the caller's full TaskSpec for recovery, audit, and later policy
+-- enforcement (for example timeout_ms). The normalized task columns stay as
+-- query-friendly projections; spec_json preserves optional protocol fields
+-- like context, constraints, inputs, expected_output, and metadata.
+alter table tasks add column spec_json text;
+`;
+
+// packages/store/src/sql/006-child-reporting.sql
+var _006_child_reporting_default = `alter table tasks add column child_token_hash text;
+
+create table if not exists task_events (
+  sequence integer primary key autoincrement,
+  id text not null unique,
+  task_id text not null,
+  type text not null,
+  message text,
+  payload_json text check (payload_json is null or json_valid(payload_json)),
+  created_at text not null,
+  foreign key(task_id) references tasks(id) on delete cascade
+);
+
+create index if not exists idx_task_events_task_id_sequence on task_events(task_id, sequence);
+create index if not exists idx_task_events_type on task_events(type);
+`;
+
+// packages/store/src/sql/007-task-events-delete-cascade.sql
+var _007_task_events_delete_cascade_default = `drop index if exists idx_task_events_task_id_sequence;
+drop index if exists idx_task_events_type;
+
+create table task_events_new (
+  sequence integer primary key autoincrement,
+  id text not null unique,
+  task_id text not null,
+  type text not null,
+  message text,
+  payload_json text check (payload_json is null or json_valid(payload_json)),
+  created_at text not null,
+  foreign key(task_id) references tasks(id) on delete cascade
+);
+
+insert into task_events_new (sequence, id, task_id, type, message, payload_json, created_at)
+select sequence, id, task_id, type, message, payload_json, created_at
+from task_events;
+
+drop table task_events;
+alter table task_events_new rename to task_events;
+
+create index if not exists idx_task_events_task_id_sequence on task_events(task_id, sequence);
+create index if not exists idx_task_events_type on task_events(type);
+`;
+
+// packages/store/src/sql/008-task-role-metadata.sql
+var _008_task_role_metadata_default = `alter table tasks add column role text;
+alter table tasks add column role_source text;
+alter table tasks add column role_selection_reason text;
+`;
+
+// packages/store/src/sql/009-task-teams.sql
+var _009_task_teams_default = `create table if not exists task_teams (
+  id text primary key,
+  session_id text not null,
+  title text not null,
+  objective text,
+  metadata_json text,
+  created_at text not null,
+  updated_at text not null,
+  foreign key(session_id) references sessions(id) on delete cascade
+);
+
+create index if not exists idx_task_teams_session_id on task_teams(session_id);
+create index if not exists idx_task_teams_updated_at on task_teams(updated_at);
+
+alter table tasks add column team_id text references task_teams(id) on delete set null;
+alter table tasks add column team_position text;
+create index if not exists idx_tasks_team_id on tasks(team_id);
+
+create trigger if not exists trg_tasks_team_session_insert
+before insert on tasks
+when new.team_id is not null
+  and not exists (
+    select 1 from task_teams
+    where task_teams.id = new.team_id
+      and task_teams.session_id = new.session_id
+  )
+begin
+  select raise(abort, 'team_id must belong to task session');
+end;
+
+create trigger if not exists trg_tasks_team_session_update
+before update of session_id, team_id on tasks
+when new.team_id is not null
+  and not exists (
+    select 1 from task_teams
+    where task_teams.id = new.team_id
+      and task_teams.session_id = new.session_id
+  )
+begin
+  select raise(abort, 'team_id must belong to task session');
+end;
+
+create trigger if not exists trg_task_teams_session_update
+before update of session_id on task_teams
+when exists (
+  select 1 from tasks
+  where tasks.team_id = old.id
+    and tasks.session_id != new.session_id
+)
+begin
+  select raise(abort, 'team session cannot move while tasks reference it');
+end;
+`;
+
+// packages/store/src/sql/010-project-config-identity.sql
+var _010_project_config_identity_default = `alter table sessions add column config_root text;
+alter table sessions add column project_id text;
+alter table sessions add column project_name text;
+alter table sessions add column project_uid text;
+
+create index if not exists idx_sessions_project_uid on sessions(project_uid);
+create index if not exists idx_sessions_config_project on sessions(config_root, project_id);
+`;
+
 // packages/store/src/migrate.ts
-import { readFileSync } from "fs";
-import { join as join3 } from "path";
-var MIGRATIONS_DIR = join3(import.meta.dir, "sql");
 var MIGRATIONS = [
-  "001-init.sql",
-  "002-tasks-updated-at-index.sql",
-  "003-tasks-started-at.sql",
-  "004-tasks-rename-target-agent-kind.sql",
-  "005-tasks-spec-json.sql",
-  "006-child-reporting.sql",
-  "007-task-events-delete-cascade.sql",
-  "008-task-role-metadata.sql",
-  "009-task-teams.sql",
-  "010-project-config-identity.sql"
+  ["001-init.sql", _001_init_default],
+  ["002-tasks-updated-at-index.sql", _002_tasks_updated_at_index_default],
+  ["003-tasks-started-at.sql", _003_tasks_started_at_default],
+  ["004-tasks-rename-target-agent-kind.sql", _004_tasks_rename_target_agent_kind_default],
+  ["005-tasks-spec-json.sql", _005_tasks_spec_json_default],
+  ["006-child-reporting.sql", _006_child_reporting_default],
+  ["007-task-events-delete-cascade.sql", _007_task_events_delete_cascade_default],
+  ["008-task-role-metadata.sql", _008_task_role_metadata_default],
+  ["009-task-teams.sql", _009_task_teams_default],
+  ["010-project-config-identity.sql", _010_project_config_identity_default]
 ];
 var BOOTSTRAP_SQL = `
 create table if not exists schema_migrations (
@@ -33381,12 +33577,11 @@ function runMigrations(db) {
   db.transaction(() => {
     const checkApplied = db.prepare("select 1 from schema_migrations where version = ?");
     const recordApplied = db.prepare("insert into schema_migrations (version, applied_at) values (?, ?)");
-    for (const file2 of MIGRATIONS) {
-      if (checkApplied.get(file2))
+    for (const [version2, sql] of MIGRATIONS) {
+      if (checkApplied.get(version2))
         continue;
-      const sql = readFileSync(join3(MIGRATIONS_DIR, file2), "utf8");
       db.exec(sql);
-      recordApplied.run(file2, new Date().toISOString());
+      recordApplied.run(version2, new Date().toISOString());
     }
   })();
 }
@@ -33560,9 +33755,9 @@ function listTasks(db, filter = {}) {
     bindings[":cursor_i"] = id;
   }
   const where = conditions.length > 0 ? `where ${conditions.join(" and ")}` : "";
-  const join4 = joinSession ? "join sessions s on s.id = t.session_id" : "";
+  const join3 = joinSession ? "join sessions s on s.id = t.session_id" : "";
   bindings[":limit"] = filter.limit ?? DEFAULT_LIST_TASKS_LIMIT;
-  const rows = db.prepare(`select t.* from tasks t ${join4} ${where} order by t.updated_at desc, t.id asc limit :limit`).all(bindings);
+  const rows = db.prepare(`select t.* from tasks t ${join3} ${where} order by t.updated_at desc, t.id asc limit :limit`).all(bindings);
   return rows.map((r) => TaskSchema.parse(r));
 }
 function updateTaskStatus(db, id, status) {
@@ -33761,8 +33956,8 @@ function listTaskTeams(db, filter = {}) {
   bindings[":limit"] = filter.limit ?? DEFAULT_LIST_TASK_TEAMS_LIMIT;
   const where = conditions.length > 0 ? `where ${conditions.join(" and ")}` : "";
   const joinSession = filter.cwd !== undefined || filter.project_root !== undefined || filter.project_scope !== undefined || filter.project_uid !== undefined;
-  const join4 = joinSession ? "join sessions s on s.id = tt.session_id" : "";
-  const rows = db.prepare(`select tt.* from task_teams tt ${join4} ${where} order by tt.updated_at desc, tt.id asc limit :limit`).all(bindings);
+  const join3 = joinSession ? "join sessions s on s.id = tt.session_id" : "";
+  const rows = db.prepare(`select tt.* from task_teams tt ${join3} ${where} order by tt.updated_at desc, tt.id asc limit :limit`).all(bindings);
   return rows.map((row) => TaskTeamRowSchema.parse(row));
 }
 function listTasksByTeam(db, team_id) {
@@ -33795,19 +33990,19 @@ function normalizeTaskResult(task2) {
 }
 
 // packages/adapters/src/task-artifacts.ts
-import { join as join4 } from "path";
+import { join as join3 } from "path";
 function taskArtifactPaths2(cwd, task_id) {
   const paths = taskArtifactPaths(cwd, task_id);
   return {
     ...paths,
-    exitCodePath: join4(paths.dir, "exit-code")
+    exitCodePath: join3(paths.dir, "exit-code")
   };
 }
 function globalTaskArtifactPaths(cuekitHome, task_id) {
-  const dir = join4(cuekitHome, "sentinels", task_id);
+  const dir = join3(cuekitHome, "sentinels", task_id);
   return {
     dir,
-    exitCodePath: join4(dir, "exit-code")
+    exitCodePath: join3(dir, "exit-code")
   };
 }
 function wrapLaunchCommandWithExitCode(launchCommand, exitCodePath) {
@@ -33819,7 +34014,7 @@ function wrapLaunchCommandWithExitCode(launchCommand, exitCodePath) {
 // packages/adapters/src/pane-adapter.ts
 function readExitCodeSentinel(exitCodePath) {
   try {
-    const raw = readFileSync2(exitCodePath, "utf8");
+    const raw = readFileSync(exitCodePath, "utf8");
     const match = raw.match(/^cuekit_exit=(-?\d+)$/m);
     if (!match?.[1])
       return null;
@@ -33879,7 +34074,7 @@ function createPaneAdapter(config2, deps) {
   const { db: db2, panes } = deps;
   const logger2 = deps.logger ?? silentLogger;
   const onPaneDisappeared = config2.onPaneDisappeared ?? defaultOnPaneDisappeared;
-  const cuekitHomeDir = deps.cuekitHomeDir ?? join5(homedir2(), ".cuekit");
+  const cuekitHomeDir = deps.cuekitHomeDir ?? join4(homedir2(), ".cuekit");
   const defaultCapabilities = {
     ...config2.capabilities,
     default_mode: config2.capabilities.default_mode ?? "interactive",
@@ -34047,7 +34242,7 @@ function createPaneAdapter(config2, deps) {
         if (!alive) {
           let exitCode = null;
           if (live.transcript_ref) {
-            exitCode = readExitCodeSentinel(join5(dirname2(live.transcript_ref), "exit-code"));
+            exitCode = readExitCodeSentinel(join4(dirname2(live.transcript_ref), "exit-code"));
           }
           if (exitCode === null) {
             exitCode = readExitCodeSentinel(globalTaskArtifactPaths(cuekitHomeDir, task_id).exitCodePath);
@@ -34786,7 +34981,7 @@ Output expectations:
 Report the PR URL, merge confirmation, and branch cleanup result. If blocked or failed, report the exact blocker (e.g., but unavailable but required, dirty working tree, missing reviewer approval) and the next action needed.`
 };
 // packages/agent-profiles/src/discovery.ts
-import { existsSync, readdirSync, readFileSync as readFileSync3, statSync } from "fs";
+import { existsSync, readdirSync, readFileSync as readFileSync2, statSync } from "fs";
 import { homedir as homedir3 } from "os";
 import { resolve as resolve2 } from "path";
 
@@ -34976,7 +35171,7 @@ function findProjectRoot(cwd, fs) {
 }
 
 // packages/agent-profiles/src/discovery.ts
-var nodeFs = { existsSync, readdirSync, readFileSync: readFileSync3, statSync };
+var nodeFs = { existsSync, readdirSync, readFileSync: readFileSync2, statSync };
 function discoverBuiltinProfiles() {
   return Object.entries(BUILTIN_AGENT_PROFILE_MARKDOWN).map(([id, content]) => {
     const parsed = parseAgentProfileMarkdown({
@@ -37796,9 +37991,9 @@ function resolveTypeName2(prop) {
 
 // node_modules/.bun/incur@0.4.3/node_modules/incur/dist/SyncMcp.js
 import { execFile } from "child_process";
-import { existsSync as existsSync2, mkdirSync as mkdirSync3, readFileSync as readFileSync4, writeFileSync } from "fs";
+import { existsSync as existsSync2, mkdirSync as mkdirSync3, readFileSync as readFileSync3, writeFileSync } from "fs";
 import { homedir as homedir4 } from "os";
-import { dirname as dirname4, join as join6 } from "path";
+import { dirname as dirname4, join as join5 } from "path";
 async function register2(name, options = {}) {
   const runner = detectRunner();
   const command = options.command ?? `${runner} ${detectPackageSpecifier(name)} --mcp`;
@@ -37824,11 +38019,11 @@ async function register2(name, options = {}) {
   return { command, agents };
 }
 function registerAmp(name, command) {
-  const configPath = join6(homedir4(), ".config", "amp", "settings.json");
+  const configPath = join5(homedir4(), ".config", "amp", "settings.json");
   let config2 = {};
   if (existsSync2(configPath)) {
     try {
-      config2 = JSON.parse(readFileSync4(configPath, "utf-8"));
+      config2 = JSON.parse(readFileSync3(configPath, "utf-8"));
     } catch {
       return false;
     }
@@ -37854,7 +38049,7 @@ function detectPackageSpecifier(name) {
   if (!match)
     return name;
   try {
-    const pkg = JSON.parse(readFileSync4(join6(match[1], "package.json"), "utf-8"));
+    const pkg = JSON.parse(readFileSync3(join5(match[1], "package.json"), "utf-8"));
     const deps = pkg.dependencies ?? {};
     const spec = deps[name];
     if (!spec || Object.keys(deps).length !== 1)
@@ -40429,7 +40624,7 @@ function applyTeamWaitDefaults(input, config2) {
 // packages/project-config/src/discovery.ts
 import { createHash as createHash3 } from "crypto";
 import { existsSync as existsSync4, statSync as statSync2 } from "fs";
-import { basename as basename2, dirname as dirname6, join as join9, resolve as resolve4 } from "path";
+import { basename as basename2, dirname as dirname6, join as join8, resolve as resolve4 } from "path";
 var PROJECT_CONFIG_FILENAME = ".cuekit.yaml";
 var nodeFs2 = { existsSync: existsSync4, statSync: statSync2 };
 function findUp(cwd, predicate) {
@@ -40454,7 +40649,7 @@ function isExistingFile(path4, fs4) {
   }
 }
 function isGitRoot(path4, fs4) {
-  const gitPath = join9(path4, ".git");
+  const gitPath = join8(path4, ".git");
   if (!fs4.existsSync(gitPath))
     return false;
   try {
@@ -40468,7 +40663,7 @@ function discoverProjectConfig(cwd, options = {}) {
   const fs4 = options.fs ?? nodeFs2;
   const resolvedCwd = resolve4(cwd);
   const configPath = findUp(resolvedCwd, (dir) => {
-    const candidate = join9(dir, PROJECT_CONFIG_FILENAME);
+    const candidate = join8(dir, PROJECT_CONFIG_FILENAME);
     return isExistingFile(candidate, fs4) ? candidate : undefined;
   });
   if (configPath) {
@@ -40533,8 +40728,8 @@ function projectIdentityFromDiscovery(discovery2, config2) {
   });
 }
 // packages/project-config/src/init.ts
-import { existsSync as existsSync5, readFileSync as readFileSync6, writeFileSync as writeFileSync2 } from "fs";
-import { basename as basename3, join as join10, resolve as resolve5 } from "path";
+import { existsSync as existsSync5, readFileSync as readFileSync5, writeFileSync as writeFileSync2 } from "fs";
+import { basename as basename3, join as join9, resolve as resolve5 } from "path";
 var CUEKIT_GITIGNORE_ENTRY = ".cuekit/tasks/";
 var CUEKIT_GITIGNORE_COMMENT = "# cuekit local task artifacts";
 function deriveProjectId(name) {
@@ -40609,8 +40804,8 @@ function runProjectConfigInit(options) {
   const dryRun = options.dryRun ?? false;
   const force = options.force ?? false;
   const shouldUpdateGitignore = options.gitignore ?? true;
-  const configPath = join10(cwd, ".cuekit.yaml");
-  const gitignorePath = join10(cwd, ".gitignore");
+  const configPath = join9(cwd, ".cuekit.yaml");
+  const gitignorePath = join9(cwd, ".gitignore");
   const created = [];
   const updated = [];
   const skipped = [];
@@ -40634,7 +40829,7 @@ function runProjectConfigInit(options) {
   });
   if (shouldUpdateGitignore) {
     const gitignoreExists = existsSync5(gitignorePath);
-    const current = gitignoreExists ? readFileSync6(gitignorePath, "utf8") : "";
+    const current = gitignoreExists ? readFileSync5(gitignorePath, "utf8") : "";
     const next = applyCuekitGitignoreEntry(current);
     if (next === current) {
       skipped.push(gitignorePath);
@@ -40662,7 +40857,7 @@ function runProjectConfigInit(options) {
   };
 }
 // packages/project-config/src/load.ts
-import { readFileSync as readFileSync7 } from "fs";
+import { readFileSync as readFileSync6 } from "fs";
 
 // packages/project-config/src/schema.ts
 var ProjectIdSchema = exports_external.string().regex(/^[A-Za-z0-9._-]+$/);
@@ -40747,7 +40942,7 @@ function loadProjectConfig(cwd) {
   }
   let raw;
   try {
-    raw = $parse(readFileSync7(discovery2.configPath, "utf8")) ?? {};
+    raw = $parse(readFileSync6(discovery2.configPath, "utf8")) ?? {};
   } catch (error48) {
     return {
       ok: false,
@@ -41085,7 +41280,7 @@ async function runCleanupTeam(ctx, input) {
 }
 
 // packages/mcp/src/session-helpers.ts
-import { dirname as dirname7, join as join11, resolve as resolve7 } from "path";
+import { dirname as dirname7, join as join10, resolve as resolve7 } from "path";
 var CONTROL_SURFACE_AGENT_KIND = "cuekit-cli";
 function generateSessionId() {
   return `s_${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}`;
@@ -44341,17 +44536,17 @@ import {
   chmodSync,
   existsSync as existsSync7,
   mkdirSync as mkdirSync5,
-  readFileSync as readFileSync8,
+  readFileSync as readFileSync7,
   renameSync,
   statSync as statSync4,
   writeFileSync as writeFileSync3
 } from "fs";
 import { homedir as homedir7 } from "os";
-import { dirname as dirname8, join as join12, resolve as resolve13 } from "path";
+import { dirname as dirname8, join as join11, resolve as resolve13 } from "path";
 function readConfig(path4) {
   if (!existsSync7(path4))
     return {};
-  const parsed = JSON.parse(readFileSync8(path4, "utf8"));
+  const parsed = JSON.parse(readFileSync7(path4, "utf8"));
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
     return {};
   return parsed;
@@ -44367,7 +44562,7 @@ function writeConfig(path4, config2) {
 }
 function getPiMcpConfigPath(options) {
   if (options.global) {
-    return join12(options.home ?? homedir7(), ".config", "mcp", "mcp.json");
+    return join11(options.home ?? homedir7(), ".config", "mcp", "mcp.json");
   }
   return resolve13(options.cwd ?? process.cwd(), ".mcp.json");
 }
@@ -44701,17 +44896,17 @@ import {
   chmodSync as chmodSync2,
   existsSync as existsSync9,
   mkdirSync as mkdirSync6,
-  readFileSync as readFileSync9,
+  readFileSync as readFileSync8,
   renameSync as renameSync2,
   statSync as statSync6,
   writeFileSync as writeFileSync4
 } from "fs";
 import { homedir as homedir8 } from "os";
-import { dirname as dirname10, join as join13, resolve as resolve14 } from "path";
+import { dirname as dirname10, join as join12, resolve as resolve14 } from "path";
 function readConfig2(path4) {
   if (!existsSync9(path4))
     return {};
-  const parsed = JSON.parse(readFileSync9(path4, "utf8"));
+  const parsed = JSON.parse(readFileSync8(path4, "utf8"));
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
     return {};
   return parsed;
@@ -44727,7 +44922,7 @@ function writeConfig2(path4, config2) {
 }
 function getJcodeMcpConfigPath(options) {
   if (options.global) {
-    return join13(options.jcodeHome ?? (options.home ? join13(options.home, ".jcode") : process.env.JCODE_HOME) ?? join13(homedir8(), ".jcode"), "mcp.json");
+    return join12(options.jcodeHome ?? (options.home ? join12(options.home, ".jcode") : process.env.JCODE_HOME) ?? join12(homedir8(), ".jcode"), "mcp.json");
   }
   return resolve14(options.cwd ?? process.cwd(), ".jcode", "mcp.json");
 }
