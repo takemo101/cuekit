@@ -81,7 +81,9 @@ export function TaskList(props: {
 					);
 				})
 			)}
-			{end < tasks.length ? <text fg={theme.muted}>{`… ${tasks.length - end} more`}</text> : null}
+			{needsMoreRow && end < tasks.length ? (
+				<text fg={theme.muted}>{`… ${tasks.length - end} more`}</text>
+			) : null}
 		</box>
 	);
 }

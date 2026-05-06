@@ -30,11 +30,11 @@ import {
 	canDeleteTeam,
 	moveSelection,
 	resolveEnterTeamFocus,
+	resolveEscapeTeamFocus,
 	restoreIndexById,
-	type TeamFocus,
 } from "./task-actions.ts";
 import { theme } from "./theme.ts";
-import type { TuiExit, TuiMode, TuiReturnState } from "./tui-state.ts";
+import type { TeamFocus, TuiExit, TuiMode, TuiReturnState } from "./tui-state.ts";
 
 const AUTO_REFRESH_MS = 3000;
 
@@ -337,8 +337,9 @@ export function App(props: {
 			return;
 		}
 		if (key.name === "escape") {
-			if (mode === "teams" && teamFocus === "members") {
-				setTeamFocus("list");
+			const nextFocus = resolveEscapeTeamFocus(teamFocus);
+			if (mode === "teams" && nextFocus !== teamFocus) {
+				setTeamFocus(nextFocus);
 				return;
 			}
 			exit({ kind: "quit" });

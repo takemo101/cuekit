@@ -1,6 +1,7 @@
-import { isTerminalTaskStatus, JobErrorSchema } from "@cuekit/core";
+import { isTerminalTaskStatus, type JobError, JobErrorSchema } from "@cuekit/core";
 import { deleteSession, getSessionById, listTasksBySession } from "@cuekit/store";
 import { z } from "incur";
+import { cleanupAdapterTask } from "../adapter-cleanup.ts";
 import type { CommandContext } from "../command-context.ts";
 import { findFirstDuplicate } from "./_duplicates.ts";
 
@@ -85,9 +86,17 @@ export async function runDeleteSessions(
 			continue;
 		}
 
+		let cleanupError: JobError | undefined;
 		for (const task of tasks) {
-			const adapter = ctx.registry.get(task.agent_kind);
-			await adapter?.cleanup?.(task.id).catch(() => {});
+			const cleanup = await cleanupAdapterTask(ctx, task);
+			if (!cleanup.ok) {
+				cleanupError = cleanup.error;
+				break;
+			}
+		}
+		if (cleanupError) {
+			results.push({ session_id: sessionId, ok: false, error: cleanupError });
+			continue;
 		}
 		deleteSession(ctx.db, sessionId);
 		results.push({

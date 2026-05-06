@@ -21,6 +21,7 @@ describe("@cuekit/tui package smoke", () => {
 		}
 		const entrypoint = await Bun.file(new URL("../src/index.ts", import.meta.url)).text();
 		expect(entrypoint).toContain("export async function runTui");
+		expect(entrypoint).toContain("export async function runTuiLoop");
 		expect(entrypoint).toContain("createCliRenderer");
 	});
 

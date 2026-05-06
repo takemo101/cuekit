@@ -4,8 +4,7 @@ import {
 	type TaskStatusView,
 	type TeamTaskCounts,
 } from "@cuekit/core";
-
-export type TeamFocus = "list" | "members";
+import type { TeamFocus } from "./tui-state.ts";
 
 export function moveSelection(index: number, delta: number, length: number): number {
 	if (length <= 0) return 0;
