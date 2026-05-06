@@ -6,9 +6,10 @@
 		"packages/*"
 	],
 	"bin": {
-		"cuekit": "packages/cli/src/bin.ts"
+		"cuekit": "bin/cuekit.js"
 	},
 	"scripts": {
+		"bundle": "bun build packages/cli/src/bin.ts --target=bun --outfile=bin/cuekit.js",
 		"build": "bun run --filter '*' build",
 		"typecheck": "bun run --filter '*' typecheck",
 		"test": "bun test",
