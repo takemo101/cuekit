@@ -6,9 +6,6 @@
 	"exports": {
 		".": "./src/index.ts"
 	},
-	"bin": {
-		"cuekit": "./src/bin.ts"
-	},
 	"scripts": {
 		"typecheck": "tsc --noEmit",
 		"test": "bun test"

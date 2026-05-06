@@ -27,6 +27,17 @@
         "zod": "^4.3.6",
       },
     },
+    "packages/cli": {
+      "name": "@cuekit/cli",
+      "version": "0.0.0",
+      "bin": {
+        "cuekit": "./src/bin.ts",
+      },
+      "dependencies": {
+        "@cuekit/core": "workspace:*",
+        "@cuekit/mcp": "workspace:*",
+      },
+    },
     "packages/core": {
       "name": "@cuekit/core",
       "version": "0.0.0",
@@ -37,9 +48,6 @@
     "packages/mcp": {
       "name": "@cuekit/mcp",
       "version": "0.0.0",
-      "bin": {
-        "cuekit": "./src/bin.ts",
-      },
       "dependencies": {
         "@cuekit/adapters": "workspace:*",
         "@cuekit/agent-profiles": "workspace:*",
@@ -106,6 +114,8 @@
     "@cuekit/adapters": ["@cuekit/adapters@workspace:packages/adapters"],
 
     "@cuekit/agent-profiles": ["@cuekit/agent-profiles@workspace:packages/agent-profiles"],
+
+    "@cuekit/cli": ["@cuekit/cli@workspace:packages/cli"],
 
     "@cuekit/core": ["@cuekit/core@workspace:packages/core"],
 

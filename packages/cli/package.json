@@ -6,11 +6,15 @@
 	"exports": {
 		".": "./src/index.ts"
 	},
+	"bin": {
+		"cuekit": "./src/bin.ts"
+	},
 	"scripts": {
 		"typecheck": "tsc --noEmit",
 		"test": "bun test"
 	},
 	"dependencies": {
-		"@cuekit/core": "workspace:*"
+		"@cuekit/core": "workspace:*",
+		"@cuekit/mcp": "workspace:*"
 	}
 }

@@ -1,3 +1,4 @@
+export * from "./bin.ts";
 export * from "./cli.ts";
 export * from "./command-context.ts";
 export * from "./commands/cancel-task.ts";
