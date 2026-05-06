@@ -5,7 +5,7 @@ const BIN_SOURCE = new URL("../../mcp/src/bin.ts", import.meta.url);
 describe("tui argv lifecycle", () => {
 	it("runs TUI before installing global process-exit signal handlers", async () => {
 		const source = await Bun.file(BIN_SOURCE).text();
-		const runTuiIndex = source.indexOf("await runTui(");
+		const runTuiIndex = source.indexOf("await runTuiLoop(");
 		const signalIndex = source.indexOf("installSignalHandlers(db);");
 
 		expect(runTuiIndex).toBeGreaterThan(-1);
@@ -13,9 +13,9 @@ describe("tui argv lifecycle", () => {
 		expect(runTuiIndex).toBeLessThan(signalIndex);
 	});
 
-	it("TUI branch closes its database after runTui returns", async () => {
+	it("TUI branch closes its database after runTuiLoop returns", async () => {
 		const source = await Bun.file(BIN_SOURCE).text();
-		const runTuiIndex = source.indexOf("await runTui(");
+		const runTuiIndex = source.indexOf("await runTuiLoop(");
 		const closeIndex = source.indexOf("closeQuietly(db);", runTuiIndex);
 		const returnIndex = source.indexOf("return;", closeIndex);
 

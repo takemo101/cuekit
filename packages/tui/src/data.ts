@@ -1,11 +1,13 @@
 import { closeSync, existsSync, openSync, readSync, statSync } from "node:fs";
-import type { TaskListFilter, TaskStatusView } from "@cuekit/core";
+import type { TaskListFilter, TaskStatusView, TaskSummary, TeamSummary } from "@cuekit/core";
 import type {
 	TuiContext,
 	TuiManualSteerHint,
 	TuiTaskEvent,
 	TuiTaskListOutput,
 	TuiTeamAttentionItem,
+	TuiTeamListOutput,
+	TuiTeamStatusOutput,
 } from "./context.ts";
 
 type LoadTaskListOptions = Pick<
@@ -29,6 +31,68 @@ export async function loadTaskList(
 	options: LoadTaskListOptions = {},
 ): Promise<TuiTaskListOutput> {
 	return ctx.listTasks({ ...options, limit: options.limit ?? 100 });
+}
+
+export async function loadTeamList(
+	ctx: TuiContext,
+	options: {
+		session_id?: string;
+		cwd?: string;
+		project_root?: string;
+		project_scope?: { project_uid?: string; project_root: string };
+		project_uid?: string;
+		limit?: number;
+		cursor?: string;
+	} = {},
+): Promise<TuiTeamListOutput> {
+	if (!ctx.listTeams) return { teams: [], has_more: false };
+	return ctx.listTeams({ ...options, limit: options.limit ?? 100 });
+}
+
+export type TuiTeamDetail = {
+	team: TeamSummary;
+	status?: Exclude<TuiTeamStatusOutput, { error: unknown }>;
+	members: TaskSummary[];
+	lanes: Partial<Record<string, TaskSummary[]>>;
+	attentionItems?: TuiTeamAttentionItem[];
+	manualSteerHints?: TuiManualSteerHint[];
+	error?: string;
+};
+
+function groupMembersByLane(members: TaskSummary[]): Partial<Record<string, TaskSummary[]>> {
+	const lanes: Partial<Record<string, TaskSummary[]>> = {};
+	for (const member of members) {
+		const lane = member.position ?? "unpositioned";
+		lanes[lane] = [...(lanes[lane] ?? []), member];
+	}
+	return lanes;
+}
+
+export async function loadTeamDetail(ctx: TuiContext, team: TeamSummary): Promise<TuiTeamDetail> {
+	const statusResult = ctx.getTeamStatus ? await ctx.getTeamStatus(team.team_id) : undefined;
+	if (statusResult && "error" in statusResult) {
+		return { team, members: [], lanes: {}, error: statusResult.error.message };
+	}
+	const status = statusResult;
+	let members = status?.tasks ?? [];
+	if (members.length === 0) {
+		const taskList = await ctx.listTasks({ team_id: team.team_id, limit: 100 });
+		members = "tasks" in taskList ? taskList.tasks : [];
+	}
+	const detail: TuiTeamDetail = {
+		team,
+		...(status ? { status } : {}),
+		members,
+		lanes: groupMembersByLane(members),
+	};
+	const runSummary = status?.run_summary;
+	if (runSummary?.attention_items && runSummary.attention_items.length > 0) {
+		detail.attentionItems = runSummary.attention_items;
+	}
+	if (runSummary?.manual_steer_hints && runSummary.manual_steer_hints.length > 0) {
+		detail.manualSteerHints = runSummary.manual_steer_hints;
+	}
+	return detail;
 }
 
 export async function loadTaskDetail(

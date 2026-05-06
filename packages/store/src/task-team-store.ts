@@ -14,6 +14,12 @@ export interface CreateTaskTeamInput {
 export interface TaskTeamListFilter {
 	session_id?: string;
 	cwd?: string;
+	project_root?: string;
+	project_scope?: {
+		project_uid?: string;
+		project_root: string;
+	};
+	project_uid?: string;
 	limit?: number;
 	cursor?: string;
 }
@@ -61,10 +67,28 @@ export function listTaskTeams(db: Database, filter: TaskTeamListFilter = {}): Ta
 		conditions.push("tt.session_id = :session_id");
 		bindings[":session_id"] = filter.session_id;
 	}
-	const joinCwd = filter.cwd !== undefined;
-	if (joinCwd && filter.cwd !== undefined) {
+	if (filter.cwd !== undefined) {
 		conditions.push("s.worktree_path = :cwd");
 		bindings[":cwd"] = filter.cwd;
+	}
+	if (filter.project_root !== undefined) {
+		conditions.push("s.project_root = :project_root");
+		bindings[":project_root"] = filter.project_root;
+	}
+	if (filter.project_scope !== undefined) {
+		if (filter.project_scope.project_uid !== undefined) {
+			conditions.push(
+				"(s.project_uid = :project_scope_uid or s.project_root = :project_scope_root)",
+			);
+			bindings[":project_scope_uid"] = filter.project_scope.project_uid;
+		} else {
+			conditions.push("s.project_root = :project_scope_root");
+		}
+		bindings[":project_scope_root"] = filter.project_scope.project_root;
+	}
+	if (filter.project_uid !== undefined) {
+		conditions.push("s.project_uid = :project_uid");
+		bindings[":project_uid"] = filter.project_uid;
 	}
 	if (filter.cursor !== undefined) {
 		const { updated_at, id } = decodeTaskListCursor(filter.cursor);
@@ -76,7 +100,12 @@ export function listTaskTeams(db: Database, filter: TaskTeamListFilter = {}): Ta
 	}
 	bindings[":limit"] = filter.limit ?? DEFAULT_LIST_TASK_TEAMS_LIMIT;
 	const where = conditions.length > 0 ? `where ${conditions.join(" and ")}` : "";
-	const join = joinCwd ? "join sessions s on s.id = tt.session_id" : "";
+	const joinSession =
+		filter.cwd !== undefined ||
+		filter.project_root !== undefined ||
+		filter.project_scope !== undefined ||
+		filter.project_uid !== undefined;
+	const join = joinSession ? "join sessions s on s.id = tt.session_id" : "";
 	const rows = db
 		.prepare(
 			`select tt.* from task_teams tt ${join} ${where} order by tt.updated_at desc, tt.id asc limit :limit`,

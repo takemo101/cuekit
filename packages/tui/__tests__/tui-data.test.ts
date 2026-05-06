@@ -10,8 +10,10 @@ import {
 	createTask,
 	createTaskTeam,
 	getTaskById,
+	getTaskTeamById,
 	listTaskEvents,
 	listTasks,
+	listTaskTeams,
 	runMigrations,
 	updateTaskChildTokenHash,
 	updateTaskRefs,
@@ -20,6 +22,8 @@ import type { TuiContext } from "../src/context.ts";
 import {
 	loadTaskDetail,
 	loadTaskList,
+	loadTeamDetail,
+	loadTeamList,
 	readTranscriptTail,
 	sanitizeTerminalText,
 } from "../src/data.ts";
@@ -210,6 +214,142 @@ describe("tui data helpers", () => {
 
 		expect(detail.teamAttentionItems?.[0]?.message_preview).toBe("need input");
 		expect(detail.manualSteerHints?.[0]?.tool).toBe("steer_task");
+	});
+
+	it("loads teams and groups selected team members by lane", async () => {
+		const { db, tui } = makeCtx();
+		createSession(db, {
+			id: "s_team_list",
+			project_root: "/tmp/cuekit-tui-data",
+			worktree_path: "/tmp/cuekit-tui-data",
+			parent_agent_kind: "cli",
+		});
+		createTaskTeam(db, { id: "tm_tui", session_id: "s_team_list", title: "TUI Team" });
+		for (const [id, position] of [
+			["t_coord", "coordinator"],
+			["t_worker", "worker"],
+			["t_review", "reviewer"],
+			["t_finish", "finisher"],
+			["t_unpositioned", undefined],
+		] as const) {
+			createTask(db, {
+				id,
+				session_id: "s_team_list",
+				agent_kind: "pi",
+				team_id: "tm_tui",
+				...(position ? { team_position: position } : {}),
+				objective: id,
+				status: "running",
+			});
+		}
+		const teamCtx: TuiContext = {
+			...tui,
+			async listTeams() {
+				return {
+					teams: listTaskTeams(db, { limit: 100 }).map((team) => ({
+						team_id: team.id,
+						session_id: team.session_id,
+						title: team.title,
+						status: "running",
+						task_counts: {
+							total: 5,
+							queued: 0,
+							running: 5,
+							input_required: 0,
+							completed: 0,
+							failed: 0,
+							cancelled: 0,
+							timed_out: 0,
+							blocked: 0,
+						},
+						created_at: team.created_at,
+						updated_at: team.updated_at,
+					})),
+					has_more: false,
+				};
+			},
+			async getTeamStatus(teamId) {
+				const team = getTaskTeamById(db, teamId);
+				if (!team)
+					return { error: { code: "team_not_found", message: "missing", retryable: false } };
+				const tasks = listTasks(db, { team_id: teamId, limit: 100 }).map((task) => ({
+					task_id: task.id,
+					agent_kind: task.agent_kind,
+					...(task.team_id ? { team_id: task.team_id } : {}),
+					...(task.team_position ? { position: task.team_position as never } : {}),
+					status: task.status,
+					updated_at: task.updated_at,
+				}));
+				return {
+					team_id: team.id,
+					session_id: team.session_id,
+					title: team.title,
+					status: "running",
+					tasks,
+					run_summary: {
+						attention_items: [
+							{
+								sequence: 2,
+								task_id: "t_review",
+								position: "reviewer",
+								type: "completed",
+								message_preview: "needs polish",
+								created_at: "2026-05-01T00:00:00.000Z",
+							},
+						],
+					},
+				};
+			},
+		};
+
+		const list = await loadTeamList(teamCtx, { limit: 100 });
+		expect("teams" in list).toBe(true);
+		if (!("teams" in list)) throw new Error("expected teams");
+		expect(list.teams.map((team) => team.team_id)).toEqual(["tm_tui"]);
+
+		const team = list.teams[0];
+		expect(team).toBeDefined();
+		if (!team) throw new Error("expected team");
+		const detail = await loadTeamDetail(teamCtx, team);
+		expect(detail.lanes.coordinator?.map((task) => task.task_id)).toEqual(["t_coord"]);
+		expect(detail.lanes.worker?.map((task) => task.task_id)).toEqual(["t_worker"]);
+		expect(detail.lanes.reviewer?.map((task) => task.task_id)).toEqual(["t_review"]);
+		expect(detail.lanes.finisher?.map((task) => task.task_id)).toEqual(["t_finish"]);
+		expect(detail.lanes.unpositioned?.map((task) => task.task_id)).toEqual(["t_unpositioned"]);
+		expect(detail.attentionItems?.[0]?.message_preview).toBe("needs polish");
+	});
+
+	it("keeps team summary when selected team status loading fails", async () => {
+		const { tui } = makeCtx();
+		const teamCtx: TuiContext = {
+			...tui,
+			async getTeamStatus() {
+				return { error: { code: "team_not_found", message: "missing team", retryable: false } };
+			},
+		};
+		const detail = await loadTeamDetail(teamCtx, {
+			team_id: "tm_missing",
+			session_id: "s_missing",
+			title: "Missing",
+			status: "failed",
+			task_counts: {
+				total: 0,
+				queued: 0,
+				running: 0,
+				input_required: 0,
+				completed: 0,
+				failed: 0,
+				cancelled: 0,
+				timed_out: 0,
+				blocked: 0,
+			},
+			created_at: "2026-05-01T00:00:00.000Z",
+			updated_at: "2026-05-01T00:00:00.000Z",
+		});
+
+		expect(detail.team.team_id).toBe("tm_missing");
+		expect(detail.error).toBe("missing team");
+		expect(detail.members).toEqual([]);
 	});
 
 	it("keeps status and transcript data when task event loading fails", async () => {

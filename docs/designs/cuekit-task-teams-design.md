@@ -98,7 +98,7 @@ This keeps `create_team` simple and makes adding more tasks to an existing team 
 Potential later work:
 
 - team-level result summaries
-- TUI team/collapsible view
+- TUI team cockpit: Teams mode, team list/detail, lanes, attention, member task selection, and normal per-task attach-and-return from team detail
 - team create/wait/cleanup actions in TUI
 - team messages or coordinator notes
 - semi-automatic strategy slot materialization: generate a coordinator-facing `submit_team_tasks` skeleton from `.cuekit.yaml` `recommended_team` slots without auto-submitting tasks

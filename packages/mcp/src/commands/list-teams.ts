@@ -8,6 +8,14 @@ import { buildTeamSummary } from "../team-status.ts";
 export const ListTeamsInputSchema = z.object({
 	session_id: z.string().min(1).optional(),
 	cwd: z.string().min(1).optional(),
+	project_root: z.string().min(1).optional(),
+	project_scope: z
+		.object({
+			project_uid: z.string().optional(),
+			project_root: z.string().min(1),
+		})
+		.optional(),
+	project_uid: z.string().min(1).optional(),
 	limit: z.number().int().positive().max(500).optional(),
 	cursor: z.string().min(1).optional(),
 });
@@ -22,14 +30,25 @@ export const ListTeamsOutputSchema = z.object({
 });
 export type ListTeamsOutput = z.infer<typeof ListTeamsOutputSchema>;
 
+function countScopes(input: ListTeamsInput): number {
+	return [
+		input.session_id,
+		input.cwd,
+		input.project_root,
+		input.project_scope,
+		input.project_uid,
+	].filter((scope) => scope !== undefined).length;
+}
+
 export function runListTeams(ctx: CommandContext, input: ListTeamsInput = {}): ListTeamsOutput {
-	if (input.session_id && input.cwd) {
+	if (countScopes(input) > 1) {
 		return {
 			teams: [],
 			has_more: false,
 			error: {
 				code: "invalid_input",
-				message: "list_teams accepts only one scope: session_id or cwd",
+				message:
+					"list_teams accepts only one scope: session_id, cwd, project_root, project_scope, or project_uid",
 				retryable: false,
 			},
 		};
@@ -37,7 +56,17 @@ export function runListTeams(ctx: CommandContext, input: ListTeamsInput = {}): L
 	try {
 		const limit = input.limit ?? 100;
 		const cwd = input.cwd === undefined ? undefined : resolve(input.cwd);
-		const rows = listTaskTeams(ctx.db, { ...input, cwd, limit: limit + 1 });
+		const project_root = input.project_root === undefined ? undefined : resolve(input.project_root);
+		const project_scope = input.project_scope
+			? { ...input.project_scope, project_root: resolve(input.project_scope.project_root) }
+			: undefined;
+		const rows = listTaskTeams(ctx.db, {
+			...input,
+			cwd,
+			project_root,
+			project_scope,
+			limit: limit + 1,
+		});
 		const page = rows.slice(0, limit);
 		const summaries = page.map((team) => buildTeamSummary(team, listTasksByTeam(ctx.db, team.id)));
 		const has_more = rows.length > limit;

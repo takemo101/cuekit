@@ -8,6 +8,7 @@ import { runGetTaskStatus } from "./commands/get-task-status.ts";
 import { runGetTeamStatus } from "./commands/get-team-status.ts";
 import { runListTaskEvents } from "./commands/list-task-events.ts";
 import { runListTasks } from "./commands/list-tasks.ts";
+import { runListTeams } from "./commands/list-teams.ts";
 import { runSteerTask } from "./commands/steer-task.ts";
 
 export interface TuiProjectScope {
@@ -25,6 +26,17 @@ export function createTuiContext(ctx: CommandContext, scope: TuiScopeOptions = {
 	return {
 		listTasks: (input: Parameters<typeof runListTasks>[1]) =>
 			runListTasks(ctx, {
+				...input,
+				...(scope.all
+					? {}
+					: scope.projectScope !== undefined
+						? { project_scope: scope.projectScope }
+						: scope.projectRoot === undefined
+							? {}
+							: { project_root: scope.projectRoot }),
+			}),
+		listTeams: (input: Parameters<typeof runListTeams>[1]) =>
+			runListTeams(ctx, {
 				...input,
 				...(scope.all
 					? {}

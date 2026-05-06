@@ -1,4 +1,5 @@
 import type { TaskStatusView } from "@cuekit/core";
+import type { TuiExit } from "./tui-state.ts";
 
 const ATTACH_HINT_RE = /^tmux\s+attach(?:-session)?\s+-t\s+([^\s]+)$/;
 
@@ -25,11 +26,40 @@ export function buildTmuxAttachArgs(sessionName: string): string[] {
 	];
 }
 
-export async function runTmuxAttach(sessionName: string): Promise<number> {
-	const proc = Bun.spawn(buildTmuxAttachArgs(sessionName), {
+export function buildTuiTaskAttachExit(sessionName: string, taskId: string): TuiExit {
+	return {
+		kind: "attach",
+		args: buildTmuxAttachArgs(sessionName),
+		returnState: { mode: "tasks", selected_task_id: taskId },
+	};
+}
+
+export function buildTuiTeamMemberAttachExit(
+	sessionName: string,
+	teamId: string,
+	taskId: string,
+): TuiExit {
+	return {
+		kind: "attach",
+		args: buildTmuxAttachArgs(sessionName),
+		returnState: {
+			mode: "teams",
+			selected_team_id: teamId,
+			selected_member_task_id: taskId,
+			team_focus: "members",
+		},
+	};
+}
+
+export async function runAttachArgs(args: string[]): Promise<number> {
+	const proc = Bun.spawn(args, {
 		stdin: "inherit",
 		stdout: "inherit",
 		stderr: "inherit",
 	});
 	return proc.exited;
+}
+
+export async function runTmuxAttach(sessionName: string): Promise<number> {
+	return runAttachArgs(buildTmuxAttachArgs(sessionName));
 }

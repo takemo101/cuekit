@@ -1,7 +1,7 @@
 import { Database } from "bun:sqlite";
 import { describe, expect, it } from "bun:test";
 import { AdapterRegistry } from "@cuekit/adapters";
-import { createSession, createTask, runMigrations } from "@cuekit/store";
+import { createSession, createTask, createTaskTeam, runMigrations } from "@cuekit/store";
 import { createTuiContext } from "../src/tui-context.ts";
 
 function makeHarness() {
@@ -128,5 +128,68 @@ describe("createTuiContext", () => {
 
 		expect("tasks" in result).toBe(true);
 		if ("tasks" in result) expect(result.tasks).toHaveLength(2);
+	});
+
+	it("scopes team listing to the current repository cwd by default", async () => {
+		const { db, tui } = makeHarness();
+		createSession(db, {
+			id: "s_repo_team",
+			project_root: "/repo",
+			worktree_path: "/repo",
+			parent_agent_kind: "pi",
+		});
+		createSession(db, {
+			id: "s_other_team",
+			project_root: "/other",
+			worktree_path: "/other",
+			parent_agent_kind: "pi",
+		});
+		createTaskTeam(db, { id: "tm_repo", session_id: "s_repo_team", title: "Repo team" });
+		createTaskTeam(db, { id: "tm_other", session_id: "s_other_team", title: "Other team" });
+
+		const result = await tui.listTeams({ limit: 100 });
+
+		expect("teams" in result).toBe(true);
+		if ("teams" in result) expect(result.teams.map((team) => team.team_id)).toEqual(["tm_repo"]);
+	});
+
+	it("uses config project scope when listing teams", async () => {
+		const db = new Database(":memory:");
+		db.exec("pragma foreign_keys = ON;");
+		runMigrations(db);
+		const tui = createTuiContext(
+			{ db, registry: new AdapterRegistry() },
+			{ projectScope: { project_uid: "pc_current", project_root: "/repo" } },
+		);
+		createSession(db, {
+			id: "s_current_team",
+			project_root: "/repo-copy",
+			worktree_path: "/repo-copy/worktree",
+			parent_agent_kind: "pi",
+			project_uid: "pc_current",
+		});
+		createSession(db, {
+			id: "s_legacy_team",
+			project_root: "/repo",
+			worktree_path: "/elsewhere/repo",
+			parent_agent_kind: "pi",
+		});
+		createSession(db, {
+			id: "s_other_team",
+			project_root: "/other",
+			worktree_path: "/repo",
+			parent_agent_kind: "pi",
+			project_uid: "pc_other",
+		});
+		createTaskTeam(db, { id: "tm_current", session_id: "s_current_team", title: "Current" });
+		createTaskTeam(db, { id: "tm_legacy", session_id: "s_legacy_team", title: "Legacy" });
+		createTaskTeam(db, { id: "tm_other", session_id: "s_other_team", title: "Other" });
+
+		const result = await tui.listTeams({ limit: 100 });
+
+		expect("teams" in result).toBe(true);
+		if ("teams" in result) {
+			expect(result.teams.map((team) => team.team_id).sort()).toEqual(["tm_current", "tm_legacy"]);
+		}
 	});
 });

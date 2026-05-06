@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import type { TaskStatusView } from "@cuekit/core";
-import { buildTmuxAttachArgs, getTmuxSessionName } from "../src/attach.ts";
+import { buildTmuxAttachArgs, buildTuiTaskAttachExit, getTmuxSessionName } from "../src/attach.ts";
 
 const baseView: TaskStatusView = {
 	task_id: "t_abc",
@@ -50,5 +50,13 @@ describe("tui tmux attach helpers", () => {
 			"-t",
 			"cuekit-task-t_abc",
 		]);
+	});
+
+	it("builds task attach exits with return state for attach-and-return", () => {
+		expect(buildTuiTaskAttachExit("cuekit-task-t_abc", "t_abc")).toEqual({
+			kind: "attach",
+			args: buildTmuxAttachArgs("cuekit-task-t_abc"),
+			returnState: { mode: "tasks", selected_task_id: "t_abc" },
+		});
 	});
 });

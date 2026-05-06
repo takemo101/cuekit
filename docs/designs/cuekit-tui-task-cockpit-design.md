@@ -11,6 +11,9 @@ cuekit's normal CLI output is optimized for agents and scripts. The default TOON
 - Show an interactive task list and selected task details.
 - Let users inspect events and transcript tail for the selected task.
 - Let users attach to a selected running task's tmux session.
+- Let users return to the TUI after detaching from a task, using a safe wrapper/restart flow rather than OpenTUI suspend/resume.
+- Let users browse task teams as workflow cockpits: team list, lanes, attention, and member tasks.
+- Let users attach to a selected team member task with the same per-task attach behavior.
 - Let users run common actions on the selected task: refresh, cancel, delete, steer.
 - Reuse existing cuekit command-layer functions and schemas where possible.
 - Keep implementation scoped enough for an MVP.
@@ -21,7 +24,7 @@ cuekit's normal CLI output is optimized for agents and scripts. The default TOON
 - Session dashboard / session deletion UI.
 - Adapter management UI.
 - Complex filtering/search.
-- Returning to the TUI after tmux attach.
+- Multi-pane team tmux attach, `join-pane`, nested tmux dashboards, or auto-updating team layouts.
 - Replacing TOON/JSON command output.
 
 ## Library choice
@@ -70,6 +73,8 @@ Implementation entry points:
 
 ## Layout
 
+### Tasks mode
+
 Initial layout:
 
 ```text
@@ -96,6 +101,48 @@ Responsive behavior:
 - Narrow terminal: prioritize task list and compact selected detail; transcript tail may be hidden behind a key toggle in a later iteration.
 - Footer always shows key bindings and latest status/error message.
 
+### Teams mode
+
+Add a peer mode for teams, toggled from Tasks mode. The goal is a team cockpit, not a multi-pane tmux dashboard.
+
+```text
+┌ Teams ───────────────────────────────┐┌ Team Detail ─────────────────────────┐
+│ ● tm_abc  running   feature: skel…  ││ Team: tm_abc                         │
+│ ✓ tm_def  completed docs-polish…    ││ Status: running   Tasks: 4 total     │
+│ ! tm_xyz  mixed     bugfix timeout  ││ Attention: 1                         │
+│                                      ││                                      │
+└──────────────────────────────────────┘│ Lanes                                │
+                                        │ coordinator ✓ t_1 final report       │
+                                        │ worker      ● t_2 implementing       │
+                                        │ reviewer    ! t_3 found issue        │
+                                        │ finisher    - none                   │
+                                        │                                      │
+                                        │ Members                              │
+                                        │   coordinator t_1 completed          │
+                                        │ > worker      t_2 running            │
+                                        │   reviewer    t_3 completed          │
+                                        └──────────────────────────────────────┘
+
+[t] tasks/teams  [enter] members  [a] attach member  [r] refresh  [q] quit
+```
+
+Team list rows should prioritize human scanning:
+
+- aggregate status glyph/color,
+- `team_id`,
+- title or objective,
+- task count summary,
+- attention marker/count when `attention_items` or `open_attention` are present.
+
+Team detail should prioritize:
+
+1. title/objective,
+2. aggregate status and task counts,
+3. lanes grouped by `position` (`coordinator`, `worker`, `reviewer`, `finisher`, `observer`),
+4. attention items/manual steer hints,
+5. member tasks,
+6. latest/final summary and cleanup hint when available.
+
 ## Data model
 
 TUI state should derive from command-layer snapshots, not direct ad-hoc SQL where avoidable.
@@ -103,25 +150,53 @@ TUI state should derive from command-layer snapshots, not direct ad-hoc SQL wher
 Suggested internal state:
 
 ```ts
+type TuiMode = "tasks" | "teams";
+type TeamFocus = "list" | "members";
+
 type TuiState = {
+  mode: TuiMode;
   tasks: TaskSummary[];
-  selectedIndex: number;
+  teams: TeamSummary[];
+  selectedTaskIndex: number;
+  selectedTeamIndex: number;
+  selectedMemberIndex: number;
+  teamFocus: TeamFocus;
   selectedStatus?: TaskStatusView;
   selectedEvents: TaskEvent[];
+  selectedTeamDetail?: TuiTeamDetail;
   transcriptTail: string[];
   loading: boolean;
   message?: string;
   error?: string;
 };
+
+type TuiTeamDetail = {
+  team_id: string;
+  title: string;
+  objective?: string;
+  status: TeamStatus;
+  task_counts: TeamTaskCounts;
+  members: TaskSummary[];
+  lanes: Record<TeamPosition, TaskSummary[]>;
+  attention_items?: TuiTeamAttentionItem[];
+  manual_steer_hints?: TuiManualSteerHint[];
+  final_summary?: string;
+  cleanup_hint?: string;
+};
 ```
 
 Data loading:
 
-- `refresh()` calls `runListTasks(ctx, { limit: 100 })`.
+- Tasks mode `refresh()` calls `runListTasks(ctx, { limit: 100 })`.
+- Teams mode `refresh()` calls `runListTeams(ctx, { limit: 100 })` and loads detail for the selected team.
 - For selected task:
   - `runGetTaskStatus(ctx, { task_id })`
   - `runListTaskEvents(ctx, { task_id })`
   - read transcript tail from `result.artifacts` when terminal, or from task artifact path if available through status/result metadata in a later iteration.
+- For selected team:
+  - `runGetTeamStatus(ctx, { team_id })` for aggregate status, counts, run summary, attention, and member tasks when available.
+  - `runGetTeamResult(ctx, { team_id })` only when final summary/timeline detail is needed; avoid making every auto-refresh expensive if status already has enough data.
+  - derive `lanes` by grouping member task summaries by `position`, preserving unpositioned members in a separate display row if needed.
 
 For v1, transcript tail can be best-effort:
 
@@ -131,37 +206,70 @@ For v1, transcript tail can be best-effort:
 
 ## Keyboard actions
 
-Required v1 keys:
+Required task-mode keys:
 
 | Key | Action |
 | --- | --- |
 | `↑` / `k` | select previous task |
 | `↓` / `j` | select next task |
 | `r` | refresh task list and selected detail |
-| `a` | attach to selected task's tmux session and exit TUI |
+| `a` | attach to selected task's tmux session, then return to TUI after detach |
 | `s` | prompt for steering message and call `runSteerTask` |
 | `c` | cancel selected non-terminal task after confirmation |
 | `d` | delete selected terminal task after confirmation |
+| `t` | toggle to Teams mode |
 | `q` / `Esc` | quit |
 
-Optional v1.1 keys:
+Required team-mode keys:
+
+| Key | Action |
+| --- | --- |
+| `↑` / `k` | select previous team, or previous member when member focus is active |
+| `↓` / `j` | select next team, or next member when member focus is active |
+| `Enter` | move focus from team list to member list |
+| `Esc` | move focus from member list back to team list; quit only when already in team-list focus |
+| `a` | attach to the selected member task when member focus is active; otherwise show guidance to press `Enter` first |
+| `r` | refresh teams and selected team detail |
+| `t` | toggle back to Tasks mode |
+| `q` | quit |
+
+Optional later keys:
 
 | Key | Action |
 | --- | --- |
 | `e` | toggle event-focused view |
-| `t` | toggle transcript-focused view |
+| `T` | toggle transcript-focused view |
 | `?` | show help overlay |
 
 ## Attach behavior
 
-The user explicitly chose one-way attach for v1.
+Use an attach-and-return wrapper flow. Do **not** implement OpenTUI suspend/resume for this slice; restart the TUI after the tmux attach process exits. This is safer for terminal raw mode and alternate-screen cleanup.
 
-When `a` is pressed:
+When `a` is pressed in Tasks mode or member-focused Teams mode:
 
-1. Verify selected task has `supports_attach` and an `attach_hint`.
-2. Destroy/suspend the OpenTUI renderer cleanly so terminal state is restored.
-3. Execute the tmux attach command with inherited stdio.
-4. Do not return to the TUI after detach.
+1. Verify the selected task/member has `supports_attach` and a tmux session name or attach hint.
+2. Return an attach request to the CLI wrapper with enough state to restore mode/selection.
+3. Destroy the OpenTUI renderer cleanly so terminal state is restored.
+4. The CLI wrapper executes the tmux attach command with inherited stdio.
+5. When the user detaches from tmux, the wrapper starts `runTui()` again with the saved return state and refreshes data.
+
+Conceptual exit contract:
+
+```ts
+type TuiExit =
+  | { kind: "quit" }
+  | {
+      kind: "attach";
+      args: string[];
+      returnState?: {
+        mode: "tasks" | "teams";
+        selected_task_id?: string;
+        selected_team_id?: string;
+        selected_member_task_id?: string;
+        team_focus?: "list" | "members";
+      };
+    };
+```
 
 Preferred implementation:
 
@@ -173,6 +281,9 @@ Bun.spawn(["tmux", "attach-session", "-t", sessionName], { stdio: ["inherit", "i
 
 - If only `attach_hint` is available, avoid shell execution when possible; parse the expected `tmux attach-session -t <name>` shape.
 - If attach is unavailable, keep the TUI open and show a footer error.
+- MVP restoration can fall back to reselecting the nearest available task/team if the saved id no longer exists.
+
+Team multi-pane attach is explicitly out of scope. Teams mode attaches to one selected member task at a time using the same per-task tmux attach flow.
 
 ## Mutating actions
 
@@ -220,14 +331,17 @@ packages/tui/
   package.json           # @cuekit/tui; owns OpenTUI/React dependencies
   tsconfig.json
   src/
-    index.tsx            # runTui(ctx)
-    app.tsx              # top-level state and keyboard routing
+    index.tsx            # runTui(ctx), attach-and-return wrapper loop
+    app.tsx              # top-level state, mode, focus, and keyboard routing
     data.ts              # command-layer data loaders and transcript-tail helper
-    attach.ts            # one-way tmux attach helper
+    attach.ts            # tmux attach args/session-name helpers
     task-actions.ts      # pure action/selection helpers
+    tui-state.ts         # optional return-state restore helpers
     components/
       task-list.tsx
       task-detail.tsx
+      team-list.tsx
+      team-detail.tsx
       footer.tsx
       confirm-dialog.tsx
       input-dialog.tsx
@@ -255,10 +369,12 @@ The TUI may reuse existing command-layer functions from `@cuekit/mcp` for the MV
 
 Unit-test non-rendering pieces first:
 
-- task selection bounds.
+- task and team/member selection bounds.
 - attach command parsing / session-name extraction.
+- attach-and-return exit contract and return-state restoration.
 - action enablement rules (`canAttach`, `canCancel`, `canDelete`).
-- data loader behavior using the in-memory DB and fake tmux runner.
+- team list/detail data loader behavior using the in-memory DB and fake tmux runner.
+- lane grouping, attention item display, and attachability summaries for team detail.
 
 For OpenTUI rendering itself, start with smoke coverage if feasible:
 
@@ -272,13 +388,20 @@ Avoid brittle snapshot tests of full terminal output in v1.
 1. Add OpenTUI references and documentation links. Done.
 2. Add `cuekit tui` design note. This document.
 3. Spike a read-only TUI with task list, detail pane, refresh, and quit.
-4. Add one-way tmux attach.
+4. Add initial per-task tmux attach support.
 5. Add cancel/delete/steer actions with confirmation/input prompts.
-6. Dogfood against real OpenCode and Claude Code tasks.
-7. Update README with `cuekit tui` usage.
+6. Upgrade per-task attach to the attach-and-return wrapper flow.
+7. Add Teams mode with team list/detail, lanes, attention, and member tasks.
+8. Add member-task attach from Teams mode using the same attach-and-return flow.
+9. Dogfood against real OpenCode and Claude Code tasks and coordinator-led teams.
+10. Update README with `cuekit tui` usage.
 
 ## Open questions
 
+- Should attach-and-return be the default for `a`, or should one-way attach remain available through a separate key/flag?
+  - Recommendation: make attach-and-return the default; `q` still exits the TUI, and a future flag can preserve one-way behavior if needed.
+- Should Teams mode load `get_team_result` on every refresh or only on demand?
+  - Recommendation: use `get_team_status` for normal refresh and load full result/timeline only on demand or when a team is terminal.
 - Should `cuekit tui` default to all tasks or only tasks for the current cwd?
   - Recommendation: default to current cwd for human relevance, with a future `--all` option.
 - Should terminal completed tasks remain visible by default?

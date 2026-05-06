@@ -104,7 +104,7 @@ function printTuiHelp(): void {
 			"Use --path to ignore .cuekit.yaml identity and scope by the current path/Git root.",
 			"Use --all to show tasks across all projects for this invocation.",
 			"",
-			"Keys: ↑/↓ select, r refresh, a attach, s steer, c cancel, d delete, q quit",
+			"Keys: ↑/↓ select, r refresh, a attach (returns after detach), t teams/tasks, s steer, c cancel, d delete, q quit",
 			"",
 		].join("\n"),
 	);
@@ -247,7 +247,7 @@ async function main(): Promise<void> {
 		registry.register(createJcodeAdapter(db, panes, { logger }));
 
 		if (isTui) {
-			const { runTui } = await import(TUI_PACKAGE_NAME);
+			const { runTuiLoop } = await import(TUI_PACKAGE_NAME);
 			const all = process.argv.includes("--all");
 			const pathScope = process.argv.includes("--path");
 			const projectRoot = findProjectRoot(process.cwd(), { existsSync, statSync });
@@ -255,7 +255,7 @@ async function main(): Promise<void> {
 			if (loadedConfig && !loadedConfig.ok) {
 				throw new Error(loadedConfig.error);
 			}
-			await runTui(
+			await runTuiLoop(
 				createTuiContext(
 					{ db, registry },
 					{

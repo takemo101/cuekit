@@ -1,4 +1,12 @@
-import type { Ack, JobError, TaskListFilter, TaskStatusView, TaskSummary } from "@cuekit/core";
+import type {
+	Ack,
+	JobError,
+	TaskListFilter,
+	TaskStatusView,
+	TaskSummary,
+	TeamSummary,
+	TeamTaskCounts,
+} from "@cuekit/core";
 
 export type TuiTaskEvent = {
 	sequence: number;
@@ -43,15 +51,42 @@ export type TuiManualSteerHint = {
 export type TuiTeamStatusOutput =
 	| {
 			team_id: string;
+			session_id?: string;
+			title?: string;
+			objective?: string;
+			status?: string;
+			task_counts?: TeamTaskCounts;
+			positions?: Record<string, TaskSummary[]>;
+			tasks?: TaskSummary[];
 			run_summary: {
 				attention_items?: TuiTeamAttentionItem[];
 				manual_steer_hints?: TuiManualSteerHint[];
+				open_attention?: Array<{
+					task_id: string;
+					position?: string;
+					status: string;
+					message?: string;
+				}>;
 			};
+			cleanup_hint?: string;
 	  }
+	| { error: JobError };
+
+export type TuiTeamListOutput =
+	| { teams: TeamSummary[]; has_more: boolean; next_cursor?: string }
 	| { error: JobError };
 
 export type TuiContext = {
 	listTasks(input: TaskListFilter): Promise<TuiTaskListOutput>;
+	listTeams?(input: {
+		session_id?: string;
+		cwd?: string;
+		project_root?: string;
+		project_scope?: { project_uid?: string; project_root: string };
+		project_uid?: string;
+		limit?: number;
+		cursor?: string;
+	}): Promise<TuiTeamListOutput>;
 	getTaskStatus(taskId: string): Promise<TaskStatusView>;
 	getTeamStatus?(teamId: string): Promise<TuiTeamStatusOutput>;
 	listTaskEvents(taskId: string): Promise<TuiListTaskEventsOutput>;
