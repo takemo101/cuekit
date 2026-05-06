@@ -28,6 +28,7 @@ Stable feature documentation and design notes:
 - [jcode adapter design](designs/cuekit-jcode-repl-adapter-design.md) and [guide](guides/jcode-adapter.md) — `jcode repl` tmux adapter.
 - [TUI task cockpit design](designs/cuekit-tui-task-cockpit-design.md) — human-facing OpenTUI interface.
 - [TUI package separation design](designs/cuekit-tui-package-separation-design.md) — implementation architecture.
+- [Human CLI and distribution design](designs/cuekit-human-cli-distribution-design.md) — `@cuekit/cli`, `cuekit doctor`, and `cuekit update` design.
 
 ## Active / Historical Investigations
 
