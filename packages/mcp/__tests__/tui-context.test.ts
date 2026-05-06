@@ -1,7 +1,14 @@
 import { Database } from "bun:sqlite";
 import { describe, expect, it } from "bun:test";
 import { AdapterRegistry } from "@cuekit/adapters";
-import { createSession, createTask, createTaskTeam, runMigrations } from "@cuekit/store";
+import {
+	createSession,
+	createTask,
+	createTaskTeam,
+	getTaskById,
+	getTaskTeamById,
+	runMigrations,
+} from "@cuekit/store";
 import { createTuiContext } from "../src/tui-context.ts";
 
 function makeHarness() {
@@ -191,5 +198,32 @@ describe("createTuiContext", () => {
 		if ("teams" in result) {
 			expect(result.teams.map((team) => team.team_id).sort()).toEqual(["tm_current", "tm_legacy"]);
 		}
+	});
+
+	it("exposes cleanup and delete team actions for the TUI", async () => {
+		const { db, tui } = makeHarness();
+		createSession(db, {
+			id: "s_cleanup_team",
+			project_root: "/repo",
+			worktree_path: "/repo",
+			parent_agent_kind: "pi",
+		});
+		createTaskTeam(db, { id: "tm_cleanup", session_id: "s_cleanup_team", title: "Cleanup" });
+		createTask(db, {
+			id: "t_cleanup",
+			session_id: "s_cleanup_team",
+			agent_kind: "claude-code",
+			team_id: "tm_cleanup",
+			objective: "done",
+			status: "completed",
+		});
+
+		const cleanup = await tui.cleanupTeam("tm_cleanup");
+		expect(cleanup.ok).toBe(true);
+		expect(getTaskById(db, "t_cleanup")).toBeNull();
+
+		const deleted = await tui.deleteTeam("tm_cleanup");
+		expect(deleted.ok).toBe(true);
+		expect(getTaskTeamById(db, "tm_cleanup")).toBeNull();
 	});
 });

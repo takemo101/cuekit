@@ -229,6 +229,8 @@ Required team-mode keys:
 | `Enter` | move focus from team list to member list |
 | `Esc` | move focus from member list back to team list; quit only when already in team-list focus |
 | `a` | attach to the selected member task when member focus is active; otherwise show guidance to press `Enter` first |
+| `c` | cleanup terminal tasks in the selected team after confirmation |
+| `d` | delete the selected team after confirmation, only when it is empty |
 | `r` | refresh teams and selected team detail |
 | `t` | toggle back to Tasks mode |
 | `q` | quit |

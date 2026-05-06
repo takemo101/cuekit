@@ -37,9 +37,11 @@ describe("@cuekit/tui package smoke", () => {
 		const taskList = await Bun.file(
 			new URL("../src/components/task-list.tsx", import.meta.url),
 		).text();
-		expect(app).toContain("<TaskList tasks={tasks} selectedIndex={selectedIndex} />");
+		expect(app).toContain("<TaskList");
+		expect(app).toContain("maxVisibleRows={listRows}");
 		expect(app).toContain("<TaskDetail task={selectedTask} detail={detail} />");
 		expect(taskList).toContain("const TASK_LIST_WIDTH = 42");
+		expect(taskList).toContain("listWindow");
 		expect(taskList).not.toContain("RESULT");
 	});
 

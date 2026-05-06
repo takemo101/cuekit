@@ -517,6 +517,6 @@ Final report should include:
 - Multi-pane team tmux attach.
 - Tmux `join-pane` or dashboard session management.
 - OpenTUI suspend/resume.
-- TUI team creation/submission/cleanup actions.
+- TUI team creation/submission/wait actions.
 - Complex filtering/search.
 - Automatic team task scheduling or auto-routing.

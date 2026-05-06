@@ -33,7 +33,7 @@ function teamHotkeys(focus: TeamFocus, attachable: boolean, compact: boolean): s
 	if (compact) {
 		return focus === "members"
 			? `${attachable ? "a att  " : ""}esc list  j/k member  r ref  t tasks  q quit  auto3s`
-			: "j/k team  enter members  t tasks  r ref  q quit  auto3s";
+			: "j/k team  enter  c clean  d del empty  t tasks  r ref  q quit  auto3s";
 	}
 	return focus === "members"
 		? [
@@ -45,7 +45,16 @@ function teamHotkeys(focus: TeamFocus, attachable: boolean, compact: boolean): s
 				"q quit",
 				"auto 3s",
 			].join("   ")
-		: ["↑/↓|j/k team", "enter members", "t tasks", "r refresh", "q quit", "auto 3s"].join(
+		: [
+				"↑/↓|j/k team",
+				"enter members",
+				"c cleanup",
+				"d delete empty",
+				"t tasks",
+				"r refresh",
+				"q quit",
+				"auto 3s",
+			].join(
 				"   ",
 			);
 }

@@ -25,7 +25,9 @@ import {
 import {
 	canAttach,
 	canCancel,
+	canCleanupTeam,
 	canDelete,
+	canDeleteTeam,
 	moveSelection,
 	resolveEnterTeamFocus,
 	restoreIndexById,
@@ -36,8 +38,25 @@ import type { TuiExit, TuiMode, TuiReturnState } from "./tui-state.ts";
 
 const AUTO_REFRESH_MS = 3000;
 
-type PendingConfirm = { kind: "cancel" | "delete"; taskId: string } | null;
+type PendingConfirmAction =
+	| { kind: "cancel"; taskId: string }
+	| { kind: "delete"; taskId: string }
+	| { kind: "cleanup-team"; teamId: string }
+	| { kind: "delete-team"; teamId: string };
+type PendingConfirm = PendingConfirmAction | null;
 type SteerInputState = { taskId: string; value: string } | null;
+
+function confirmTitle(action: PendingConfirmAction): string {
+	if (action.kind === "cleanup-team") return "Cleanup team";
+	if (action.kind === "delete-team") return "Delete team";
+	return `${action.kind === "cancel" ? "Cancel" : "Delete"} task`;
+}
+
+function confirmMessage(action: PendingConfirmAction): string {
+	if (action.kind === "cleanup-team") return `Cleanup terminal tasks in ${action.teamId}?`;
+	if (action.kind === "delete-team") return `Delete empty team ${action.teamId}?`;
+	return `${action.kind} ${action.taskId}?`;
+}
 
 export function App(props: {
 	ctx: TuiContext;
@@ -69,6 +88,8 @@ export function App(props: {
 		() => teamDetail?.members[selectedMemberIndex],
 		[teamDetail, selectedMemberIndex],
 	);
+	const selectedTeamCounts = selectedTeam?.task_counts ?? teamDetail?.status?.task_counts;
+	const listRows = Math.max(1, terminal.height - 7);
 
 	const exit = useCallback(
 		(next: TuiExit) => {
@@ -203,7 +224,15 @@ export function App(props: {
 			const result =
 				action.kind === "cancel"
 					? await props.ctx.cancelTask(action.taskId)
-					: await props.ctx.deleteTask(action.taskId);
+					: action.kind === "delete"
+						? await props.ctx.deleteTask(action.taskId)
+						: action.kind === "cleanup-team"
+							? await props.ctx.cleanupTeam?.(action.teamId)
+							: await props.ctx.deleteTeam?.(action.teamId);
+			if (!result) {
+				setError("Selected team action is not available.");
+				return;
+			}
 			if (!result.ok) {
 				setError(result.error.message);
 				return;
@@ -368,6 +397,18 @@ export function App(props: {
 			return;
 		}
 		if (key.name === "c") {
+			if (mode === "teams") {
+				if (!selectedTeam) {
+					setError("Select a team to cleanup.");
+					return;
+				}
+				if (!canCleanupTeam(selectedTeamCounts)) {
+					setError("Selected team has no terminal tasks to cleanup.");
+					return;
+				}
+				setPendingConfirm({ kind: "cleanup-team", teamId: selectedTeam.team_id });
+				return;
+			}
 			if (mode !== "tasks" || !selectedTask || !canCancel(selectedTask.status)) {
 				setError("Selected task cannot be cancelled.");
 				return;
@@ -376,6 +417,18 @@ export function App(props: {
 			return;
 		}
 		if (key.name === "d") {
+			if (mode === "teams") {
+				if (!selectedTeam) {
+					setError("Select an empty team to delete.");
+					return;
+				}
+				if (!canDeleteTeam(selectedTeamCounts)) {
+					setError("Selected team must be empty before deletion.");
+					return;
+				}
+				setPendingConfirm({ kind: "delete-team", teamId: selectedTeam.team_id });
+				return;
+			}
 			if (mode !== "tasks" || !selectedTask || !canDelete(selectedTask.status)) {
 				setError("Selected task cannot be deleted until it is terminal.");
 				return;
@@ -399,20 +452,20 @@ export function App(props: {
 			<box flexDirection="row" flexGrow={1} gap={1} backgroundColor={theme.bg}>
 				{mode === "teams" ? (
 					<>
-						<TeamList teams={teams} selectedIndex={selectedTeamIndex} />
+						<TeamList teams={teams} selectedIndex={selectedTeamIndex} maxVisibleRows={listRows} />
 						<TeamDetail team={selectedTeam} detail={teamDetail} selectedMemberIndex={selectedMemberIndex} focus={teamFocus} />
 					</>
 				) : (
 					<>
-						<TaskList tasks={tasks} selectedIndex={selectedIndex} />
+						<TaskList tasks={tasks} selectedIndex={selectedIndex} maxVisibleRows={listRows} />
 						<TaskDetail task={selectedTask} detail={detail} />
 					</>
 				)}
 			</box>
 			{pendingConfirm ? (
 				<ConfirmDialog
-					title={`${pendingConfirm.kind === "cancel" ? "Cancel" : "Delete"} task`}
-					message={`${pendingConfirm.kind} ${pendingConfirm.taskId}?`}
+					title={confirmTitle(pendingConfirm)}
+					message={confirmMessage(pendingConfirm)}
 				/>
 			) : null}
 			{steerInput !== null ? (
