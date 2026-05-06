@@ -126,6 +126,13 @@ function trimVersionOutput(value: string): string {
 	return value.trim().split(/\s+/).join(" ");
 }
 
+const ADAPTER_EXECUTABLES = [
+	{ kind: "claude-code", command: "claude" },
+	{ kind: "pi", command: "pi" },
+	{ kind: "opencode", command: "opencode" },
+	{ kind: "jcode", command: "jcode" },
+] as const;
+
 function renderDoctor(checks: DoctorCheck[]): string {
 	return [
 		"cuekit doctor",
@@ -192,6 +199,23 @@ export async function runDoctor(options: RunDoctorOptions = {}): Promise<DoctorR
 	}
 
 	checks.push({ level: "ok", label: "MCP config helper", detail: "cuekit mcp config" });
+
+	for (const adapter of ADAPTER_EXECUTABLES) {
+		const result = await exec(adapter.command, ["--version"]);
+		checks.push(
+			result.ok
+				? {
+						level: "ok",
+						label: `adapter ${adapter.kind}`,
+						detail: `${adapter.command} found`,
+					}
+				: {
+						level: "warn",
+						label: `adapter ${adapter.kind}`,
+						detail: `${adapter.command} not found`,
+					},
+		);
+	}
 
 	const latest = await (options.getLatestRelease ?? defaultGetLatestRelease)();
 	if (!latest.ok) {

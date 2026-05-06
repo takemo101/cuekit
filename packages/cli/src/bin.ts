@@ -21,7 +21,12 @@ import {
 	printUpdateHelp,
 } from "./dispatch.ts";
 import { runDoctor } from "./doctor.ts";
-import { printTuiHelp, runInitCommand, runPiMcpAddCommand } from "./human-commands.ts";
+import {
+	printTuiHelp,
+	runInitCommand,
+	runJcodeMcpAddCommand,
+	runPiMcpAddCommand,
+} from "./human-commands.ts";
 import { runUpdate } from "./update.ts";
 
 const TUI_PACKAGE_NAME = "@cuekit/tui";
@@ -110,9 +115,11 @@ export async function runCuekitCliBin(): Promise<void> {
 		return;
 	}
 	if (classification.kind === "mcp-add") {
-		const result = runPiMcpAddCommand(argv.slice(2));
+		const jcodeResult = runJcodeMcpAddCommand(argv.slice(2));
+		const result = jcodeResult.shouldDelegate ? runPiMcpAddCommand(argv.slice(2)) : jcodeResult;
 		process.stdout.write(result.stdout);
 		if (result.stderr) process.stderr.write(result.stderr);
+		if (result.exitCode !== 0) process.exit(result.exitCode);
 		if (!result.shouldDelegate) return;
 		process.argv = [process.argv[0] ?? "bun", process.argv[1] ?? "cuekit", ...result.delegateArgv];
 	}
