@@ -93,5 +93,7 @@ export type TuiContext = {
 	cancelTask(taskId: string): Promise<Ack>;
 	deleteTask(taskId: string): Promise<Ack>;
 	steerTask(taskId: string, message: string): Promise<Ack>;
+	cleanupTeam?(teamId: string): Promise<Ack>;
+	deleteTeam?(teamId: string): Promise<Ack>;
 	getTranscriptPath?(taskId: string): string | undefined;
 };

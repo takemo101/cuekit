@@ -3,7 +3,10 @@ import type { TaskStatus, TaskStatusView } from "@cuekit/core";
 import {
 	canAttach,
 	canCancel,
+	canCleanupTeam,
 	canDelete,
+	canDeleteTeam,
+	listWindow,
 	moveSelection,
 	resolveEnterTeamFocus,
 	resolveEscapeTeamFocus,
@@ -122,5 +125,90 @@ describe("tui task action helpers", () => {
 		expect(resolveEnterTeamFocus("members", 1)).toBe("members");
 		expect(resolveEscapeTeamFocus("members")).toBe("list");
 		expect(resolveEscapeTeamFocus("list")).toBe("list");
+	});
+
+	it("allows team cleanup only when terminal member tasks exist", () => {
+		expect(
+			canCleanupTeam({
+				total: 2,
+				queued: 0,
+				running: 1,
+				input_required: 0,
+				completed: 1,
+				failed: 0,
+				cancelled: 0,
+				timed_out: 0,
+				blocked: 0,
+			}),
+		).toBe(true);
+		expect(
+			canCleanupTeam({
+				total: 1,
+				queued: 0,
+				running: 1,
+				input_required: 0,
+				completed: 0,
+				failed: 0,
+				cancelled: 0,
+				timed_out: 0,
+				blocked: 0,
+			}),
+		).toBe(false);
+	});
+
+	it("allows team delete only for empty teams", () => {
+		expect(
+			canDeleteTeam({
+				total: 0,
+				queued: 0,
+				running: 0,
+				input_required: 0,
+				completed: 0,
+				failed: 0,
+				cancelled: 0,
+				timed_out: 0,
+				blocked: 0,
+			}),
+		).toBe(true);
+		expect(
+			canDeleteTeam({
+				total: 1,
+				queued: 0,
+				running: 0,
+				input_required: 0,
+				completed: 1,
+				failed: 0,
+				cancelled: 0,
+				timed_out: 0,
+				blocked: 0,
+			}),
+		).toBe(false);
+	});
+
+	it("computes a bounded list window that keeps the selected row visible", () => {
+		expect(listWindow({ length: 0, selectedIndex: 0, maxVisible: 5 })).toEqual({
+			start: 0,
+			end: 0,
+		});
+		expect(listWindow({ length: 20, selectedIndex: 0, maxVisible: 5 })).toEqual({
+			start: 0,
+			end: 5,
+		});
+		expect(listWindow({ length: 20, selectedIndex: 8, maxVisible: 5 })).toEqual({
+			start: 6,
+			end: 11,
+		});
+		expect(listWindow({ length: 20, selectedIndex: 19, maxVisible: 5 })).toEqual({
+			start: 15,
+			end: 20,
+		});
+		expect(listWindow({ length: 3, selectedIndex: 2, maxVisible: 10 })).toEqual({
+			start: 0,
+			end: 3,
+		});
+		expect(listWindow({ length: 20, selectedIndex: 8, maxVisible: 1 })).toEqual({
+			start: 8,
+			end: 9,
+		});
 	});
 });

@@ -1,6 +1,7 @@
 import type { TaskSummary } from "@cuekit/core";
 import type { ReactNode } from "react";
 import { truncateEnd } from "../format.ts";
+import { listWindow } from "../task-actions.ts";
 import { statusAccent, statusGlyph, theme } from "../theme.ts";
 
 const TASK_LIST_WIDTH = 42;
@@ -33,8 +34,27 @@ function rowBackground(index: number, selected: boolean): string {
 	return index % 2 === 0 ? theme.rowAlt : theme.row;
 }
 
-export function TaskList(props: { tasks: TaskSummary[]; selectedIndex: number }): ReactNode {
+export function TaskList(props: {
+	tasks: TaskSummary[];
+	selectedIndex: number;
+	maxVisibleRows?: number;
+}): ReactNode {
 	const { tasks, selectedIndex } = props;
+	const contentBudget = Math.max(0, props.maxVisibleRows ?? tasks.length + 1);
+	const rowBudget = Math.max(0, contentBudget - 1);
+	const firstWindow = listWindow({
+		length: tasks.length,
+		selectedIndex,
+		maxVisible: rowBudget,
+	});
+	const needsMoreRow = rowBudget >= 2 && firstWindow.end < tasks.length;
+	const visibleRowBudget = needsMoreRow ? rowBudget - 1 : rowBudget;
+	const { start, end } = listWindow({
+		length: tasks.length,
+		selectedIndex,
+		maxVisible: visibleRowBudget,
+	});
+	const visibleTasks = tasks.slice(start, end);
 	return (
 		<box
 			title="Tasks"
@@ -51,7 +71,8 @@ export function TaskList(props: { tasks: TaskSummary[]; selectedIndex: number })
 			{tasks.length === 0 ? (
 				<text fg={theme.muted}>No tasks found.</text>
 			) : (
-				tasks.map((task, index) => {
+				visibleTasks.map((task, visibleIndex) => {
+					const index = start + visibleIndex;
 					const selected = index === selectedIndex;
 					return (
 						<box key={task.task_id} backgroundColor={rowBackground(index, selected)} height={1}>
@@ -60,6 +81,7 @@ export function TaskList(props: { tasks: TaskSummary[]; selectedIndex: number })
 					);
 				})
 			)}
+			{end < tasks.length ? <text fg={theme.muted}>{`… ${tasks.length - end} more`}</text> : null}
 		</box>
 	);
 }

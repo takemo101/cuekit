@@ -623,14 +623,15 @@ Task detail:
 - Show `position` if present.
 - Optionally show aggregate team status and task counts if the data is already available without expensive extra calls.
 
-No TUI team actions in Phase 1:
+Minimal TUI team actions:
 
 - no create team dialog
 - no wait team action
-- no cleanup team action
+- allow cleanup of terminal tasks in the selected team after confirmation
+- allow deleting an empty selected team after confirmation
 - no team collapse/expand
 
-These can be added after the MCP/store layer is stable.
+Cleanup/delete actions should reuse the existing command layer and keep the same rules as MCP/CLI: cleanup removes terminal tasks and keeps the team row; delete requires the team to be empty.
 
 ## CLI Shape
 

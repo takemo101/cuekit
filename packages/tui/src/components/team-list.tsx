@@ -1,6 +1,7 @@
 import type { TeamSummary } from "@cuekit/core";
 import type { ReactNode } from "react";
 import { truncateEnd } from "../format.ts";
+import { listWindow } from "../task-actions.ts";
 import { statusAccent, statusGlyph, theme } from "../theme.ts";
 
 const TEAM_LIST_WIDTH = 42;
@@ -21,8 +22,27 @@ function rowBackground(index: number, selected: boolean): string {
 	return index % 2 === 0 ? theme.rowAlt : theme.row;
 }
 
-export function TeamList(props: { teams: TeamSummary[]; selectedIndex: number }): ReactNode {
+export function TeamList(props: {
+	teams: TeamSummary[];
+	selectedIndex: number;
+	maxVisibleRows?: number;
+}): ReactNode {
 	const { teams, selectedIndex } = props;
+	const contentBudget = Math.max(0, props.maxVisibleRows ?? teams.length + 1);
+	const rowBudget = Math.max(0, contentBudget - 1);
+	const firstWindow = listWindow({
+		length: teams.length,
+		selectedIndex,
+		maxVisible: rowBudget,
+	});
+	const needsMoreRow = rowBudget >= 2 && firstWindow.end < teams.length;
+	const visibleRowBudget = needsMoreRow ? rowBudget - 1 : rowBudget;
+	const { start, end } = listWindow({
+		length: teams.length,
+		selectedIndex,
+		maxVisible: visibleRowBudget,
+	});
+	const visibleTeams = teams.slice(start, end);
 	return (
 		<box
 			title="Teams"
@@ -39,7 +59,8 @@ export function TeamList(props: { teams: TeamSummary[]; selectedIndex: number })
 			{teams.length === 0 ? (
 				<text fg={theme.muted}>No teams found.</text>
 			) : (
-				teams.map((team, index) => {
+				visibleTeams.map((team, visibleIndex) => {
+					const index = start + visibleIndex;
 					const selected = index === selectedIndex;
 					return (
 						<box key={team.team_id} backgroundColor={rowBackground(index, selected)} height={1}>
@@ -48,6 +69,7 @@ export function TeamList(props: { teams: TeamSummary[]; selectedIndex: number })
 					);
 				})
 			)}
+			{end < teams.length ? <text fg={theme.muted}>{`… ${teams.length - end} more`}</text> : null}
 		</box>
 	);
 }
