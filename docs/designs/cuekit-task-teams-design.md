@@ -6,7 +6,9 @@ Status: proposed
 
 Task teams add a small collaboration layer on top of existing cuekit sessions and tasks. A team represents one user-level objective that may require several child-agent tasks, such as planning, implementation, review, and docs. Each team task can also carry a `position` such as `coordinator`, `worker`, `reviewer`, or `finisher` so callers and prompts can distinguish team leadership, implementation, review, and release/report-back work from specialist Agent Profiles.
 
-The design intentionally avoids a full swarm runtime: no scheduler, no DAG, no file locking, no agent-to-agent chat, no automatic report routing, and no worktree manager in the MVP. The goal is to provide a practical Swarm-lite workflow without making cuekit's core model complex. Future coordinator report-back improvements should start as durable event summaries and guidance over `task_events`, not automatic wake/steer behavior.
+Teams are a derived layer, not cuekit's core. The core primitive is parent-to-child delegation: a parent agent submits work it cannot or should not keep in its own context, observes the child, optionally attaches or steers, and collects a normalized result. A team is the lightweight view that keeps several related delegations understandable to the parent agent.
+
+The design intentionally avoids a full swarm runtime: no scheduler, no DAG, no file locking, no agent-to-agent chat, no automatic report routing, and no worktree manager in the MVP. The goal is to provide a practical Swarm-lite workflow without making cuekit's core model complex or replacing the parent agent's judgment. Future coordinator report-back improvements should start as durable event summaries and guidance over `task_events`, not automatic wake/steer behavior.
 
 ## Goals
 

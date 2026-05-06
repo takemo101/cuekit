@@ -18,7 +18,9 @@ A rigid workflow engine would solve repeatability, but it risks turning the coor
 
 ## Design Goal
 
-Add **Team Strategies**: project-local strategy profiles that cuekit renders into coordinator guidance. A strategy is a **mission playbook**, not an executable workflow.
+Add **Team Strategies**: project-local strategy profiles that cuekit renders into coordinator guidance. A strategy is a **development frame/playbook**, not workflow control.
+
+Strategies exist because unguided delegation can be too loose for software delivery: implementation can skip review, review can lack success criteria, and final reporting can be ambiguous. A strategy supplies shared intent, guardrails, recommended roles, and confidence checks while leaving task selection, sequencing, intervention, and final judgment with the parent/coordinator agent.
 
 Team Strategies should:
 
