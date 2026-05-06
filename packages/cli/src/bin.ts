@@ -29,8 +29,6 @@ import {
 } from "./human-commands.ts";
 import { runUpdate } from "./update.ts";
 
-const TUI_PACKAGE_NAME = "@cuekit/tui";
-
 function closeQuietly(db: Database): void {
 	try {
 		db.close();
@@ -56,7 +54,7 @@ async function runTuiCommand(): Promise<void> {
 		registry.register(createOpenCodeAdapter(db, panes, { logger }));
 		registry.register(createJcodeAdapter(db, panes, { logger }));
 
-		const { runTuiLoop } = await import(TUI_PACKAGE_NAME);
+		const { runTuiLoop } = await import("@cuekit/tui");
 		const all = process.argv.includes("--all");
 		const pathScope = process.argv.includes("--path");
 		const projectRoot = findProjectRoot(process.cwd(), { existsSync, statSync });
@@ -80,7 +78,7 @@ async function runTuiCommand(): Promise<void> {
 								}
 						: { projectRoot }),
 				},
-			),
+			) as never,
 		);
 		closeQuietly(db);
 	} catch (err) {
