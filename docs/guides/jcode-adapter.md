@@ -21,6 +21,22 @@ command -v tmux
 
 If `jcode auth status` reports missing credentials, authenticate with jcode before running the smoke test. If `tmux` is unavailable, cuekit can still run fake-backed tests, but live attach/steer verification is not possible.
 
+## Register cuekit for jcode MCP
+
+To let jcode call cuekit's MCP server, register the local `cuekit` command in jcode's MCP config:
+
+```sh
+cuekit mcp add --agent jcode
+```
+
+By default this writes `~/.jcode/mcp.json` using jcode's `servers` config shape. Use `--no-global` to write the project-local `.jcode/mcp.json` instead:
+
+```sh
+cuekit mcp add --agent jcode --no-global
+```
+
+Existing jcode MCP servers are preserved.
+
 ## Submit and attach smoke test
 
 Install or link the current checkout first:

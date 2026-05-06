@@ -772,10 +772,81 @@ describe("createCli", () => {
 		}
 	});
 
-	it("just install creates a wrapper without making the tracked bin executable", async () => {
+	it("registers MCP for jcode in the global jcode config", async () => {
+		const tmpRoot = mkdtempSync(`${tmpdir()}/cuekit-jcode-mcp-add-`);
+		try {
+			const proc = Bun.spawn(["bun", "packages/cli/src/bin.ts", "mcp", "add", "--agent", "jcode"], {
+				cwd: WORKSPACE_ROOT,
+				env: {
+					...process.env,
+					CUEKIT_DB_PATH: ":memory:",
+					HOME: tmpRoot,
+				},
+				stderr: "pipe",
+				stdout: "pipe",
+			});
+			const [exitCode, stdout, stderr] = await Promise.all([
+				proc.exited,
+				new Response(proc.stdout).text(),
+				new Response(proc.stderr).text(),
+			]);
+
+			expect(exitCode).toBe(0);
+			expect(stderr).toBe("");
+			const configPath = `${tmpRoot}/.jcode/mcp.json`;
+			expect(stdout).toContain(`Registered MCP server 'cuekit' for jcode: ${configPath}`);
+			const config = JSON.parse(readFileSync(configPath, "utf8")) as {
+				servers: { cuekit: { command: string; args: string[]; env: object; shared: boolean } };
+			};
+			expect(config.servers.cuekit.command).toBe("cuekit");
+			expect(config.servers.cuekit.args).toEqual(["--mcp"]);
+			expect(config.servers.cuekit.shared).toBe(true);
+		} finally {
+			rmSync(tmpRoot, { recursive: true, force: true });
+		}
+	});
+
+	it("registers MCP for jcode in the project local config with --no-global", async () => {
+		const tmpRoot = mkdtempSync(`${tmpdir()}/cuekit-jcode-mcp-add-project-`);
+		try {
+			const proc = Bun.spawn(
+				[
+					"bun",
+					`${WORKSPACE_ROOT}/packages/cli/src/bin.ts`,
+					"mcp",
+					"add",
+					"--agent",
+					"jcode",
+					"--no-global",
+				],
+				{
+					cwd: tmpRoot,
+					env: {
+						...process.env,
+						CUEKIT_DB_PATH: ":memory:",
+						HOME: tmpRoot,
+					},
+					stderr: "pipe",
+					stdout: "pipe",
+				},
+			);
+			const [exitCode, stderr] = await Promise.all([proc.exited, new Response(proc.stderr).text()]);
+
+			expect(exitCode).toBe(0);
+			expect(stderr).toBe("");
+			const config = JSON.parse(readFileSync(`${tmpRoot}/.jcode/mcp.json`, "utf8")) as {
+				servers: { cuekit: { command: string; args: string[] } };
+			};
+			expect(config.servers.cuekit).toMatchObject({ command: "cuekit", args: ["--mcp"] });
+		} finally {
+			rmSync(tmpRoot, { recursive: true, force: true });
+		}
+	});
+
+	it("just install creates a wrapper for the @cuekit/cli bin without making it executable", async () => {
 		const tmpRoot = mkdtempSync(`${tmpdir()}/cuekit-just-install-`);
 		try {
-			const binPath = `${WORKSPACE_ROOT}/packages/mcp/src/bin.ts`;
+			const binPath = `${WORKSPACE_ROOT}/packages/cli/src/bin.ts`;
 			const beforeMode = statSync(binPath).mode & 0o777;
 			const proc = Bun.spawn(["just", "install"], {
 				cwd: WORKSPACE_ROOT,
@@ -790,7 +861,9 @@ describe("createCli", () => {
 			const exitCode = await proc.exited;
 
 			expect(exitCode).toBe(0);
-			expect(statSync(`${tmpRoot}/.bun/bin/cuekit`).mode & 0o111).not.toBe(0);
+			const wrapperPath = `${tmpRoot}/.bun/bin/cuekit`;
+			expect(statSync(wrapperPath).mode & 0o111).not.toBe(0);
+			expect(readFileSync(wrapperPath, "utf8")).toContain("/packages/cli/src/bin.ts");
 			expect(statSync(binPath).mode & 0o777).toBe(beforeMode);
 		} finally {
 			rmSync(tmpRoot, { recursive: true, force: true });

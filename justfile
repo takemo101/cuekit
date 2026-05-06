@@ -7,7 +7,7 @@ default:
 install:
     mkdir -p "$HOME/.bun/bin"
     rm -f "$HOME/.bun/bin/cuekit"
-    printf '%s\n' '#!/usr/bin/env sh' 'exec bun "{{ justfile_directory() }}/packages/mcp/src/bin.ts" "$@"' > "$HOME/.bun/bin/cuekit"
+    printf '%s\n' '#!/usr/bin/env sh' 'exec bun "{{ justfile_directory() }}/packages/cli/src/bin.ts" "$@"' > "$HOME/.bun/bin/cuekit"
     chmod 755 "$HOME/.bun/bin/cuekit"
     "$HOME/.bun/bin/cuekit" --help
 

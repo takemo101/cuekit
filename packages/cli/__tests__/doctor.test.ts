@@ -75,6 +75,30 @@ describe("cuekit doctor", () => {
 		});
 	});
 
+	it("reports adapter executable availability as non-blocking warnings", async () => {
+		const result = await runDoctor({
+			cwd: "/repo",
+			env: {},
+			exec: async (command) => {
+				if (command === "bun") return { ok: true, stdout: "1.3.11\n" };
+				if (command === "tmux") return { ok: true, stdout: "tmux 3.5a\n" };
+				if (command === "claude") return { ok: true, stdout: "1.0.0\n" };
+				if (command === "jcode") return { ok: true, stdout: "jcode v0.9.0\n" };
+				return { ok: false, stderr: "not found" };
+			},
+			checkWritableState: async () => ({ ok: true, path: "~/.cuekit/state.db" }),
+			loadProjectConfig: () => ({ ok: true, source: "config", path: "/repo/.cuekit.yaml" }),
+			getCurrentVersion: () => "v0.1.0",
+			getLatestRelease: async () => ({ ok: false, reason: "offline" }),
+		});
+
+		expect(result.exitCode).toBe(0);
+		expect(result.stdout).toContain("✓ adapter claude-code: claude found");
+		expect(result.stdout).toContain("! adapter pi: pi not found");
+		expect(result.stdout).toContain("! adapter opencode: opencode not found");
+		expect(result.stdout).toContain("✓ adapter jcode: jcode found");
+	});
+
 	it("suggests the implemented update command as a next step", async () => {
 		const result = await runDoctor({
 			cwd: "/repo",

@@ -1,5 +1,6 @@
 import { registerPiMcpServer } from "@cuekit/mcp";
 import { type ProjectConfigInitResult, runProjectConfigInit } from "@cuekit/project-config";
+import { registerJcodeMcpServer } from "./jcode-mcp-config.ts";
 
 export type HumanCommandResult = {
 	exitCode: number;
@@ -91,24 +92,29 @@ export function printTuiHelp(): string {
 	].join("\n");
 }
 
-export function splitPiAgentArgs(argv: string[]): { hasPi: boolean; rest: string[] } {
+function splitAgentArgs(argv: string[], agent: string): { hasAgent: boolean; rest: string[] } {
 	const rest: string[] = [];
-	let hasPi = false;
+	let hasAgent = false;
 	for (let i = 0; i < argv.length; i++) {
 		const arg = argv[i];
 		if (arg === undefined) continue;
-		if ((arg === "--agent" || arg === "-a") && argv[i + 1] === "pi") {
-			hasPi = true;
+		if ((arg === "--agent" || arg === "-a") && argv[i + 1] === agent) {
+			hasAgent = true;
 			i++;
 			continue;
 		}
-		if (arg === "--agent=pi" || arg === "-a=pi") {
-			hasPi = true;
+		if (arg === `--agent=${agent}` || arg === `-a=${agent}`) {
+			hasAgent = true;
 			continue;
 		}
 		rest.push(arg);
 	}
-	return { hasPi, rest };
+	return { hasAgent, rest };
+}
+
+export function splitPiAgentArgs(argv: string[]): { hasPi: boolean; rest: string[] } {
+	const result = splitAgentArgs(argv, "pi");
+	return { hasPi: result.hasAgent, rest: result.rest };
 }
 
 export function hasExplicitAgent(argv: string[]): boolean {
@@ -135,4 +141,48 @@ export function runPiMcpAddCommand(
 		shouldDelegate: hasExplicitAgent(piAgents.rest),
 		delegateArgv: ["mcp", "add", ...piAgents.rest],
 	};
+}
+
+export type McpAddCommandResult = HumanCommandResult & {
+	shouldDelegate: boolean;
+	delegateArgv: string[];
+};
+
+export type RunJcodeMcpAddDependencies = {
+	cwd?: string;
+	home?: string;
+	jcodeHome?: string;
+};
+
+export function runJcodeMcpAddCommand(
+	argv: string[],
+	dependencies: RunJcodeMcpAddDependencies = {},
+): McpAddCommandResult {
+	const jcodeAgents = splitAgentArgs(argv, "jcode");
+	if (!jcodeAgents.hasAgent) {
+		return { exitCode: 0, stdout: "", shouldDelegate: true, delegateArgv: ["mcp", "add", ...argv] };
+	}
+
+	try {
+		const result = registerJcodeMcpServer({
+			global: !jcodeAgents.rest.includes("--no-global"),
+			cwd: dependencies.cwd,
+			home: dependencies.home,
+			jcodeHome: dependencies.jcodeHome,
+		});
+		return {
+			exitCode: 0,
+			stdout: `Registered MCP server '${result.serverName}' for jcode: ${result.path}\n`,
+			shouldDelegate: hasExplicitAgent(jcodeAgents.rest),
+			delegateArgv: ["mcp", "add", ...jcodeAgents.rest],
+		};
+	} catch (err) {
+		return {
+			exitCode: 1,
+			stdout: "",
+			stderr: `${err instanceof Error ? err.message : String(err)}\n`,
+			shouldDelegate: false,
+			delegateArgv: ["mcp", "add", ...jcodeAgents.rest],
+		};
+	}
 }
