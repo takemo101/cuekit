@@ -2,6 +2,14 @@
 
 Protocol and adapter foundation for orchestrating coding agents. A single schema-backed control surface powers grouped human CLI commands such as `cuekit task submit ...` and a compact grouped MCP tool surface for AI callers.
 
+## Philosophy
+
+cuekit is not a workflow engine; it is a child-agent delegation substrate.
+
+The parent agent remains the decision-maker. cuekit gives that agent a stable way to delegate child work, observe progress, attach when needed, steer manually, collect normalized results, and clean up runtime resources.
+
+Teams and strategies are deliberately lightweight. A team is a lightweight view over related child tasks, not a swarm OS. A strategy is a development frame/playbook, not workflow control. cuekit avoids automatic scheduling, auto-wake, auto-steer, and behavior that replaces the parent agent's judgment.
+
 ## Shape
 
 - `@cuekit/core` — protocol types, Zod schemas, and lifecycle helpers. No runtime dependencies; pure TypeScript.
