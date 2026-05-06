@@ -7,10 +7,7 @@ const workspaceRoot = resolve(import.meta.dir, "..", "..", "..");
 
 describe("cuekit CLI binary dispatch", () => {
 	it("classifies human, reserved, MCP, and protocol commands", () => {
-		expect(classifyCuekitCommand(["doctor"])).toEqual({
-			kind: "reserved-human",
-			command: "doctor",
-		});
+		expect(classifyCuekitCommand(["doctor"])).toEqual({ kind: "doctor" });
 		expect(classifyCuekitCommand(["update"])).toEqual({
 			kind: "reserved-human",
 			command: "update",
@@ -26,7 +23,7 @@ describe("cuekit CLI binary dispatch", () => {
 		const help = printMainHelp();
 		expect(help).toContain("cuekit init");
 		expect(help).toContain("cuekit tui");
-		expect(help).not.toContain("cuekit doctor");
+		expect(help).toContain("cuekit doctor");
 		expect(help).not.toContain("cuekit update");
 	});
 

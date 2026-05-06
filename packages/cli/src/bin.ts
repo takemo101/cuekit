@@ -1,12 +1,29 @@
 #!/usr/bin/env bun
 import { runCuekitMcpBin } from "@cuekit/mcp";
-import { classifyCuekitCommand, printMainHelp, printReservedHumanCommand } from "./dispatch.ts";
+import {
+	classifyCuekitCommand,
+	printDoctorHelp,
+	printMainHelp,
+	printReservedHumanCommand,
+} from "./dispatch.ts";
+import { runDoctor } from "./doctor.ts";
 
 export async function runCuekitCliBin(): Promise<void> {
-	const classification = classifyCuekitCommand(process.argv.slice(2));
+	const argv = process.argv.slice(2);
+	const classification = classifyCuekitCommand(argv);
 	if (classification.kind === "help") {
 		process.stdout.write(printMainHelp());
 		return;
+	}
+	if (classification.kind === "doctor") {
+		if (argv.includes("--help") || argv.includes("-h")) {
+			process.stdout.write(printDoctorHelp());
+			return;
+		}
+		const result = await runDoctor();
+		process.stdout.write(result.stdout);
+		if (result.stderr) process.stderr.write(result.stderr);
+		process.exit(result.exitCode);
 	}
 	if (classification.kind === "reserved-human") {
 		process.stderr.write(printReservedHumanCommand(classification.command));
