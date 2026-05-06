@@ -97,7 +97,7 @@ This avoids importing `@cuekit/mcp` from `@cuekit/tui` and keeps command logic c
 
 ## Future direction
 
-If more non-MCP frontends appear, extract the command-layer functions currently in `@cuekit/mcp/src/commands` into a dedicated package such as `@cuekit/control`. At that point:
+If more non-MCP frontends appear, extract the command-layer functions currently in `@cuekit/mcp/src/commands` into a dedicated package such as `@cuekit/control`. If the human CLI/distribution split proceeds, the installed binary should eventually move to `@cuekit/cli` as described in [Human CLI and distribution design](cuekit-human-cli-distribution-design.md); until then this TUI split can keep `@cuekit/mcp` as the transitional binary owner. At that point:
 
 ```text
 @cuekit/mcp -> @cuekit/control
