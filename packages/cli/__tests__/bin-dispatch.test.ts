@@ -24,7 +24,7 @@ describe("cuekit CLI binary dispatch", () => {
 		expect(help).toContain("cuekit update");
 	});
 
-	it("moves installed bin ownership to @cuekit/cli", () => {
+	it("publishes the root installed bin as a bundled @cuekit/cli entrypoint", () => {
 		const rootPackage = JSON.parse(readFileSync(resolve(workspaceRoot, "package.json"), "utf8"));
 		const cliPackage = JSON.parse(
 			readFileSync(resolve(workspaceRoot, "packages/cli/package.json"), "utf8"),
@@ -33,7 +33,10 @@ describe("cuekit CLI binary dispatch", () => {
 			readFileSync(resolve(workspaceRoot, "packages/mcp/package.json"), "utf8"),
 		);
 
-		expect(rootPackage.bin?.cuekit).toBe("packages/cli/src/bin.ts");
+		expect(rootPackage.bin?.cuekit).toBe("bin/cuekit.js");
+		const bundledBin = readFileSync(resolve(workspaceRoot, "bin/cuekit.js"), "utf8");
+		expect(bundledBin).toContain("#!/usr/bin/env bun");
+		expect(bundledBin).toContain("cuekit doctor");
 		expect(cliPackage.bin?.cuekit).toBe("./src/bin.ts");
 		expect(cliPackage.dependencies?.["@cuekit/mcp"]).toBe("workspace:*");
 		expect(mcpPackage.bin?.cuekit).toBeUndefined();
