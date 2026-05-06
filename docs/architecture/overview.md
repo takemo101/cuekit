@@ -20,9 +20,10 @@ cuekit は **coding agent 向けの lightweight delegation substrate** であり
 | `@cuekit/core` | pure domain / protocol | なし | task/session model, status, result, error, schema, state transition |
 | `@cuekit/store` | persistence adapter | SQLite / file refs | sessions/tasks 永続化、row mapping |
 | `@cuekit/adapters` | runtime bindings | CLI / HTTP / MCP など | pi / Claude Code / OpenCode を cuekit protocol に適合 |
-| `@cuekit/mcp` | incur-based control surface | CLI / MCP transport | cuekit command/tool surface を公開し、core/store/adapters を接続 |
+| `@cuekit/cli` | installed human CLI | Bun CLI entrypoint | setup / diagnostics / update advice / TUI startup / MCP projection への委譲 |
+| `@cuekit/mcp` | incur-based control surface | MCP transport / protocol CLI projection | cuekit command/tool surface を公開し、core/store/adapters を接続 |
 
-補助的に将来 `@cuekit/cli` を足してもよいが、MVP の中心ではない。
+`@cuekit/cli` owns the installed `cuekit` binary. `@cuekit/mcp` owns the AI/protocol control surface and must not import `@cuekit/cli`.
 
 ## なぜこの構成か
 

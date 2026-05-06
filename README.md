@@ -15,7 +15,8 @@ Teams and strategies are deliberately lightweight. A team is a lightweight view 
 - `@cuekit/core` — protocol types, Zod schemas, and lifecycle helpers. No runtime dependencies; pure TypeScript.
 - `@cuekit/store` — SQLite-backed persistence at `~/.cuekit/state.db` with migrations and typed row decoding.
 - `@cuekit/adapters` — runtime bindings. v0 ships a `tmux`-pane backend with adapters for claude-code (working spike), pi, opencode (stub), and jcode REPL. The jcode adapter uses `jcode repl` for the same attach/steer workflow; see [`docs/designs/cuekit-jcode-repl-adapter-design.md`](docs/designs/cuekit-jcode-repl-adapter-design.md).
-- `@cuekit/mcp` — control surface. The `cuekit` binary.
+- `@cuekit/cli` — installed human `cuekit` binary, setup helpers, diagnostics, and update advice.
+- `@cuekit/mcp` — MCP server and protocol/control command projection used by the CLI and AI callers.
 
 ## Requirements
 
@@ -43,16 +44,45 @@ cd cuekit
 bun install
 ```
 
-`cuekit` is exposed as the binary of `@cuekit/mcp`. For local use, register the binary globally:
+For first-time public installs, use Bun's GitHub installer with an immutable release tag:
 
 ```sh
-cd packages/mcp && bun link    # adds `cuekit` to ~/.bun/bin/
+bun install -g github:takemo101/cuekit#v0.1.0
+cuekit doctor
+cuekit mcp config
 ```
 
-Or run it directly without linking:
+Add the printed MCP configuration snippet to your MCP client and restart that client so it picks up the newly installed `cuekit` binary. npm publishing is not required for this first public distribution path.
+
+Release tags are expected to be immutable. `cuekit update` reads the latest GitHub Release tag and prints the exact Bun command to install it:
 
 ```sh
-bun packages/mcp/src/bin.ts <command> ...
+cuekit update
+# then run the printed command, for example:
+bun install -g github:takemo101/cuekit#v0.1.1
+```
+
+If release lookup is unavailable, `cuekit update` prints `#<release-tag>` as a clearly labeled placeholder, not a discovered version. `cuekit update` is advisory-only; it does not run `bun install` or self-update by default. After installing a newer tag, restart MCP clients again. Avoid using floating `#main` as the normal install path; it is a developer-only escape hatch because Bun caching and update semantics are less explicit than release tags.
+
+Until the first release tag exists, the remaining release-only check is to run `bun install -g github:takemo101/cuekit#<release-tag>` against the published tag and confirm it exposes the root `cuekit` bin from `packages/cli/src/bin.ts`.
+
+For local development, link the workspace root (which exposes `packages/cli/src/bin.ts` as `cuekit`):
+
+```sh
+bun link    # adds `cuekit` to ~/.bun/bin/
+```
+
+Or run the CLI directly without linking:
+
+```sh
+bun packages/cli/src/bin.ts <command> ...
+```
+
+After local development installs, validate the environment and update guidance with:
+
+```sh
+cuekit doctor
+cuekit update   # advisory-only; prints the next bun install command, does not self-update
 ```
 
 ## CLI

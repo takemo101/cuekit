@@ -2,11 +2,11 @@
 
 ## Status
 
-Approved design direction — pre-implementation.
+Implemented MVP direction for `@cuekit/cli`, `cuekit doctor`, and advisory-only `cuekit update`; distribution validation remains tag/release dependent.
 
 ## Summary
 
-Separate the installed human `cuekit` binary into a future `@cuekit/cli` package. Keep `@cuekit/mcp` focused on the protocol/MCP control surface and let `@cuekit/cli` own setup, diagnostics, update guidance, and other distribution-facing commands.
+The installed human `cuekit` binary is owned by `@cuekit/cli`. `@cuekit/mcp` stays focused on the protocol/MCP control surface, while `@cuekit/cli` owns setup, diagnostics, update guidance, TUI startup, and other distribution-facing commands.
 
 This keeps one user-facing command while making package ownership explicit:
 
@@ -30,7 +30,7 @@ Target package shape:
 @cuekit/cli        installed human CLI and distribution/setup commands
 ```
 
-Long term, the installed binary should be owned by `@cuekit/cli` / the root distribution entry point:
+The installed binary is owned by `@cuekit/cli` / the root distribution entry point:
 
 ```json
 {
@@ -85,14 +85,22 @@ Initial public distribution can use Bun's GitHub installer before npm publishing
 bun install -g github:takemo101/cuekit#v0.1.0
 ```
 
-Release tags should be immutable, and users should update by installing a newer tag. Installing from `main` can remain an undocumented or developer-only escape hatch.
+Release tags must be immutable, and users should update by installing a newer tag. `cuekit update` is the advisory path: it fetches the latest GitHub Release tag when possible and prints the exact command to run. When release lookup is offline or malformed, it uses a clearly labeled placeholder:
+
+```sh
+bun install -g github:takemo101/cuekit#<release-tag>
+```
+
+`<release-tag>` is a placeholder, not a discovered version. Installing from floating `#main` should remain a developer-only escape hatch, not the documented default.
+
+Current package metadata supports the Bun/GitHub flow from the repository root: root `package.json` exposes `bin.cuekit = "packages/cli/src/bin.ts"`, `packages/cli/package.json` also exposes `bin.cuekit`, and `packages/mcp/package.json` no longer owns an installed `cuekit` bin.
 
 ## Migration Sketch
 
-1. Add `packages/cli` with `doctor` and `update` command modules while keeping existing `@cuekit/mcp` binary behavior intact.
-2. Switch the installed `cuekit` bin target to `@cuekit/cli` / the root distribution entry point.
-3. Move or wrap human setup commands (`init`, `tui`, `mcp config/add`) under CLI ownership while preserving behavior.
-4. Keep `@cuekit/mcp` exports focused on programmatic MCP server startup and protocol/control operations.
+1. ✅ Add `packages/cli` with `doctor` and `update` command modules while keeping existing `@cuekit/mcp` protocol behavior intact.
+2. ✅ Switch the installed `cuekit` bin target to `@cuekit/cli` / the root distribution entry point.
+3. ✅ Move or wrap human setup commands (`init`, `tui`, `mcp config/add`) under CLI ownership while preserving behavior.
+4. ✅ Keep `@cuekit/mcp` exports focused on programmatic MCP server startup and protocol/control operations.
 
 ## Open Questions
 
