@@ -9,4 +9,7 @@ export * from "./commands/list-tasks.ts";
 export * from "./commands/steer-task.ts";
 export * from "./commands/steer-team.ts";
 export * from "./commands/submit-task.ts";
+export type { PiMcpRegistrationOptions, PiMcpRegistrationResult } from "./pi-mcp-config.ts";
+export { registerPiMcpServer } from "./pi-mcp-config.ts";
 export * from "./session-helpers.ts";
+export * from "./tui-context.ts";

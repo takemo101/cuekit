@@ -1,5 +1,19 @@
 #!/usr/bin/env bun
-import { runCuekitMcpBin } from "@cuekit/mcp";
+import type { Database } from "bun:sqlite";
+import { existsSync, statSync } from "node:fs";
+import {
+	AdapterRegistry,
+	createClaudeCodeAdapter,
+	createJcodeAdapter,
+	createOpenCodeAdapter,
+	createPiAdapter,
+	PaneBackend,
+} from "@cuekit/adapters";
+import { findProjectRoot } from "@cuekit/agent-profiles";
+import { createStderrLogger, parseLogLevel } from "@cuekit/core";
+import { createTuiContext, runCuekitMcpBin } from "@cuekit/mcp";
+import { loadProjectConfig } from "@cuekit/project-config";
+import { openDatabase, runMigrations } from "@cuekit/store";
 import {
 	classifyCuekitCommand,
 	printDoctorHelp,
@@ -7,7 +21,71 @@ import {
 	printUpdateHelp,
 } from "./dispatch.ts";
 import { runDoctor } from "./doctor.ts";
+import { printTuiHelp, runInitCommand, runPiMcpAddCommand } from "./human-commands.ts";
 import { runUpdate } from "./update.ts";
+
+const TUI_PACKAGE_NAME = "@cuekit/tui";
+
+function closeQuietly(db: Database): void {
+	try {
+		db.close();
+	} catch {
+		// ignore close errors on shutdown
+	}
+}
+
+async function runTuiCommand(): Promise<void> {
+	const logLevel = parseLogLevel(process.env.CUEKIT_LOG_LEVEL);
+	const logger = createStderrLogger({ minLevel: logLevel });
+	let db: Database | undefined;
+	try {
+		const dbPath = process.env.CUEKIT_DB_PATH;
+		const useCustomPath = dbPath !== undefined && dbPath.length > 0;
+		db = openDatabase(useCustomPath ? { path: dbPath } : {});
+		runMigrations(db);
+
+		const panes = new PaneBackend();
+		const registry = new AdapterRegistry();
+		registry.register(createClaudeCodeAdapter(db, panes, { logger }));
+		registry.register(createPiAdapter(db, panes, { logger }));
+		registry.register(createOpenCodeAdapter(db, panes, { logger }));
+		registry.register(createJcodeAdapter(db, panes, { logger }));
+
+		const { runTuiLoop } = await import(TUI_PACKAGE_NAME);
+		const all = process.argv.includes("--all");
+		const pathScope = process.argv.includes("--path");
+		const projectRoot = findProjectRoot(process.cwd(), { existsSync, statSync });
+		const loadedConfig = all || pathScope ? undefined : loadProjectConfig(process.cwd());
+		if (loadedConfig && !loadedConfig.ok) {
+			throw new Error(loadedConfig.error);
+		}
+		await runTuiLoop(
+			createTuiContext(
+				{ db, registry },
+				{
+					all,
+					...(loadedConfig?.ok && loadedConfig.discovery.source === "config"
+						? loadedConfig.config.tui?.scope === "path"
+							? { projectRoot }
+							: {
+									projectScope: {
+										project_uid: loadedConfig.identity.project_uid,
+										project_root: loadedConfig.discovery.configRoot,
+									},
+								}
+						: { projectRoot }),
+				},
+			),
+		);
+		closeQuietly(db);
+	} catch (err) {
+		if (db) closeQuietly(db);
+		logger.error("tui startup failed", {
+			reason: err instanceof Error ? err.message : String(err),
+		});
+		process.exit(1);
+	}
+}
 
 export async function runCuekitCliBin(): Promise<void> {
 	const argv = process.argv.slice(2);
@@ -15,6 +93,28 @@ export async function runCuekitCliBin(): Promise<void> {
 	if (classification.kind === "help") {
 		process.stdout.write(printMainHelp());
 		return;
+	}
+	if (classification.kind === "init") {
+		const result = runInitCommand(argv.slice(1));
+		process.stdout.write(result.stdout);
+		if (result.stderr) process.stderr.write(result.stderr);
+		if (result.exitCode !== 0) process.exit(result.exitCode);
+		return;
+	}
+	if (classification.kind === "tui" && (argv.includes("--help") || argv.includes("-h"))) {
+		process.stdout.write(printTuiHelp());
+		return;
+	}
+	if (classification.kind === "tui") {
+		await runTuiCommand();
+		return;
+	}
+	if (classification.kind === "mcp-add") {
+		const result = runPiMcpAddCommand(argv.slice(2));
+		process.stdout.write(result.stdout);
+		if (result.stderr) process.stderr.write(result.stderr);
+		if (!result.shouldDelegate) return;
+		process.argv = [process.argv[0] ?? "bun", process.argv[1] ?? "cuekit", ...result.delegateArgv];
 	}
 	if (classification.kind === "doctor") {
 		if (argv.includes("--help") || argv.includes("-h")) {

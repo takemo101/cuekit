@@ -9,9 +9,9 @@ describe("cuekit CLI binary dispatch", () => {
 	it("classifies human, reserved, MCP, and protocol commands", () => {
 		expect(classifyCuekitCommand(["doctor"])).toEqual({ kind: "doctor" });
 		expect(classifyCuekitCommand(["update"])).toEqual({ kind: "update" });
-		expect(classifyCuekitCommand(["init"])).toEqual({ kind: "delegate" });
-		expect(classifyCuekitCommand(["tui"])).toEqual({ kind: "delegate" });
-		expect(classifyCuekitCommand(["mcp", "config"])).toEqual({ kind: "delegate" });
+		expect(classifyCuekitCommand(["init"])).toEqual({ kind: "init" });
+		expect(classifyCuekitCommand(["tui"])).toEqual({ kind: "tui" });
+		expect(classifyCuekitCommand(["mcp", "config"])).toEqual({ kind: "mcp-config" });
 		expect(classifyCuekitCommand(["--mcp"])).toEqual({ kind: "delegate" });
 		expect(classifyCuekitCommand(["task", "submit"])).toEqual({ kind: "delegate" });
 	});

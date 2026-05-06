@@ -1,16 +1,14 @@
 import { describe, expect, it } from "bun:test";
 
-const BIN_SOURCE = new URL("../../mcp/src/bin.ts", import.meta.url);
+const BIN_SOURCE = new URL("../../cli/src/bin.ts", import.meta.url);
 
 describe("tui argv lifecycle", () => {
-	it("runs TUI before installing global process-exit signal handlers", async () => {
+	it("runs TUI from the CLI-owned human command path without global process-exit signal handlers", async () => {
 		const source = await Bun.file(BIN_SOURCE).text();
 		const runTuiIndex = source.indexOf("await runTuiLoop(");
-		const signalIndex = source.indexOf("installSignalHandlers(db);");
 
 		expect(runTuiIndex).toBeGreaterThan(-1);
-		expect(signalIndex).toBeGreaterThan(-1);
-		expect(runTuiIndex).toBeLessThan(signalIndex);
+		expect(source).not.toContain("installSignalHandlers(db);");
 	});
 
 	it("TUI branch closes its database after runTuiLoop returns", async () => {

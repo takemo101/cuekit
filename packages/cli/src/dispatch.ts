@@ -2,12 +2,28 @@ export type CuekitCommandClassification =
 	| { kind: "help" }
 	| { kind: "doctor" }
 	| { kind: "update" }
+	| { kind: "init" }
+	| { kind: "tui" }
+	| { kind: "mcp-config" }
+	| { kind: "mcp-add" }
 	| { kind: "delegate" };
 
 export function classifyCuekitCommand(argv: string[]): CuekitCommandClassification {
 	const command = argv[0];
 	if (command === undefined || command === "--help" || command === "-h") {
 		return { kind: "help" };
+	}
+	if (command === "init") {
+		return { kind: "init" };
+	}
+	if (command === "tui") {
+		return { kind: "tui" };
+	}
+	if (command === "mcp" && argv[1] === "config") {
+		return { kind: "mcp-config" };
+	}
+	if (command === "mcp" && argv[1] === "add") {
+		return { kind: "mcp-add" };
 	}
 	if (command === "doctor") {
 		return { kind: "doctor" };
