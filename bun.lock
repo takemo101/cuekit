@@ -36,6 +36,8 @@
       "dependencies": {
         "@cuekit/core": "workspace:*",
         "@cuekit/mcp": "workspace:*",
+        "@cuekit/project-config": "workspace:*",
+        "@cuekit/store": "workspace:*",
       },
     },
     "packages/core": {
