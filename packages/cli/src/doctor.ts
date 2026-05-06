@@ -126,6 +126,10 @@ function trimVersionOutput(value: string): string {
 	return value.trim().split(/\s+/).join(" ");
 }
 
+function normalizeReleaseVersion(value: string): string {
+	return value.trim().replace(/^v/, "");
+}
+
 const ADAPTER_EXECUTABLES = [
 	{ kind: "claude-code", command: "claude" },
 	{ kind: "pi", command: "pi" },
@@ -220,7 +224,10 @@ export async function runDoctor(options: RunDoctorOptions = {}): Promise<DoctorR
 	const latest = await (options.getLatestRelease ?? defaultGetLatestRelease)();
 	if (!latest.ok) {
 		checks.push({ level: "warn", label: "update", detail: `skipped (${latest.reason})` });
-	} else if (currentVersion && currentVersion === latest.tag) {
+	} else if (
+		currentVersion &&
+		normalizeReleaseVersion(currentVersion) === normalizeReleaseVersion(latest.tag)
+	) {
 		checks.push({ level: "ok", label: "update", detail: "up to date" });
 	} else {
 		checks.push({ level: "warn", label: "update", detail: `${latest.tag} available` });
