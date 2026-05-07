@@ -1,265 +1,222 @@
 # cuekit
 
-Protocol and adapter foundation for orchestrating coding agents. A single schema-backed control surface powers grouped human CLI commands such as `cuekit task submit ...` and a compact grouped MCP tool surface for AI callers.
+A child-agent delegation substrate for coding agents.
+
+cuekit gives a parent agent a stable way to spawn child coding agents, attach to them live via tmux, steer them, collect normalized results, and clean up. The same protocol surface is exposed as a grouped human CLI (`cuekit task ...`) and a grouped MCP tool surface for AI callers.
 
 ## Philosophy
 
-cuekit is not a workflow engine; it is a child-agent delegation substrate.
+cuekit is **not a workflow engine**. The parent agent stays the decision-maker; cuekit is the substrate that makes delegation observable and steerable.
 
-The parent agent remains the decision-maker. cuekit gives that agent a stable way to delegate child work, observe progress, attach when needed, steer manually, collect normalized results, and clean up runtime resources.
-
-Teams and strategies are deliberately lightweight. A team is a lightweight view over related child tasks, not a swarm OS. A strategy is a development frame/playbook, not workflow control. cuekit avoids automatic scheduling, auto-wake, auto-steer, and behavior that replaces the parent agent's judgment.
-
-## Shape
-
-- `@cuekit/core` — protocol types, Zod schemas, and lifecycle helpers. No runtime dependencies; pure TypeScript.
-- `@cuekit/store` — SQLite-backed persistence at `~/.cuekit/state.db` with migrations and typed row decoding.
-- `@cuekit/adapters` — runtime bindings. v0 ships a `tmux`-pane backend with adapters for claude-code (working spike), pi, opencode (stub), and jcode REPL. The jcode adapter uses `jcode repl` for the same attach/steer workflow; see [`docs/designs/cuekit-jcode-repl-adapter-design.md`](docs/designs/cuekit-jcode-repl-adapter-design.md).
-- `@cuekit/cli` — installed human `cuekit` binary, setup helpers, diagnostics, and update advice.
-- `@cuekit/mcp` — MCP server and protocol/control command projection used by the CLI and AI callers.
+- **Teams** are a lightweight view over related child tasks, not a swarm OS.
+- **Strategies** are development playbooks, not workflow control.
+- No automatic scheduling, auto-wake, or auto-steer that replaces parent judgment.
 
 ## Requirements
 
-- [Bun](https://bun.sh) 1.2 or newer
-- `tmux` on `PATH` with `new-session -e` support (children run in tmux sessions so you can `tmux attach` to debug them live)
-
-## v0 scope
-
-| Supported | Deferred |
-|---|---|
-| `submit_task` / `get_status` / `get_task_result` / `wait` / `cancel_tasks` | Workflow engine, kanban, swarm OS |
-| grouped `list` / `cleanup` / `delete` MCP tools | Distributed worker pools, DAG scheduling |
-| `steer_task` (best-effort, adapter-dependent) | Remote tenancy / auth model |
-| tmux attach for every running task | Cost accounting, long-term memory |
-
-See [`docs/specs/README.md`](docs/specs/README.md) for the full v0 protocol.
+- [Bun](https://bun.sh) ≥ 1.2
+- `tmux` on `PATH` with `new-session -e` support — children run in tmux sessions you can `tmux attach` into
 
 ## Install
 
-Clone and install from workspace:
+```sh
+bun install -g github:takemo101/cuekit#v0.1.0
+cuekit doctor
+cuekit mcp config   # prints the snippet to register cuekit with your MCP client
+```
+
+Use an immutable release tag (`#v0.1.0`, etc.). Avoid floating `#main` outside development — Bun's caching semantics for branches are less explicit. After installing a newer tag, restart MCP clients.
+
+`cuekit update` reads the latest GitHub Release tag and prints the exact `bun install` command to run. It is **advisory-only** and does not self-update.
+
+For local development:
 
 ```sh
 git clone https://github.com/takemo101/cuekit
 cd cuekit
 bun install
+bun link                              # exposes `cuekit` from the workspace
+# or run directly:
+bun packages/cli/src/bin.ts <command>
 ```
 
-For first-time public installs, use Bun's GitHub installer with an immutable release tag:
+## Quick start
 
 ```sh
-bun install -g github:takemo101/cuekit#v0.1.0
-cuekit doctor
-cuekit mcp config
-```
+# Submit a child agent task in your repo:
+cuekit task submit \
+  --objective "add retry logic to src/api/client.ts" \
+  --agent_kind claude-code \
+  --model sonnet \
+  --cwd /path/to/repo
+# → { task_id: "t_abc...", attach_hint: "tmux attach-session -t cuekit-task-t_abc..." }
 
-Add the printed MCP configuration snippet to your MCP client and restart that client so it picks up the newly installed `cuekit` binary. npm publishing is not required for this first public distribution path.
+# Watch the child live in another terminal:
+tmux attach-session -t cuekit-task-t_abc...
 
-Release tags are expected to be immutable. `cuekit update` reads the latest GitHub Release tag and prints the exact Bun command to install it:
+# Steer it without attaching:
+cuekit task steer --task_id t_abc... --message "also cover exponential backoff"
 
-```sh
-cuekit update
-# then run the printed command, for example:
-bun install -g github:takemo101/cuekit#v0.1.1
-```
-
-If release lookup is unavailable, `cuekit update` prints `#<release-tag>` as a clearly labeled placeholder, not a discovered version. `cuekit update` is advisory-only; it does not run `bun install` or self-update by default. After installing a newer tag, restart MCP clients again. Avoid using floating `#main` as the normal install path; it is a developer-only escape hatch because Bun caching and update semantics are less explicit than release tags.
-
-Until the first release tag exists, the remaining release-only check is to run `bun install -g github:takemo101/cuekit#<release-tag>` against the published tag and confirm it exposes the root `cuekit` bin from `packages/cli/src/bin.ts`.
-
-For local development, link the workspace root (which exposes `packages/cli/src/bin.ts` as `cuekit`):
-
-```sh
-bun link    # adds `cuekit` to ~/.bun/bin/
-```
-
-Or run the CLI directly without linking:
-
-```sh
-bun packages/cli/src/bin.ts <command> ...
-```
-
-After local development installs, validate the environment and update guidance with:
-
-```sh
-cuekit doctor
-cuekit update   # advisory-only; prints the next bun install command, does not self-update
+# Collect the normalized result:
+cuekit task result --task_id t_abc...
 ```
 
 ## CLI
 
-CLI commands are grouped by resource for humans. Option names remain snake_case. MCP tool names stay flat snake_case for tool-using agents; flat CLI aliases such as `cuekit submit_task` are not supported.
+Commands are grouped by resource. Option names are `snake_case`. Every command accepts `--help`, `--llms` / `--llms-full` (machine-readable manifest), `--schema`, and `--format` (`toon` / `json` / `yaml` / `md` / `jsonl`).
 
-```sh
-cuekit adapter list
-# → { adapters: [ { agent_kind: "claude-code", supports_attach: true, ... } ] }
+| Group | Examples |
+|---|---|
+| `task` | `submit`, `status`, `steer`, `cancel`, `result`, `wait`, `list` |
+| `team` | `create`, `submit`, `start`, `result`, `steer`, `delete` |
+| `agent` | `list` (discover role profiles) |
+| `adapter` | `list` (runtime capabilities) |
+| `tui` | interactive task cockpit |
+| `mcp` | `config` (print MCP client snippet) |
+| top-level | `init`, `doctor`, `update` |
 
-cuekit task submit --objective "add retry logic to src/api/client.ts" \
-                  --agent_kind claude-code \
-                  --model sonnet \
-                  --cwd /path/to/repo
-# → { accepted: true, task_id: "t_abc...", agent_kind: "claude-code", session_id: "s_..." }
-
-# claude-code defaults to runtime permission bypass so delegated panes do not
-# stall. opencode uses the interactive TUI by default; permission bypass applies
-# only to its opt-in batch/run mode.
-cuekit task submit --objective "run one opencode batch prompt" \
-                  --agent_kind opencode \
-                  --adapter_options '{"mode":"batch","dangerously_skip_permissions":false}'
-
-cuekit task status --task_id t_abc...
-# → { task_id, status: "running", attach_hint: "tmux attach-session -t cuekit-task-t_abc...", ... }
-
-# The attach_hint is a real command you can run in another terminal:
-tmux attach-session -t cuekit-task-t_abc...
-
-cuekit task steer --task_id t_abc... --message "also cover exponential backoff"
-
-cuekit task cancel --task_id t_abc...
-
-cuekit task result --task_id t_abc...
-# → { task_id: "t_abc...", status: "cancelled", summary: "...", files_changed: [], artifacts: [...] }
-
-cuekit task wait --task_ids t_abc... --session_id s_abc... --mode all
-# → { done: true, timed_out: false, tasks: [ { task_id: "t_abc...", status: "completed", ... } ] }
-
-cuekit task list --status running
-```
+Flat aliases like `cuekit submit_task` are intentionally not supported — only MCP tool names use that flat form.
 
 ### Agent profiles
 
-Use `role` to submit a task with focused child-agent instructions. Profiles are discovered from builtins, `~/.cuekit/agents/*.md`, and `<project-root>/.cuekit/agents/*.md`; project profiles override user profiles, which override builtins.
+Use `--role` to submit with focused child-agent instructions. Profiles resolve in this order: project (`<repo>/.cuekit/agents/*.md`) → user (`~/.cuekit/agents/*.md`) → builtins. `--agent_kind` / `--model` override profile defaults.
 
 ```sh
 cuekit agent list
-
-cuekit task submit --objective "review this diff" \
-                  --role reviewer \
-                  --cwd /path/to/repo
-
-cuekit task submit --objective "debug the failing auth tests" \
-                  --role auto \
-                  --cwd /path/to/repo
+cuekit task submit --objective "review this diff" --role reviewer --cwd /path/to/repo
+cuekit task submit --objective "debug the failing auth tests" --role auto --cwd /path/to/repo
 ```
 
-Explicit `--agent_kind` / `--model` override profile defaults. `role: "auto"` uses deterministic keyword selection and records the selected role plus reason in task status/list output; the TUI detail pane shows role/source/model when present. See [Agent Profiles](docs/guides/agent-profiles.md).
+`role: "auto"` uses deterministic keyword selection and records the chosen role and reason in task status. See [Agent Profiles guide](docs/guides/agent-profiles.md).
 
 ### Project config
 
-Add `.cuekit.yaml` to a repository to define project identity, safe submit defaults, TUI scope, and Task Teams defaults. The recommended starting point is:
-
 ```sh
-cuekit init
+cuekit init   # writes a safe .cuekit.yaml and adds .cuekit/tasks/ to .gitignore
 ```
 
-This creates a safe `.cuekit.yaml` and adds `.cuekit/tasks/` to `.gitignore` for local task artifacts. You can also start from [`.cuekit.example.yaml`](.cuekit.example.yaml). See [Project Config](docs/guides/project-config.md).
+`.cuekit.yaml` defines project identity, safe submit defaults, TUI scope, and Task Teams defaults. The generated file uses prompt-safe adapter permissions; pass `cuekit init --unsafe-bypass` only in trusted repos when you want project-local defaults to request bypass behavior. Project-derived role/agent defaults still force prompt-safe adapter options unless a caller explicitly supplies `adapter_options`. See [Project Config guide](docs/guides/project-config.md) and [`.cuekit.example.yaml`](.cuekit.example.yaml).
 
-By default, generated project config uses prompt-safe adapter permissions. Use `cuekit init --unsafe-bypass` only for trusted repositories when you intentionally want project-local adapter defaults to request bypass behavior. Project-derived role/agent defaults still force prompt-safe adapter options unless a caller explicitly supplies `adapter_options`.
+### TUI
 
-Every command accepts `--help`, `--llms` / `--llms-full` (machine-readable manifest for LLM-friendly CLIs), `--schema` (JSON Schema for the command input), and `--format` (toon / json / yaml / md / jsonl) via incur.
-
-### Human TUI
-
-`cuekit tui` opens an interactive task cockpit for human operators. The normal CLI remains optimized for agents/scripts with TOON output; the TUI is a separate terminal UI for browsing and acting on tasks.
-
-```sh
-cuekit tui
-```
-
-Keys:
+`cuekit tui` opens an interactive task cockpit for humans. The flat CLI stays optimized for agents/scripts; the TUI is a separate surface for browsing and acting.
 
 ```text
-↑/↓ or j/k  select task
-r           refresh
-a           attach to selected task's tmux session and exit TUI
-s           steer selected task
-c           cancel selected non-terminal task
-d           delete selected terminal task
-q or Esc    quit
+↑/↓ or j/k  select task        a  attach to tmux session (one-way; exits TUI)
+r           refresh            s  steer selected task
+c           cancel selected    d  delete terminal task
+q / Esc     quit
 ```
-
-Attach is one-way in the MVP: pressing `a` restores the terminal, runs `tmux attach-session -t <session>`, and does not return to the TUI after you detach.
 
 ## MCP
 
-Start the stdio MCP server:
+Start the stdio server:
 
 ```sh
 cuekit --mcp
 ```
 
-Agents that speak MCP can list the compact grouped tool surface: `submit_task`, `submit_team_tasks`, `start_team_strategy`, `create_team`, `get_status`, `get_task_result`, `get_team_result`, `wait`, `cancel_tasks`, `list`, `report_task_event`, `steer`, `steer_task`, `steer_team`, `cleanup`, and `delete`. The grouped `list` tool supports `kind: "tasks" | "teams" | "events" | "adapters" | "agent_profiles" | "strategies"`; pass `cwd` explicitly for project-local strategy discovery. Prefer grouped `steer({ "kind": "task" | "team", ... })`; `steer_task` and `steer_team` remain as compatibility aliases during the prototype window. Use `delete({ "kind": "team", "team_id": "tm_..." })` or `cuekit team delete` only for empty teams. Use `cuekit mcp config` from the human CLI to print a client configuration snippet; setup helpers are not exposed as MCP tools.
+Grouped tool surface: `submit_task`, `submit_team_tasks`, `start_team_strategy`, `create_team`, `get_status`, `get_task_result`, `get_team_result`, `wait`, `cancel_tasks`, `list`, `report_task_event`, `steer`, `steer_task`, `steer_team`, `cleanup`, `delete`.
 
-`wait` is the parent-side polling primitive for asynchronous delegation. Use `kind: "tasks"` with `task_ids: [task_id]` for one or more tasks, or `kind: "team"` with `team_id` for a team snapshot. Prefer short bounded waits such as `{ "kind": "tasks", "task_ids": ["t_..."], "timeout_ms": 30000, "poll_interval_ms": 5000 }` and poll again instead of one very long MCP request. Waiting is scoped by `session_id` or the current/explicit `cwd`; a wait timeout only stops waiting and does not cancel child work. Team waits are snapshot-based by default; coordinator-led and strategy-backed teams that submit workers or reviewers after waiting begins can set `follow_new_tasks: true` to refresh team membership during polling.
+- `list({ kind: "tasks" | "teams" | "events" | "adapters" | "agent_profiles" | "strategies" })` — pass `cwd` for project-local strategy discovery.
+- `steer({ kind: "task" | "team", ... })` — preferred. `steer_task` / `steer_team` remain as compatibility aliases.
+- `delete({ kind: "team", ... })` — for empty teams only.
+- `cuekit mcp config` is CLI-only; no MCP setup helpers are exposed as tools.
 
-When a bounded wait times out, call `get_status` for the task or team. If a task includes `attention_hint` (for example `stop_hook_or_idle_prompt_suspected`), use `steer({ "kind": "task", ... })` with a short instruction such as “please report progress or finish now”. To send one instruction to every currently non-terminal task in a team, use `steer({ "kind": "team", ... })` / `cuekit team steer`. Inspect durable child reports with `list({ "kind": "events", "task_id": "t_..." })`. Team-level `run_summary` and `get_team_result` views are event-first and do not use noisy transcript tails as their primary result source.
+### Waiting on child work
 
-## State
+`wait` is the parent-side polling primitive. Prefer **short bounded waits** over one long request:
 
-- **Global state index**: `~/.cuekit/state.db` — SQLite database with two tables (`sessions`, `tasks`) and a `schema_migrations` tracker. One connection per process; WAL mode, `foreign_keys = ON`.
-- **Per-task artifacts**: `<worktree>/.cuekit/tasks/<task_id>/` — transcript capture (`transcript.txt`), any runtime-emitted `result.json`, and anything else the adapter drops there. Paths are stored as `transcript_ref` / `result_ref` on the task row.
-- **tmux sessions**: one session per task named `cuekit-task-<id>`. Killed on terminal transition or explicit cancel.
+```jsonc
+{ "kind": "tasks", "task_ids": ["t_..."], "timeout_ms": 30000, "poll_interval_ms": 5000 }
+```
+
+A wait timeout only stops waiting; child work keeps running. Team waits are snapshot-based by default — coordinator-led / strategy-backed teams that submit workers after waiting begins can pass `follow_new_tasks: true`.
+
+When a bounded wait times out, call `get_status`. If a task includes `attention_hint` (e.g. `stop_hook_or_idle_prompt_suspected`), use `steer({ kind: "task", ... })` with a short instruction. Inspect durable child reports with `list({ kind: "events", task_id: "t_..." })`.
 
 ## Execution model
 
-Built-in pane adapters default to interactive mode. The child starts in a dedicated tmux pane with an initial prompt, so cuekit can attach, steer, and capture transcripts while the runtime stays alive. For short single-shot jobs, opt into non-interactive batch mode per task:
+Pane adapters default to **interactive** mode: the child runs in a dedicated `cuekit-task-<id>` tmux session so cuekit can attach, steer, and capture transcripts while the runtime stays alive.
+
+For single-shot jobs, opt into batch mode per task:
 
 ```sh
 cuekit task submit --objective "review this diff once and exit" \
-                  --agent_kind claude-code \
-                  --adapter_options '{"mode":"batch"}'
+                   --agent_kind claude-code \
+                   --adapter_options '{"mode":"batch"}'
 ```
 
-Batch tasks still run in a pane and can be attached for streaming output, but task status reports `metadata.adapter_mode: "batch"` and `supports_steering: false`; `steer_task` rejects them with `steering_unsupported`. Adapter list output reports default capabilities, while task status reports the actual mode selected for that task.
+Batch tasks still run in a pane and are attachable, but `metadata.adapter_mode: "batch"` and `supports_steering: false`; `steer_task` rejects them with `steering_unsupported`. Adapter list reports default capabilities; task status reports the actual mode chosen.
 
-Every task runs in its own dedicated tmux session (not headless), so:
+### Adapter defaults
 
-1. The orchestrator can submit / cancel / steer programmatically via tmux commands.
-2. You can `tmux attach-session -t cuekit-task-<id>` from any terminal to watch the child agent live.
-3. The transcript is captured via `tmux pipe-pane` and persists even after the session is killed.
+- `claude-code` defaults to runtime permission bypass so delegated panes don't stall.
+- `opencode` defaults to its interactive TUI; permission bypass applies only to opt-in batch/run mode.
 
 See [`docs/specs/2026-04-23-cuekit-adapter-spec.md`](docs/specs/2026-04-23-cuekit-adapter-spec.md) §3.7 for the full pane-backend contract.
 
-## Design references
+## State
 
-- Specs: [`docs/specs/README.md`](docs/specs/README.md)
-- Architecture: [`docs/architecture/README.md`](docs/architecture/README.md)
-- Stable design notes: [`docs/designs/README.md`](docs/designs/README.md)
-- Implementation plans: [`docs/plans/`](docs/plans/)
+| Where | What |
+|---|---|
+| `~/.cuekit/state.db` | global SQLite index — `sessions`, `tasks`, `schema_migrations`. WAL mode, `foreign_keys = ON`, one connection per process. |
+| `<worktree>/.cuekit/tasks/<task_id>/` | per-task artifacts: `transcript.txt`, runtime-emitted `result.json`, anything else the adapter drops. Stored as `transcript_ref` / `result_ref` on the task row. |
+| `cuekit-task-<id>` | one tmux session per task. Killed on terminal transition or explicit cancel. |
+
+## Packages
+
+| Package | Purpose |
+|---|---|
+| `@cuekit/core` | Protocol types, Zod schemas, lifecycle helpers. No runtime deps. |
+| `@cuekit/store` | SQLite persistence at `~/.cuekit/state.db` with migrations. |
+| `@cuekit/adapters` | Runtime bindings. v0 ships a tmux-pane backend with adapters for claude-code, pi, opencode (stub), and `jcode repl`. |
+| `@cuekit/agent-profiles` | Role-based child-agent profiles. |
+| `@cuekit/project-config` | `.cuekit.yaml` loading, validation, and defaults. |
+| `@cuekit/mcp` | MCP server and protocol/control command projection. |
+| `@cuekit/cli` | The `cuekit` binary, setup helpers, diagnostics. |
+| `@cuekit/tui` | OpenTUI-based human task cockpit. |
+
+## Documentation
+
+The full documentation index is at [`docs/README.md`](docs/README.md).
+
+| Area | When to read |
+|---|---|
+| [`docs/specs/`](docs/specs/README.md) | What cuekit is — protocol, state model, MCP API, adapter contract. |
+| [`docs/architecture/`](docs/architecture/README.md) | How cuekit must be built — package boundaries, coding rules, error taxonomy. |
+| [`docs/decisions/`](docs/decisions/) | ADRs and durable design decisions. |
+| [`docs/designs/`](docs/designs/README.md) | Stable feature/subsystem designs (teams, strategies, profiles, TUI, ...). |
+| [`docs/guides/`](docs/guides/README.md) | Operator/developer guides for implemented features. |
+| [`docs/issues/`](docs/issues/README.md) | Active investigations and bug reports. |
+| [`docs/plans/`](docs/plans/) | Implementation plans and execution notes. |
+| [`docs/references/`](docs/references/README.md) | Local copies of third-party docs (e.g. OpenTUI). |
 
 ## Development
 
 ```sh
-bun run typecheck     # tsc --noEmit across all packages
-bun run test          # bun:test across all packages
-bun run check         # Biome lint + format check
-bun run fix           # Biome auto-fix
+bun run typecheck   # tsc --noEmit across all packages
+bun run test        # bun:test across all packages
+bun run check       # Biome lint + format check
+bun run fix         # Biome auto-fix
 ```
 
 Tests use `FakeTmuxRunner` (exported from `@cuekit/adapters`) so the default run does not require `tmux`. A small integration suite in `@cuekit/adapters` exercises real tmux when available and skips otherwise.
 
 ### Manual smoke tests
 
-See [`docs/guides/jcode-adapter.md`](docs/guides/jcode-adapter.md) for a real-runtime `jcode repl` smoke test covering submit, tmux attach, steering, transcript capture, and cleanup.
+Adapter end-to-end checks against real runtimes are documented per adapter:
 
-#### Real `claude`
+- [jcode adapter smoke test](docs/guides/jcode-adapter.md)
+- Real `claude` CLI: `just install`, then submit a task with `--agent_kind claude-code` and `tmux attach-session -t cuekit-task-<id>`. The transcript persists at `<cwd>/.cuekit/tasks/<task_id>/transcript.txt` after the session is killed.
 
-The automated suite stubs the child runtime with `sleep` so it never calls Anthropic. To verify the adapter end-to-end against the real `claude` CLI:
+## v0 scope
 
-```sh
-# One-time setup
-just install      # registers `cuekit` globally
+| Supported | Deferred |
+|---|---|
+| `submit_task` / `get_status` / `get_task_result` / `wait` / `cancel_tasks` | Workflow engine, kanban, swarm OS |
+| Grouped `list` / `cleanup` / `delete` MCP tools | Distributed worker pools, DAG scheduling |
+| `steer_task` (best-effort, adapter-dependent) | Remote tenancy / auth model |
+| tmux attach for every running task | Cost accounting, long-term memory |
 
-# In a real repo where you want the child to work:
-cuekit task submit --objective "explain this repo in one paragraph" \
-                  --agent_kind claude-code \
-                  --model sonnet
-
-# Returns a task_id. Attach to the live child:
-tmux attach-session -t cuekit-task-<task_id>
-# Ctrl-b d detaches; the task keeps running.
-
-cuekit task status --task_id <task_id>
-cuekit task cancel --task_id <task_id>
-```
-
-The transcript is piped to `<cwd>/.cuekit/tasks/<task_id>/transcript.txt` and stays after the session is killed.
+Full v0 protocol: [`docs/specs/README.md`](docs/specs/README.md).
