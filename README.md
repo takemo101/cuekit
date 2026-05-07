@@ -153,6 +153,7 @@ Batch tasks still run in a pane and are attachable, but `metadata.adapter_mode: 
 
 - `claude-code` defaults to runtime permission bypass so delegated panes don't stall.
 - `opencode` defaults to its interactive TUI; permission bypass applies only to opt-in batch/run mode.
+- `gemini` defaults to runtime permission bypass (`-y`) and always passes `--skip-trust` so unattended panes don't stall on the trusted-folder gate.
 
 See [`docs/specs/2026-04-23-cuekit-adapter-spec.md`](docs/specs/2026-04-23-cuekit-adapter-spec.md) §3.7 for the full pane-backend contract.
 
@@ -170,7 +171,7 @@ See [`docs/specs/2026-04-23-cuekit-adapter-spec.md`](docs/specs/2026-04-23-cueki
 |---|---|
 | `@cuekit/core` | Protocol types, Zod schemas, lifecycle helpers. No runtime deps. |
 | `@cuekit/store` | SQLite persistence at `~/.cuekit/state.db` with migrations. |
-| `@cuekit/adapters` | Runtime bindings. v0 ships a tmux-pane backend with adapters for claude-code, pi, opencode (stub), and `jcode repl`. |
+| `@cuekit/adapters` | Runtime bindings. v0 ships a tmux-pane backend with adapters for claude-code, pi, opencode (stub), `jcode repl`, and gemini. |
 | `@cuekit/agent-profiles` | Role-based child-agent profiles. |
 | `@cuekit/project-config` | `.cuekit.yaml` loading, validation, and defaults. |
 | `@cuekit/mcp` | MCP server and protocol/control command projection. |

@@ -268,7 +268,7 @@ describe("cuekit --mcp (stdio integration)", () => {
 		const textPayload = JSON.parse(text) as { adapters: Array<{ agent_kind: string }> };
 		const adapters = textPayload.adapters;
 		const kinds = adapters.map((a) => a.agent_kind).sort();
-		expect(kinds).toEqual(["claude-code", "jcode", "opencode", "pi"]);
+		expect(kinds).toEqual(["claude-code", "gemini", "jcode", "opencode", "pi"]);
 	});
 
 	it("tools/call list kind=strategies returns project team strategies", async () => {
