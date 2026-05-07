@@ -2210,6 +2210,19 @@ describe("cancel-task", () => {
 		expect(ack.ok).toBe(false);
 		if (!ack.ok) expect(ack.error.message).toBe("duplicate task_id 't_dup'");
 	});
+
+	it("accepts a comma-separated task_ids string", async () => {
+		const a = await runSubmitTask(ctx, { objective: "a", agent_kind: "claude-code", cwd: "/tmp" });
+		const b = await runSubmitTask(ctx, { objective: "b", agent_kind: "claude-code", cwd: "/tmp" });
+		if (!a.accepted || !b.accepted) throw new Error("setup failed");
+
+		const ack = await runCancelTasks(ctx, { task_ids: [`${a.task_id},${b.task_id}`] });
+
+		expect(ack.ok).toBe(true);
+		if (ack.ok) expect(ack.tasks.map((t) => t.task_id)).toEqual([a.task_id, b.task_id]);
+		expect(getTaskById(db, a.task_id)?.status).toBe("cancelled");
+		expect(getTaskById(db, b.task_id)?.status).toBe("cancelled");
+	});
 });
 
 describe("report-task-event", () => {
@@ -2464,6 +2477,30 @@ describe("wait-tasks", () => {
 		expect(waited.done).toBe(false);
 		expect(waited.error?.code).toBe("invalid_input");
 		expect(waited.error?.message).toBe("duplicate task_id 't_dup'");
+	});
+
+	it("accepts a comma-separated task_ids string", async () => {
+		const a = await runSubmitTask(ctx, {
+			objective: "a",
+			agent_kind: "claude-code",
+			cwd: "/my/project",
+		});
+		const b = await runSubmitTask(ctx, {
+			objective: "b",
+			agent_kind: "claude-code",
+			cwd: "/my/project",
+		});
+		if (!a.accepted || !b.accepted) throw new Error("setup failed");
+
+		const waited = await runWaitTasks(ctx, {
+			task_ids: [`${a.task_id},${b.task_id}`],
+			session_id: a.session_id,
+			timeout_ms: 0,
+			poll_interval_ms: 1,
+		});
+
+		expect(waited.error).toBeUndefined();
+		expect(waited.tasks.map((t) => t.task_id)).toEqual([a.task_id, b.task_id]);
 	});
 
 	it("timeout_ms 0 returns a non-blocking snapshot without cancelling the task", async () => {
@@ -3276,6 +3313,29 @@ describe("delete-tasks", () => {
 		expect(ack.ok).toBe(false);
 		if (!ack.ok) expect(ack.error.code).toBe("invalid_input");
 	});
+
+	it("accepts a comma-separated task_ids string", async () => {
+		const a = await runSubmitTask(ctx, { objective: "a", agent_kind: "claude-code", cwd: "/tmp" });
+		const b = await runSubmitTask(ctx, { objective: "b", agent_kind: "claude-code", cwd: "/tmp" });
+		if (!a.accepted || !b.accepted) throw new Error("setup failed");
+		await runCancelTasks(ctx, { task_ids: [`${a.task_id},${b.task_id}`] });
+
+		const ack = await runDeleteTasks(ctx, { task_ids: [`${a.task_id},${b.task_id}`] });
+
+		expect(ack.ok).toBe(true);
+		if (ack.ok) expect(ack.tasks.map((t) => t.task_id)).toEqual([a.task_id, b.task_id]);
+		expect(getTaskById(db, a.task_id)).toBeNull();
+		expect(getTaskById(db, b.task_id)).toBeNull();
+	});
+
+	it("rejects task_ids that resolve to an empty list after splitting", async () => {
+		const ack = await runDeleteTasks(ctx, { task_ids: [","] });
+		expect(ack.ok).toBe(false);
+		if (!ack.ok) {
+			expect(ack.error.code).toBe("invalid_input");
+			expect(ack.error.message).toMatch(/empty values after splitting/);
+		}
+	});
 });
 
 describe("cleanup-tasks", () => {
@@ -3518,6 +3578,30 @@ describe("delete-sessions", () => {
 		const ack = await runDeleteSessions(ctx, { session_ids: ["s_same", "s_same"] });
 		expect(ack.ok).toBe(false);
 		if (!ack.ok) expect(ack.error.code).toBe("invalid_input");
+	});
+
+	it("accepts a comma-separated session_ids string", async () => {
+		createSession(db, {
+			id: "s_comma_a",
+			project_root: "/p",
+			worktree_path: "/w",
+			parent_agent_kind: "pi",
+		});
+		createSession(db, {
+			id: "s_comma_b",
+			project_root: "/p",
+			worktree_path: "/w",
+			parent_agent_kind: "pi",
+		});
+
+		const ack = await runDeleteSessions(ctx, {
+			session_ids: ["s_comma_a,s_comma_b"],
+		});
+
+		expect(ack.ok).toBe(true);
+		if (ack.ok) expect(ack.sessions.map((s) => s.session_id)).toEqual(["s_comma_a", "s_comma_b"]);
+		expect(getSessionById(db, "s_comma_a")).toBeNull();
+		expect(getSessionById(db, "s_comma_b")).toBeNull();
 	});
 });
 

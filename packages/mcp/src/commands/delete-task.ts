@@ -4,13 +4,14 @@ import { z } from "incur";
 import { cleanupAdapterTask } from "../adapter-cleanup.ts";
 import type { CommandContext } from "../command-context.ts";
 import { findFirstDuplicate } from "./_duplicates.ts";
+import { normalizeIdList } from "./_normalize-id-list.ts";
 
 export const DeleteTasksInputSchema = z.object({
 	task_ids: z
 		.array(z.string().min(1))
 		.min(1)
 		.describe(
-			"cuekit task ids to delete. Repeat flag for multiple: --task_ids t_a --task_ids t_b.",
+			"cuekit task ids to delete. Repeat flag for multiple (--task_ids t_a --task_ids t_b) or pass a comma-separated list (--task_ids t_a,t_b).",
 		),
 });
 
@@ -46,11 +47,15 @@ export async function runDeleteTasks(
 	ctx: CommandContext,
 	input: DeleteTasksInput,
 ): Promise<DeleteTasksOutput> {
-	const duplicate = findFirstDuplicate(input.task_ids);
+	const taskIds = normalizeIdList(input.task_ids);
+	if (taskIds.length === 0) {
+		return invalidInput("task_ids contained only empty values after splitting");
+	}
+	const duplicate = findFirstDuplicate(taskIds);
 	if (duplicate) return invalidInput(`duplicate task_id '${duplicate}'`);
 
 	const results: z.infer<typeof DeleteTaskItemSchema>[] = [];
-	for (const taskId of input.task_ids) {
+	for (const taskId of taskIds) {
 		const task = getTaskById(ctx.db, taskId);
 		if (!task) {
 			results.push({

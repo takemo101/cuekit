@@ -12,6 +12,7 @@ import type { CommandContext } from "../command-context.ts";
 import { getTaskActivity } from "../task-activity.ts";
 import { withTerminalReportSummaryFallback } from "../task-result-summary.ts";
 import { findFirstDuplicate } from "./_duplicates.ts";
+import { normalizeIdList } from "./_normalize-id-list.ts";
 import { sleep } from "./_sleep.ts";
 
 export const WaitModeSchema = z.enum(["all", "any"]);
@@ -39,7 +40,12 @@ export const WaitTaskSnapshotSchema = z.object({
 });
 
 export const WaitTasksInputSchema = z.object({
-	task_ids: z.array(z.string().min(1)).min(1).describe("cuekit task ids to wait for."),
+	task_ids: z
+		.array(z.string().min(1))
+		.min(1)
+		.describe(
+			"cuekit task ids to wait for. Repeat flag for multiple (--task_ids t_a --task_ids t_b) or pass a comma-separated list (--task_ids t_a,t_b).",
+		),
 	session_id: z.string().min(1).optional().describe("Restrict waiting to this cuekit session."),
 	cwd: z
 		.string()
@@ -238,10 +244,15 @@ export async function runWaitTasks(
 	ctx: CommandContext,
 	input: WaitTasksInput,
 ): Promise<WaitTasksOutput> {
+	const taskIds = normalizeIdList(input.task_ids);
+	if (taskIds.length === 0) {
+		return commandError("invalid_input", "task_ids contained only empty values after splitting");
+	}
+	const normalizedInput: WaitTasksInput = { ...input, task_ids: taskIds };
 	const mode = input.mode ?? "all";
 	const timeoutMs = input.timeout_ms ?? DEFAULT_TIMEOUT_MS;
 	const pollIntervalMs = input.poll_interval_ms ?? DEFAULT_POLL_INTERVAL_MS;
-	const scoped = await validateScope(ctx, input);
+	const scoped = await validateScope(ctx, normalizedInput);
 	if (!scoped.ok) return scoped.output;
 
 	const scope = {
@@ -253,7 +264,7 @@ export async function runWaitTasks(
 
 	for (;;) {
 		const snapshots: WaitTasksOutput["tasks"] = [];
-		for (const taskId of input.task_ids) {
+		for (const taskId of normalizedInput.task_ids) {
 			const snapshot = await snapshotTask(ctx, taskId, input);
 			if ("error" in snapshot) {
 				return {
