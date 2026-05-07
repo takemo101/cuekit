@@ -68,7 +68,16 @@ describe("renderProjectConfigTemplate", () => {
 		const parsed = CuekitProjectConfigSchema.parse(parse(text));
 		expect(parsed.adapters?.["claude-code"]?.permissions).toBe("bypass");
 		expect(parsed.adapters?.opencode?.permissions).toBe("bypass");
+		expect(parsed.adapters?.gemini?.permissions).toBe("bypass");
 		expect(text).not.toContain("cleanup: delete-empty-team");
+	});
+
+	it("includes a gemini adapter block with prompt-safe defaults", () => {
+		const text = renderProjectConfigTemplate({ projectId: "my-app", projectName: "My App" });
+
+		const parsed = CuekitProjectConfigSchema.parse(parse(text));
+		expect(parsed.adapters?.gemini?.permissions).toBe("prompt");
+		expect(text).toContain("# gemini always passes --skip-trust");
 	});
 
 	it("quotes YAML-sensitive generated project values", () => {

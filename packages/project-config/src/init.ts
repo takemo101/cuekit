@@ -56,6 +56,11 @@ adapters:
     permissions: ${permissions}
   opencode:
     permissions: ${permissions}
+  gemini:
+    # gemini always passes --skip-trust at the adapter layer (the trusted-folder
+    # gate is not auto-skipped in non-TTY mode), so this permissions toggle
+    # only controls whether -y (yolo) is added.
+    permissions: ${permissions}
 `;
 }
 
