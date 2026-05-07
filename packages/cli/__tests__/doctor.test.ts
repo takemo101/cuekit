@@ -84,6 +84,7 @@ describe("cuekit doctor", () => {
 				if (command === "tmux") return { ok: true, stdout: "tmux 3.5a\n" };
 				if (command === "claude") return { ok: true, stdout: "1.0.0\n" };
 				if (command === "jcode") return { ok: true, stdout: "jcode v0.9.0\n" };
+				if (command === "gemini") return { ok: true, stdout: "0.41.1\n" };
 				return { ok: false, stderr: "not found" };
 			},
 			checkWritableState: async () => ({ ok: true, path: "~/.cuekit/state.db" }),
@@ -97,6 +98,26 @@ describe("cuekit doctor", () => {
 		expect(result.stdout).toContain("! adapter pi: pi not found");
 		expect(result.stdout).toContain("! adapter opencode: opencode not found");
 		expect(result.stdout).toContain("✓ adapter jcode: jcode found");
+		expect(result.stdout).toContain("✓ adapter gemini: gemini found");
+	});
+
+	it("reports gemini as not found when the binary is missing", async () => {
+		const result = await runDoctor({
+			cwd: "/repo",
+			env: {},
+			exec: async (command) => {
+				if (command === "bun") return { ok: true, stdout: "1.3.11\n" };
+				if (command === "tmux") return { ok: true, stdout: "tmux 3.5a\n" };
+				return { ok: false, stderr: "not found" };
+			},
+			checkWritableState: async () => ({ ok: true, path: "~/.cuekit/state.db" }),
+			loadProjectConfig: () => ({ ok: true, source: "config", path: "/repo/.cuekit.yaml" }),
+			getCurrentVersion: () => "v0.1.0",
+			getLatestRelease: async () => ({ ok: false, reason: "offline" }),
+		});
+
+		expect(result.exitCode).toBe(0);
+		expect(result.stdout).toContain("! adapter gemini: gemini not found");
 	});
 
 	it("treats matching package versions and v-prefixed release tags as up to date", async () => {

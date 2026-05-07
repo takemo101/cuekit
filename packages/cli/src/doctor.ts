@@ -135,6 +135,7 @@ const ADAPTER_EXECUTABLES = [
 	{ kind: "pi", command: "pi" },
 	{ kind: "opencode", command: "opencode" },
 	{ kind: "jcode", command: "jcode" },
+	{ kind: "gemini", command: "gemini" },
 ] as const;
 
 function renderDoctor(checks: DoctorCheck[]): string {
