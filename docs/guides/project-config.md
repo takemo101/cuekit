@@ -279,7 +279,7 @@ Top-level keys are strict: unknown top-level keys are rejected.
 - `project.name`: optional display name
 - `tui.scope`: `project` or `path`
 - `submit.role`: optional Agent Profile id
-- `submit.agent`: optional adapter kind (`claude-code`, `opencode`, `pi`, ...)
+- `submit.agent`: optional adapter kind (`claude-code`, `opencode`, `pi`, `jcode`, `gemini`, ...)
 - `submit.model`: optional adapter model
 - `submit.timeout_ms`: positive integer
 - `submit.priority`: `low`, `normal`, or `high`

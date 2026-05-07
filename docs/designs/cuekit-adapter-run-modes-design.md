@@ -41,6 +41,7 @@ Invalid/missing values fall back to `interactive` for compatibility with existin
 | `jcode` | existing `jcode repl` FIFO feeder | `jcode run '<prompt>'` |
 | `opencode` | `opencode --prompt '<prompt>'` | `opencode run [--dangerously-skip-permissions] -- '<prompt>'` |
 | `claude-code` | `claude '<prompt>'` | `claude -p '<prompt>'` or `claude --print '<prompt>'` after CLI verification |
+| `gemini` | `gemini --skip-trust [-y] [-m '<model>'] '<prompt>'` | `gemini --skip-trust [-y] [-m '<model>'] -p '<prompt>'` |
 
 ## Capability model
 

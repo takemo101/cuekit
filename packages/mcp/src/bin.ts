@@ -3,6 +3,7 @@ import type { Database } from "bun:sqlite";
 import {
 	AdapterRegistry,
 	createClaudeCodeAdapter,
+	createGeminiAdapter,
 	createJcodeAdapter,
 	createOpenCodeAdapter,
 	createPiAdapter,
@@ -117,6 +118,7 @@ export async function runCuekitMcpBin(): Promise<void> {
 		registry.register(createPiAdapter(db, panes, { logger }));
 		registry.register(createOpenCodeAdapter(db, panes, { logger }));
 		registry.register(createJcodeAdapter(db, panes, { logger }));
+		registry.register(createGeminiAdapter(db, panes, { logger }));
 
 		installSignalHandlers(db);
 

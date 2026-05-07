@@ -30,7 +30,7 @@ Teams は関連子タスクの軽量ビュー、Strategies は開発の playbook
 ## 実装時に踏みやすい落とし穴
 
 - **アダプタ既定モード**: pane アダプタは interactive が既定。batch タスク (`metadata.adapter_mode: "batch"`) は `supports_steering: false` で、`steer_task` は `steering_unsupported` を返す。 → [adapter run modes](docs/designs/cuekit-adapter-run-modes-design.md)
-- **権限 bypass の既定**: `claude-code` はランタイム権限 bypass が既定 (pane が止まらないように)。`opencode` は interactive TUI が既定で、bypass は opt-in な batch/run モードのみ適用。 → [adapter permission bypass](docs/designs/cuekit-adapter-permission-bypass-design.md)
+- **権限 bypass の既定**: `claude-code` はランタイム権限 bypass が既定 (pane が止まらないように)。`opencode` は interactive TUI が既定で、bypass は opt-in な batch/run モードのみ適用。`gemini` は `-y` (yolo) を既定 ON にしつつ、加えて `--skip-trust` を常時付与して trusted-folder gate でも止まらないようにする。 → [adapter permission bypass](docs/designs/cuekit-adapter-permission-bypass-design.md)
 - **`.cuekit.yaml` の安全側既定**: `cuekit init` が生成する設定は prompt-safe な adapter 既定を持つ。プロジェクト由来の role/agent 既定は、呼び出し側が明示的に `adapter_options` を渡さない限り常に prompt-safe を強制する。 → [project config](docs/designs/cuekit-project-config-design.md) / [guide](docs/guides/project-config.md)
 - **Agent profile の解決順**: project (`<repo>/.cuekit/agents/*.md`) → user (`~/.cuekit/agents/*.md`) → builtin。`role: "auto"` は決定的キーワード選択で、選んだ role と理由を task status に記録する。 → [agent profiles](docs/designs/cuekit-agent-profiles-design.md) / [guide](docs/guides/agent-profiles.md)
 - **`wait` は境界付きポーリング**: 1 回の長い MCP リクエストではなく、短い `timeout_ms` で再ポーリングする。タイムアウトは待機をやめるだけで子の作業はキャンセルしない。coordinator-led / strategy-backed なチームでは、待機後に新メンバーが追加されるなら `follow_new_tasks: true`。
@@ -41,7 +41,7 @@ Teams は関連子タスクの軽量ビュー、Strategies は開発の playbook
 
 - `@cuekit/core` — プロトコル型 / Zod schema / lifecycle ヘルパ。**runtime 依存禁止**。
 - `@cuekit/store` — SQLite 永続化 (`~/.cuekit/state.db`)、マイグレーション、行デコード。
-- `@cuekit/adapters` — ランタイムバインディング (tmux pane backend + claude-code / pi / opencode / `jcode repl`)。
+- `@cuekit/adapters` — ランタイムバインディング (tmux pane backend + claude-code / pi / opencode / `jcode repl` / gemini)。
 - `@cuekit/agent-profiles` — role 解決 (project → user → builtin)。
 - `@cuekit/project-config` — `.cuekit.yaml` loader / validator / defaults。
 - `@cuekit/mcp` — MCP サーバと grouped tool projection。
