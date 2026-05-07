@@ -24,6 +24,25 @@ describe("cuekit CLI binary dispatch", () => {
 		expect(help).toContain("cuekit update");
 	});
 
+	it("registers every shipped adapter in the TUI registry build-out", () => {
+		// Regression for the gemini-not-attachable-from-TUI bug: `cuekit tui`
+		// builds its own AdapterRegistry separate from the MCP server, and a
+		// missing registration here makes tasks for that adapter look like
+		// "Selected task is not attachable" inside the TUI even when the
+		// pane is alive. Pin the expected adapter set so any future adapter
+		// addition fails loudly here unless the TUI registry is updated too.
+		const binSource = readFileSync(resolve(workspaceRoot, "packages/cli/src/bin.ts"), "utf8");
+		for (const factory of [
+			"createClaudeCodeAdapter",
+			"createPiAdapter",
+			"createOpenCodeAdapter",
+			"createJcodeAdapter",
+			"createGeminiAdapter",
+		]) {
+			expect(binSource).toContain(`registry.register(${factory}(`);
+		}
+	});
+
 	it("publishes the root installed bin as a bundled @cuekit/cli entrypoint", () => {
 		const rootPackage = JSON.parse(readFileSync(resolve(workspaceRoot, "package.json"), "utf8"));
 		const cliPackage = JSON.parse(
