@@ -4,13 +4,14 @@ import { z } from "incur";
 import { cleanupAdapterTask } from "../adapter-cleanup.ts";
 import type { CommandContext } from "../command-context.ts";
 import { findFirstDuplicate } from "./_duplicates.ts";
+import { normalizeIdList } from "./_normalize-id-list.ts";
 
 export const DeleteSessionsInputSchema = z.object({
 	session_ids: z
 		.array(z.string().min(1))
 		.min(1)
 		.describe(
-			"cuekit session ids to delete. Repeat flag for multiple: --session_ids s_a --session_ids s_b.",
+			"cuekit session ids to delete. Repeat flag for multiple (--session_ids s_a --session_ids s_b) or pass a comma-separated list (--session_ids s_a,s_b).",
 		),
 });
 
@@ -43,7 +44,18 @@ export async function runDeleteSessions(
 	ctx: CommandContext,
 	input: DeleteSessionsInput,
 ): Promise<DeleteSessionsOutput> {
-	const duplicate = findFirstDuplicate(input.session_ids);
+	const sessionIds = normalizeIdList(input.session_ids);
+	if (sessionIds.length === 0) {
+		return {
+			ok: false,
+			error: {
+				code: "invalid_input",
+				message: "session_ids contained only empty values after splitting",
+				retryable: false,
+			},
+		};
+	}
+	const duplicate = findFirstDuplicate(sessionIds);
 	if (duplicate) {
 		return {
 			ok: false,
@@ -56,7 +68,7 @@ export async function runDeleteSessions(
 	}
 
 	const results: z.infer<typeof DeleteSessionItemSchema>[] = [];
-	for (const sessionId of input.session_ids) {
+	for (const sessionId of sessionIds) {
 		const session = getSessionById(ctx.db, sessionId);
 		if (!session) {
 			results.push({
