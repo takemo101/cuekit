@@ -51,7 +51,9 @@ export const WaitTasksInputSchema = z.object({
 		.string()
 		.min(1)
 		.optional()
-		.describe("Restrict waiting to sessions for this worktree path."),
+		.describe(
+			"Optional opt-in restriction: only wait on tasks whose session worktree matches this path. When omitted no implicit scope is applied (task_ids alone identifies the targets).",
+		),
 	mode: WaitModeSchema.optional().describe("Wait for all tasks or any one task. Defaults to all."),
 	timeout_ms: z.number().int().min(0).optional().describe("Maximum time to wait in milliseconds."),
 	poll_interval_ms: z
@@ -130,8 +132,8 @@ function commandError(
 	};
 }
 
-function normalizeCwd(inputCwd: string | undefined): string {
-	return resolve(inputCwd ?? process.cwd());
+function normalizeCwd(inputCwd: string): string {
+	return resolve(inputCwd);
 }
 
 async function validateScope(
@@ -146,8 +148,7 @@ async function validateScope(
 		};
 	}
 
-	const cwd =
-		input.cwd !== undefined || input.session_id === undefined ? normalizeCwd(input.cwd) : undefined;
+	const cwd = input.cwd !== undefined ? normalizeCwd(input.cwd) : undefined;
 	for (const taskId of input.task_ids) {
 		const task = getTaskById(ctx.db, taskId);
 		if (!task) {
