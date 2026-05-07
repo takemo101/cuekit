@@ -209,6 +209,7 @@ Tests use `FakeTmuxRunner` (exported from `@cuekit/adapters`) so the default run
 Adapter end-to-end checks against real runtimes are documented per adapter:
 
 - [jcode adapter smoke test](docs/guides/jcode-adapter.md)
+- [gemini adapter smoke test](docs/guides/gemini-adapter.md)
 - Real `claude` CLI: `just install`, then submit a task with `--agent_kind claude-code` and `tmux attach-session -t cuekit-task-<id>`. The transcript persists at `<cwd>/.cuekit/tasks/<task_id>/transcript.txt` after the session is killed.
 
 ## v0 scope
