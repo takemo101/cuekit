@@ -4,6 +4,7 @@ import { existsSync, statSync } from "node:fs";
 import {
 	AdapterRegistry,
 	createClaudeCodeAdapter,
+	createGeminiAdapter,
 	createJcodeAdapter,
 	createOpenCodeAdapter,
 	createPiAdapter,
@@ -53,6 +54,7 @@ async function runTuiCommand(): Promise<void> {
 		registry.register(createPiAdapter(db, panes, { logger }));
 		registry.register(createOpenCodeAdapter(db, panes, { logger }));
 		registry.register(createJcodeAdapter(db, panes, { logger }));
+		registry.register(createGeminiAdapter(db, panes, { logger }));
 
 		const { runTuiLoop } = await import("@cuekit/tui");
 		const all = process.argv.includes("--all");
