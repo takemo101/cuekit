@@ -180,4 +180,56 @@ describe("buildGeminiLaunchCommand", () => {
 		const out = buildGeminiLaunchCommand(spec({ objective: "rm -rf $HOME; echo pwned" }));
 		expect(out).toContain("'rm -rf $HOME; echo pwned");
 	});
+
+	for (const mode of ["default", "auto_edit", "yolo", "plan"] as const) {
+		it(`emits --approval-mode '${mode}' and drops -y when approval_mode is set to ${mode}`, () => {
+			const out = buildGeminiLaunchCommand(spec({ adapter_options: { approval_mode: mode } }));
+			expect(out).toContain(`--approval-mode '${mode}'`);
+			const tokens = out.split(/\s+/);
+			expect(tokens).not.toContain("-y");
+			expect(tokens).toContain("--skip-trust");
+		});
+	}
+
+	it("approval_mode wins over an explicit dangerously_skip_permissions: true", () => {
+		const out = buildGeminiLaunchCommand(
+			spec({ adapter_options: { approval_mode: "plan", dangerously_skip_permissions: true } }),
+		);
+		expect(out).toContain("--approval-mode 'plan'");
+		const tokens = out.split(/\s+/);
+		expect(tokens).not.toContain("-y");
+	});
+
+	it("approval_mode wins over the implicit -y default", () => {
+		// No dangerously_skip_permissions → defaults to true → would normally add -y.
+		const out = buildGeminiLaunchCommand(spec({ adapter_options: { approval_mode: "auto_edit" } }));
+		expect(out).toContain("--approval-mode 'auto_edit'");
+		const tokens = out.split(/\s+/);
+		expect(tokens).not.toContain("-y");
+	});
+
+	it("falls back to the binary -y path when approval_mode is invalid", () => {
+		const bogusString = buildGeminiLaunchCommand(
+			spec({ adapter_options: { approval_mode: "bogus" } }),
+		);
+		expect(bogusString).not.toContain("--approval-mode");
+		expect(bogusString.split(/\s+/)).toContain("-y");
+
+		const numeric = buildGeminiLaunchCommand(spec({ adapter_options: { approval_mode: 123 } }));
+		expect(numeric).not.toContain("--approval-mode");
+		expect(numeric.split(/\s+/)).toContain("-y");
+	});
+
+	it("approval_mode 'plan' combines with batch mode and model selection", () => {
+		const out = buildGeminiLaunchCommand(
+			spec({
+				adapter_options: { approval_mode: "plan", mode: "batch" },
+				model: "gemini-2.5-flash",
+			}),
+		);
+		expect(out).toStartWith(
+			"gemini --skip-trust --approval-mode 'plan' -m 'gemini-2.5-flash' -p 'do the thing",
+		);
+		expect(out.split(/\s+/)).not.toContain("-y");
+	});
 });

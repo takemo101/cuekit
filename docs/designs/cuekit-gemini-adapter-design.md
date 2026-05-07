@@ -209,7 +209,7 @@ Add the smoke recipe to `docs/guides/gemini-adapter.md` once the adapter ships.
 ## Safety notes
 
 - `-y` (yolo) approves every tool call, including potentially destructive ones. The default-on choice mirrors `claude-code`'s and `opencode`'s existing v0 behavior, where unattended panes need to make progress without prompts. Project config (`.cuekit.yaml`) keeps the right to force `dangerously_skip_permissions: false` for prompt-safe defaults — this still applies to the Gemini adapter unchanged.
-- `--approval-mode plan` (read-only) and `--approval-mode auto_edit` are interesting future toggles, but v0 keeps the binary `-y` / no-`-y` mapping to align with existing adapters and avoid expanding the shared `adapter_options` shape mid-prototype.
+- `--approval-mode plan` (read-only) and `--approval-mode auto_edit` are now exposed via `adapter_options.approval_mode` (4 valid values: `default` / `auto_edit` / `yolo` / `plan`). When set to a valid value, it takes precedence over `dangerously_skip_permissions` and the launch command emits `--approval-mode <value>` directly, dropping `-y`. Invalid values fall back to the binary path. `--skip-trust` stays unconditional regardless. The reviewer use case (`role: reviewer + approval_mode: "plan"`) is documented in the gemini guide. Profile-level integration that auto-sets `approval_mode: "plan"` for `role: reviewer + agent_kind: gemini` is intentionally not done yet; the explicit per-task opt-in is enough for v0.
 
 ## Open questions
 
