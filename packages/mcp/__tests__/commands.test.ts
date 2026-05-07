@@ -2503,6 +2503,50 @@ describe("wait-tasks", () => {
 		expect(waited.tasks.map((t) => t.task_id)).toEqual([a.task_id, b.task_id]);
 	});
 
+	it("succeeds when cwd is omitted even if process.cwd() is unrelated to the task's worktree", async () => {
+		const submitted = await runSubmitTask(ctx, {
+			objective: "x",
+			agent_kind: "claude-code",
+			cwd: "/some/distant/worktree",
+		});
+		if (!submitted.accepted) throw new Error("setup failed");
+
+		// Sanity: process.cwd() is NOT the task's worktree. Without the opt-in
+		// fix, this would return permission_denied.
+		expect(process.cwd()).not.toBe("/some/distant/worktree");
+
+		const waited = await runWaitTasks(ctx, {
+			task_ids: [submitted.task_id],
+			timeout_ms: 0,
+			poll_interval_ms: 1,
+		});
+
+		expect(waited.error).toBeUndefined();
+		expect(waited.scope.cwd).toBeUndefined();
+		expect(waited.tasks).toHaveLength(1);
+		expect(waited.tasks[0]?.task_id).toBe(submitted.task_id);
+	});
+
+	it("still rejects with permission_denied when cwd is explicitly mismatched", async () => {
+		const submitted = await runSubmitTask(ctx, {
+			objective: "x",
+			agent_kind: "claude-code",
+			cwd: "/correct/worktree",
+		});
+		if (!submitted.accepted) throw new Error("setup failed");
+
+		const waited = await runWaitTasks(ctx, {
+			task_ids: [submitted.task_id],
+			cwd: "/wrong/worktree",
+			timeout_ms: 0,
+			poll_interval_ms: 1,
+		});
+
+		expect(waited.done).toBe(false);
+		expect(waited.error?.code).toBe("permission_denied");
+		expect(waited.error?.message).toMatch(/outside cwd/);
+	});
+
 	it("timeout_ms 0 returns a non-blocking snapshot without cancelling the task", async () => {
 		const submitted = await runSubmitTask(ctx, {
 			objective: "x",
