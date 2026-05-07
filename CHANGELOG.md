@@ -3,11 +3,76 @@
 All notable changes to cuekit are documented here.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
-cuekit is pre-v0.1; everything lives under **Unreleased** until the first
-tagged release. Breaking changes *are* tracked here because early adopters
-building against `main` can still be affected.
+cuekit is pre-v0.1. Releases are tagged on GitHub (`v0.0.x`) and pulled
+via `bun install -g github:takemo101/cuekit#vX.Y.Z`. Breaking changes
+*are* tracked here because early adopters building against `main` can
+still be affected.
 
 ## [Unreleased]
+
+## [0.0.2] — 2026-05-08
+
+### Added
+
+- **`@cuekit/adapters/gemini-adapter`**: Google Gemini CLI adapter with
+  first-class interactive + batch run modes, unconditional `--skip-trust`
+  (Gemini's per-directory trust gate is not auto-skipped in non-TTY mode
+  unlike Claude Code), `-y` (yolo) defaulted on through the shared
+  `shouldDangerouslySkipPermissions` helper, and curated
+  `availableModels` list (`gemini-2.5-pro`, `gemini-2.5-flash`,
+  `gemini-2.5-flash-lite`). Registered in `@cuekit/mcp` alongside
+  claude-code / pi / opencode / jcode and exposed through `cuekit doctor`.
+  Pairs with [`docs/designs/cuekit-gemini-adapter-design.md`] and
+  [`docs/guides/gemini-adapter.md`].
+- **`adapter_options.approval_mode`** (Gemini-only): exposes Gemini's
+  full 4-value `--approval-mode` surface (`default` / `auto_edit` /
+  `yolo` / `plan`). `plan` is API-level read-only, useful for reviewer
+  / audit children that must structurally not call edit tools. Wins
+  over the binary `dangerously_skip_permissions` toggle when set;
+  invalid values fall back silently.
+- **`adapter_options.cleanup_on_terminal_report`** (all pane adapters):
+  opt-in that asks `report_task_event` to call the adapter's
+  `cleanup()` (kill the tmux session) the moment a terminal child
+  report (`completed` / `failed` / `blocked`) is committed. Default
+  behavior is preserved when the option is absent. Most useful for
+  Gemini, whose REPL has no clean self-exit path.
+- **`cuekit init` template**: generated `.cuekit.yaml` now lists a
+  `gemini:` adapter block alongside `claude-code:` and `opencode:`,
+  with an inline note that `--skip-trust` is unconditional and
+  `permissions` only governs `-y`.
+
+### Changed
+
+- **`wait-tasks` cwd validation is now opt-in.** Previously a caller
+  who omitted both `cwd` and `session_id` had the MCP server's
+  `process.cwd()` silently applied as scope, producing
+  `permission_denied: task '...' is outside cwd '<server cwd>'` for
+  callers that submitted a task and waited on it without re-passing
+  scope. Now omitting `cwd` skips scope validation entirely; explicit
+  `cwd` mismatch still rejects with `permission_denied`. Brings
+  `wait-tasks` in line with `get_task_status` (which has no scope).
+- **`--task_ids` / `--session_ids` accept comma-separated values**
+  in addition to the documented repeat-flag form. `cuekit task delete
+  --task_ids "t_a,t_b"` now works as users naturally expect; mixed
+  forms (`--task_ids t_a --task_ids t_b,t_c`) flatten correctly. MCP
+  callers passing `task_ids: ["t_a", "t_b"]` are unaffected.
+
+### Documentation
+
+- Top-level README, `docs/README.md`, `docs/guides/README.md`,
+  AGENTS.md and a new redirect-only CLAUDE.md were rewritten for
+  scannability and consolidated into a single source of truth.
+- New design notes: gemini adapter (with trusted-folder handling).
+- New guide: `docs/guides/gemini-adapter.md` covering submit /
+  attach / steer / batch-mode steering rejection / cleanup, plus
+  read-only review mode and auto-cleanup sections.
+- Implementation plan: `docs/plans/2026-05-07-gemini-adapter-implementation-plan.md`.
+
+## [0.0.1] — 2026-05-04
+
+Initial GitHub-distributed release. The full set of features that
+shipped under this tag is recorded below; subsequent versions only
+list deltas relative to the previous tag.
 
 ### Added
 
