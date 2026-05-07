@@ -183,6 +183,12 @@ Adapter tests:
 - `opencode` batch command preserves existing `opencode run -- '<prompt>'` behavior.
 - `opencode` permission bypass appears only in batch command.
 
+## Related: cleanup_on_terminal_report
+
+`adapter_options.cleanup_on_terminal_report: true` is a separate opt-in that asks `report_task_event` to call the adapter's `cleanup()` (kill the tmux session for pane adapters) the moment a terminal child report (`completed` / `failed` / `blocked`) is committed. The default contract — "reporting does not close your pane or process" — is preserved when the option is absent, so existing children that depend on pane-survives-report behavior keep working.
+
+This option is most useful for runtimes whose REPL has no clean self-exit path (notably Gemini CLI), and for unattended workflows where the parent never needs the pane after the report. Cleanup failure does not roll back the terminal status.
+
 ## Open questions
 
 1. Should `mode: "non-interactive"` be accepted as an alias for `batch`? Recommendation: not initially; keep the public surface small.
