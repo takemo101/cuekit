@@ -2366,6 +2366,138 @@ describe("report-task-event", () => {
 		if (!result.ok) expect(result.error.code).toBe("invalid_input");
 		expect(listTaskEvents(db, task_id)).toEqual([]);
 	});
+
+	it("leaves the adapter pane alive after a terminal report by default", async () => {
+		const task_id = await submitWithChildToken();
+		const sessionName = `cuekit-task-${task_id}`;
+		expect(runner.knownSessions()).toContain(sessionName);
+
+		const result = await runReportTaskEvent(ctx, {
+			task_id,
+			child_token: "data",
+			type: "completed",
+			message: "Done",
+		});
+
+		expect(result.ok).toBe(true);
+		expect(getTaskById(db, task_id)?.status).toBe("completed");
+		// The contract is "reporting does not close your pane or process".
+		// Without the opt-in, the tmux session must stay alive.
+		expect(runner.knownSessions()).toContain(sessionName);
+	});
+
+	it("kills the adapter pane on terminal report when cleanup_on_terminal_report is opted into", async () => {
+		const submit = await runSubmitTask(ctx, {
+			objective: "x",
+			agent_kind: "claude-code",
+			cwd: "/tmp",
+			adapter_options: { cleanup_on_terminal_report: true },
+		});
+		if (!submit.accepted) throw new Error("setup failed");
+		updateTaskChildTokenHash(
+			db,
+			submit.task_id,
+			"sha256:3a6eb0790f39ac87c94f3856b2dd2c5d110e6811602261a9a923d3bb23adc8b7",
+		);
+		const sessionName = `cuekit-task-${submit.task_id}`;
+		expect(runner.knownSessions()).toContain(sessionName);
+
+		const result = await runReportTaskEvent(ctx, {
+			task_id: submit.task_id,
+			child_token: "data",
+			type: "completed",
+			message: "Done",
+		});
+
+		expect(result.ok).toBe(true);
+		expect(getTaskById(db, submit.task_id)?.status).toBe("completed");
+		expect(runner.knownSessions()).not.toContain(sessionName);
+	});
+
+	it("triggers cleanup for failed and blocked terminal reports too", async () => {
+		for (const reportType of ["failed", "blocked"] as const) {
+			const submit = await runSubmitTask(ctx, {
+				objective: "x",
+				agent_kind: "claude-code",
+				cwd: "/tmp",
+				adapter_options: { cleanup_on_terminal_report: true },
+			});
+			if (!submit.accepted) throw new Error("setup failed");
+			updateTaskChildTokenHash(
+				db,
+				submit.task_id,
+				"sha256:3a6eb0790f39ac87c94f3856b2dd2c5d110e6811602261a9a923d3bb23adc8b7",
+			);
+			const sessionName = `cuekit-task-${submit.task_id}`;
+			expect(runner.knownSessions()).toContain(sessionName);
+
+			const result = await runReportTaskEvent(ctx, {
+				task_id: submit.task_id,
+				child_token: "data",
+				type: reportType,
+				message: `${reportType} reported`,
+			});
+
+			expect(result.ok).toBe(true);
+			expect(getTaskById(db, submit.task_id)?.status).toBe(reportType);
+			expect(runner.knownSessions()).not.toContain(sessionName);
+		}
+	});
+
+	it("does not run cleanup for non-terminal reports", async () => {
+		const submit = await runSubmitTask(ctx, {
+			objective: "x",
+			agent_kind: "claude-code",
+			cwd: "/tmp",
+			adapter_options: { cleanup_on_terminal_report: true },
+		});
+		if (!submit.accepted) throw new Error("setup failed");
+		updateTaskChildTokenHash(
+			db,
+			submit.task_id,
+			"sha256:3a6eb0790f39ac87c94f3856b2dd2c5d110e6811602261a9a923d3bb23adc8b7",
+		);
+		const sessionName = `cuekit-task-${submit.task_id}`;
+
+		const result = await runReportTaskEvent(ctx, {
+			task_id: submit.task_id,
+			child_token: "data",
+			type: "progress",
+			message: "still working",
+		});
+
+		expect(result.ok).toBe(true);
+		expect(getTaskById(db, submit.task_id)?.status).toBe("running");
+		expect(runner.knownSessions()).toContain(sessionName);
+	});
+
+	it("succeeds with terminal status committed even when post-report cleanup fails", async () => {
+		const submit = await runSubmitTask(ctx, {
+			objective: "x",
+			agent_kind: "claude-code",
+			cwd: "/tmp",
+			adapter_options: { cleanup_on_terminal_report: true },
+		});
+		if (!submit.accepted) throw new Error("setup failed");
+		updateTaskChildTokenHash(
+			db,
+			submit.task_id,
+			"sha256:3a6eb0790f39ac87c94f3856b2dd2c5d110e6811602261a9a923d3bb23adc8b7",
+		);
+		// Force the next tmux call (kill-session via cleanup) to fail.
+		runner.queueResponse({ stdout: "", stderr: "permission denied", exitCode: 1 });
+
+		const result = await runReportTaskEvent(ctx, {
+			task_id: submit.task_id,
+			child_token: "data",
+			type: "completed",
+			message: "Done",
+		});
+
+		// The terminal status MUST commit regardless of cleanup outcome.
+		expect(result.ok).toBe(true);
+		expect(getTaskById(db, submit.task_id)?.status).toBe("completed");
+	});
 });
 
 describe("list-task-events", () => {

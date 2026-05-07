@@ -104,6 +104,24 @@ Expected observations:
 
 - The pane/transcript remain useful for output inspection until cleanup.
 
+## Auto-cleanup after terminal report
+
+By default the cuekit reporting contract is "reporting does not close your pane or process; finish normally after reporting." Gemini's REPL doesn't have a clean self-exit path after `report_task_event`, so an interactive task will idle at the prompt until you delete it.
+
+When you know the parent will not need the pane after the child reports, opt into automatic cleanup at submit time:
+
+```sh
+cuekit task submit \
+  --agent_kind gemini \
+  --model gemini-2.5-flash \
+  --adapter_options '{"cleanup_on_terminal_report": true}' \
+  --objective "..."
+```
+
+With this option set, the moment the child sends a terminal `task_event` (`completed` / `failed` / `blocked`), cuekit kills the tmux session synchronously. The terminal status itself is committed to SQLite first, so a cleanup failure (e.g. session already gone) is logged but does not roll back the report.
+
+This option is adapter-agnostic; it applies to any pane adapter, not just Gemini. It is most useful for Gemini specifically because the REPL is the most likely runtime to idle indefinitely after reporting.
+
 ## Permission opt-out
 
 To disable the default `-y` (yolo) and let Gemini prompt for tool approvals — for trusted local sessions where a human is ready to attach — pass:

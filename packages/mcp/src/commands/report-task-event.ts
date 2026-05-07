@@ -1,7 +1,8 @@
 import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
-import { type JobError, JobErrorSchema, type TaskStatus } from "@cuekit/core";
-import { appendTaskEvent, getTaskById, updateTaskStatus } from "@cuekit/store";
+import { type JobError, JobErrorSchema, TaskSpecSchema, type TaskStatus } from "@cuekit/core";
+import { appendTaskEvent, getTaskById, type Task, updateTaskStatus } from "@cuekit/store";
 import { z } from "incur";
+import { cleanupAdapterTask } from "../adapter-cleanup.ts";
 import type { CommandContext } from "../command-context.ts";
 
 const REPORT_TYPES = [
@@ -67,6 +68,20 @@ function hashesMatch(expected: string, actual: string): boolean {
 	const actualBuffer = Buffer.from(actual);
 	if (expectedBuffer.length !== actualBuffer.length) return false;
 	return timingSafeEqual(expectedBuffer, actualBuffer);
+}
+
+// Read `adapter_options.cleanup_on_terminal_report` from the task's stored
+// spec. The JSON / schema may be missing or malformed (older rows, future
+// shape changes); treat any failure as the option being absent rather than
+// rolling back a successful terminal report.
+function cleanupOnTerminalReportFor(task: Task): boolean {
+	if (!task.spec_json) return false;
+	try {
+		const spec = TaskSpecSchema.parse(JSON.parse(task.spec_json));
+		return spec.adapter_options?.cleanup_on_terminal_report === true;
+	} catch {
+		return false;
+	}
 }
 
 function normalizePayload(
@@ -136,6 +151,22 @@ export async function runReportTaskEvent(
 	}
 
 	const updated = getTaskById(ctx.db, task_id);
+
+	// Opt-in pane cleanup. The default contract is "reporting does not close
+	// your pane or process"; setting `adapter_options.cleanup_on_terminal_report`
+	// to true at submit time tells cuekit to kill the adapter (e.g. tmux
+	// session for pane adapters) the moment a terminal report lands. Cleanup
+	// failure is logged but does NOT roll back the report itself — the
+	// terminal status is already committed and clients should see ok:true.
+	if (TERMINAL_REPORT_STATUS[input.type] && updated && cleanupOnTerminalReportFor(updated)) {
+		const cleanup = await cleanupAdapterTask(ctx, updated);
+		if (!cleanup.ok) {
+			console.error(
+				`cuekit report_task_event: post-report cleanup failed for task '${task_id}': ${cleanup.error.message}`,
+			);
+		}
+	}
+
 	return {
 		ok: true,
 		task_id,
