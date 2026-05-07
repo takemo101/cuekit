@@ -17,6 +17,7 @@ Use these notes when working on an existing cuekit feature area. For current ope
 - [`cuekit-adapter-permission-bypass-design.md`](cuekit-adapter-permission-bypass-design.md) — default permission bypass behavior for unattended child agents.
 - [`cuekit-adapter-run-modes-design.md`](cuekit-adapter-run-modes-design.md) — shared interactive/default and batch/non-interactive adapter mode design.
 - [`cuekit-jcode-repl-adapter-design.md`](cuekit-jcode-repl-adapter-design.md) — `jcode repl` adapter design for tmux attach and steering support.
+- [`cuekit-gemini-adapter-design.md`](cuekit-gemini-adapter-design.md) — Gemini CLI adapter design covering interactive + batch run modes, `-y` permission bypass, and steering via `tmux send-keys`.
 - [`cuekit-tui-task-cockpit-design.md`](cuekit-tui-task-cockpit-design.md) — OpenTUI-based human task cockpit for browsing tasks and managing operations.
 - [`cuekit-tui-package-separation-design.md`](cuekit-tui-package-separation-design.md) — package-boundary design for moving TUI code into `@cuekit/tui`.
 - [`cuekit-human-cli-distribution-design.md`](cuekit-human-cli-distribution-design.md) — human CLI package split and GitHub/Bun distribution helpers such as `doctor` and `update`.
