@@ -122,6 +122,27 @@ With this option set, the moment the child sends a terminal `task_event` (`compl
 
 This option is adapter-agnostic; it applies to any pane adapter, not just Gemini. It is most useful for Gemini specifically because the REPL is the most likely runtime to idle indefinitely after reporting.
 
+## Read-only review mode (`approval_mode: "plan"`)
+
+Gemini's `--approval-mode` flag has 4 values: `default` / `auto_edit` / `yolo` / `plan`. cuekit defaults to `yolo` (via `-y`) so unattended panes never stall on tool prompts. To override that mapping per task, pass `adapter_options.approval_mode` directly:
+
+```sh
+cuekit task submit --agent_kind gemini --role reviewer \
+                   --adapter_options '{"approval_mode":"plan"}' \
+                   --objective "Audit this diff for missing error handling and document the findings."
+```
+
+`plan` is **API-level read-only** — Gemini structurally cannot call edit tools. Pair it with `role: reviewer` for a child that's enforced read-only at the API boundary, not just by prompt instruction.
+
+When `approval_mode` is set to a valid value, it takes precedence over `dangerously_skip_permissions` and `-y` is omitted. Invalid values silently fall back to the binary path. `--skip-trust` stays present in all cases.
+
+| Value | Effect | When to use |
+|---|---|---|
+| `default` | Prompt for every tool call | Trusted local sessions where a human will attach |
+| `auto_edit` | Auto-approve edit tools, prompt for shell/network | Code-only refactor tasks (will stall if shell needed) |
+| `yolo` | Auto-approve everything (= `-y`) | Default cuekit behavior; unattended progress |
+| `plan` | Read-only — write tools disabled | Reviewer / audit / analysis tasks |
+
 ## Permission opt-out
 
 To disable the default `-y` (yolo) and let Gemini prompt for tool approvals — for trusted local sessions where a human is ready to attach — pass:

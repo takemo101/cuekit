@@ -26,20 +26,43 @@ export interface BuildGeminiLaunchCommandOptions {
 	geminiBin?: string;
 }
 
+// The four values Gemini's `--approval-mode` flag accepts.
+const APPROVAL_MODES = ["default", "auto_edit", "yolo", "plan"] as const;
+type GeminiApprovalMode = (typeof APPROVAL_MODES)[number];
+
+// Read `adapter_options.approval_mode` and validate against the
+// known enum. Unknown / non-string values fall through to undefined
+// so the binary `dangerously_skip_permissions` path still applies —
+// invalid input must not silently produce a malformed launch command.
+function approvalModeFor(spec: TaskSpec): GeminiApprovalMode | undefined {
+	const value = spec.adapter_options?.approval_mode;
+	return typeof value === "string" && (APPROVAL_MODES as readonly string[]).includes(value)
+		? (value as GeminiApprovalMode)
+		: undefined;
+}
+
 // Pure builder for the tmux-pane launch command. Output is a single
 // shell-command string (tmux new-session receives it as its final
 // positional argument).
 //
 // Shape:
-//   <bin> --skip-trust [-y] [-m '<model>'] '<prompt>'           (interactive)
-//   <bin> --skip-trust [-y] [-m '<model>'] -p '<prompt>'        (batch)
+//   <bin> --skip-trust [--approval-mode '<mode>' | -y] [-m '<model>'] '<prompt>'           (interactive)
+//   <bin> --skip-trust [--approval-mode '<mode>' | -y] [-m '<model>'] -p '<prompt>'        (batch)
 //
 // `--skip-trust` is added unconditionally so unattended panes never
 // stall on Gemini's trusted-folder gate (which, unlike Claude Code,
-// is not auto-skipped in non-TTY mode). The `-y` (yolo) flag is
-// added when `shouldDangerouslySkipPermissions(spec)` is true,
-// which is the default; explicit `dangerously_skip_permissions:
-// false` removes it but leaves `--skip-trust` in place.
+// is not auto-skipped in non-TTY mode).
+//
+// Permission semantics:
+// - When `adapter_options.approval_mode` is one of the four valid
+//   values (`default` / `auto_edit` / `yolo` / `plan`), emit
+//   `--approval-mode <value>` directly and skip the `-y` shortcut —
+//   the explicit value wins over the binary
+//   `dangerously_skip_permissions` toggle.
+// - Otherwise fall back to the binary path: add `-y` when
+//   `shouldDangerouslySkipPermissions(spec)` is true (default).
+// `--approval-mode plan` is the API-level read-only mode useful for
+// reviewer-style children that must not be able to edit files.
 //
 // Interactive mode passes the prompt as a positional argument so
 // the REPL stays attached to the TTY. Batch mode passes the prompt
@@ -50,7 +73,10 @@ export function buildGeminiLaunchCommand(
 ): string {
 	const bin = options.geminiBin ?? "gemini";
 	const parts: string[] = [bin, "--skip-trust"];
-	if (shouldDangerouslySkipPermissions(spec)) {
+	const approvalMode = approvalModeFor(spec);
+	if (approvalMode !== undefined) {
+		parts.push("--approval-mode", shellQuote(approvalMode));
+	} else if (shouldDangerouslySkipPermissions(spec)) {
 		parts.push("-y");
 	}
 	if (spec.model) {
