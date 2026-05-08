@@ -1,14 +1,6 @@
 #!/usr/bin/env bun
 import type { Database } from "bun:sqlite";
-import {
-	AdapterRegistry,
-	createClaudeCodeAdapter,
-	createGeminiAdapter,
-	createJcodeAdapter,
-	createOpenCodeAdapter,
-	createPiAdapter,
-	PaneBackend,
-} from "@cuekit/adapters";
+import { buildAdapterRegistry, PaneBackend } from "@cuekit/adapters";
 import { createStderrLogger, parseLogLevel } from "@cuekit/core";
 import { openDatabase, runMigrations } from "@cuekit/store";
 import { createCli, createMcpCli, createMcpConfigCli } from "./cli.ts";
@@ -113,12 +105,7 @@ export async function runCuekitMcpBin(): Promise<void> {
 		runMigrations(db);
 
 		const panes = new PaneBackend();
-		const registry = new AdapterRegistry();
-		registry.register(createClaudeCodeAdapter(db, panes, { logger }));
-		registry.register(createPiAdapter(db, panes, { logger }));
-		registry.register(createOpenCodeAdapter(db, panes, { logger }));
-		registry.register(createJcodeAdapter(db, panes, { logger }));
-		registry.register(createGeminiAdapter(db, panes, { logger }));
+		const registry = buildAdapterRegistry(db, panes, { logger });
 
 		installSignalHandlers(db);
 

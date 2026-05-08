@@ -1,15 +1,7 @@
 #!/usr/bin/env bun
 import type { Database } from "bun:sqlite";
 import { existsSync, statSync } from "node:fs";
-import {
-	AdapterRegistry,
-	createClaudeCodeAdapter,
-	createGeminiAdapter,
-	createJcodeAdapter,
-	createOpenCodeAdapter,
-	createPiAdapter,
-	PaneBackend,
-} from "@cuekit/adapters";
+import { type AdapterRegistry, buildAdapterRegistry, PaneBackend } from "@cuekit/adapters";
 import { findProjectRoot } from "@cuekit/agent-profiles";
 import { createStderrLogger, parseLogLevel } from "@cuekit/core";
 import { createTuiContext, runCuekitMcpBin } from "@cuekit/mcp";
@@ -38,26 +30,16 @@ function closeQuietly(db: Database): void {
 	}
 }
 
-// Build the AdapterRegistry that `cuekit tui` uses. Exported so the CLI's
-// regression test can assert the full registered adapter set without
-// resorting to brittle string-greps against this file. Keep this in sync
-// with `packages/mcp/src/bin.ts` — both registries must list the same
-// adapters or `cuekit tui` will lose access to a runtime that the MCP
-// server already supports (the bug fixed in #375).
-export function buildTuiAdapterRegistry(
+// Re-export the canonical adapter-registry factory under a TUI-specific
+// name to preserve the existing call sites and regression-test imports.
+// The actual build-out lives in `@cuekit/adapters/build-registry` so it
+// can be shared between `cuekit --mcp` (the MCP server) and
+// `cuekit tui` (this binary). See #382 for the unification rationale.
+export const buildTuiAdapterRegistry: (
 	db: Database,
 	panes: PaneBackend,
-	options: { logger?: import("@cuekit/core").Logger } = {},
-): AdapterRegistry {
-	const { logger } = options;
-	const registry = new AdapterRegistry();
-	registry.register(createClaudeCodeAdapter(db, panes, { logger }));
-	registry.register(createPiAdapter(db, panes, { logger }));
-	registry.register(createOpenCodeAdapter(db, panes, { logger }));
-	registry.register(createJcodeAdapter(db, panes, { logger }));
-	registry.register(createGeminiAdapter(db, panes, { logger }));
-	return registry;
-}
+	options?: { logger?: import("@cuekit/core").Logger },
+) => AdapterRegistry = buildAdapterRegistry;
 
 async function runTuiCommand(): Promise<void> {
 	const logLevel = parseLogLevel(process.env.CUEKIT_LOG_LEVEL);
