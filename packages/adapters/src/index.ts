@@ -1,5 +1,6 @@
 export * from "./adapter-registry.ts";
 export * from "./agent-adapter.ts";
+export * from "./build-registry.ts";
 export * from "./claude-code-adapter.ts";
 export * from "./gemini-adapter.ts";
 export * from "./jcode-adapter.ts";
