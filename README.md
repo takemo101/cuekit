@@ -20,16 +20,28 @@ cuekit is **not a workflow engine**. The parent agent stays the decision-maker; 
 ## Install
 
 ```sh
-bun install -g github:takemo101/cuekit#v0.1.0
+bun install -g github:takemo101/cuekit#v0.0.3
 cuekit doctor
 cuekit mcp config   # prints the snippet to register cuekit with your MCP client
 ```
 
-Use an immutable release tag (`#v0.1.0`, etc.). Avoid floating `#main` outside development — Bun's caching semantics for branches are less explicit. After installing a newer tag, restart MCP clients.
+Use an immutable release tag (`#v0.0.3`, etc.). Avoid floating `#main` outside development — Bun's caching semantics for branches are less explicit. After installing a newer tag, restart MCP clients.
 
 `cuekit update` reads the latest GitHub Release tag and prints the exact `bun install` command to run. It is **advisory-only** and does not self-update.
 
-For local development:
+> **Naming gotcha**: the binary is named `cuekit` but the workspace `package.json#name` is `cuekit-workspace`. This matters when you uninstall (see below) and when you list installed packages (`bun pm ls -g | grep cuekit`).
+
+### Uninstall
+
+```sh
+bun remove -g cuekit-workspace
+```
+
+`bun remove -g cuekit` is a **silent no-op** because no package by that name exists — Bun returns success without removing anything. Always remove by the package name `cuekit-workspace`. Verify with `which cuekit` (should report nothing) or `bun pm ls -g | grep cuekit-workspace` (should be empty).
+
+For a deeper cleanup including state, transcript, and tmux sessions, see the uninstall recipe at the bottom of this file.
+
+### Local development
 
 ```sh
 git clone https://github.com/takemo101/cuekit
@@ -224,3 +236,42 @@ Adapter end-to-end checks against real runtimes are documented per adapter:
 | tmux attach for every running task | Cost accounting, long-term memory |
 
 Full v0 protocol: [`docs/specs/README.md`](docs/specs/README.md).
+
+## Full uninstall
+
+The basic `bun remove -g cuekit-workspace` (see [Uninstall](#uninstall)) removes only the binary. To wipe state, transcripts, and project artifacts as well:
+
+```sh
+# 1. Binary + Bun cache
+bun remove -g cuekit-workspace
+rm -rf ~/.bun/install/cache/@GH@takemo101-cuekit-*
+rm -rf ~/.bun/install/global/node_modules/cuekit-workspace
+
+# 2. Global state DB (task history, sessions, events)
+rm -rf ~/.cuekit
+
+# 3. Per-project artifacts (run inside each repo that used cuekit)
+find . -name '.cuekit' -type d -prune -exec rm -rf {} +
+rm -f ./.cuekit.yaml          # if `cuekit init` was run
+
+# 4. Kill any remaining tmux sessions
+tmux ls 2>/dev/null | grep cuekit-task | cut -d: -f1 | xargs -I {} tmux kill-session -t {}
+
+# 5. Remove the cuekit entry from MCP client configs
+#    Claude Code: `~/.claude.json` → `mcpServers.cuekit`
+#    Project:     `<repo>/.mcp.json` → `mcpServers.cuekit`
+#    Cursor / Claude Desktop: each client's MCP config
+#    Restart the client after editing.
+```
+
+Verify the removal:
+
+```sh
+which cuekit            # should report nothing
+ls ~/.cuekit            # should be "No such file"
+tmux ls | grep cuekit-  # should be empty
+```
+
+Step 1 is enough for most cases. Steps 2 and 3 are destructive — back up `transcript.txt` files first if you need them for review or postmortem.
+
+Note: `bun remove -g cuekit` (without `-workspace`) returns success but removes nothing — the workspace package is named `cuekit-workspace` even though its binary is `cuekit`.
