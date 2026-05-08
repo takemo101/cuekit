@@ -10,6 +10,62 @@ still be affected.
 
 ## [Unreleased]
 
+## [0.0.3] — 2026-05-08
+
+### Fixed
+
+- **TUI could not attach to gemini tasks** (regression introduced in
+  v0.0.2). `cuekit tui` builds its own `AdapterRegistry` separate from
+  the MCP server, and the gemini registration only landed on the MCP
+  side. Pressing `a` on a gemini task showed
+  "Selected task is not attachable" even though the tmux session was
+  alive and `tmux attach-session` worked from the shell. The TUI
+  registry now includes gemini, and the regression test drives the
+  actual factory rather than string-grepping the source.
+
+### Added
+
+- **TUI transcript pane sources from `tmux capture-pane`** for
+  running tasks with a known tmux session. The persisted transcript
+  file is dominated by re-rendered UI chrome and cursor-move escapes
+  for frequently-redrawing TUI children (Gemini CLI, opencode TUI),
+  pushing actual conversation content off the tail. capture-pane
+  returns the post-render screen the human is staring at. Terminal
+  tasks, unknown sessions, and capture failures fall back to the
+  existing file-tail path. The header indicates which source produced
+  the displayed content (`LIVE OUTPUT (N lines, tmux pane | transcript file)`).
+- **LIVE OUTPUT scrollbox stable height**: pad the live capture to
+  `DEFAULT_TRANSCRIPT_LINES = 80` so OpenTUI's sticky-scroll
+  "pause when user scrolls away" semantics work — total content
+  height no longer shifts between refreshes, so a user reading
+  older content stays put.
+- **`cuekit doctor`** now probes `tmux capture-pane` against a
+  guaranteed-missing target and warns if the subcommand isn't
+  recognised. Without this, an ancient or stripped tmux build would
+  silently break the new TUI live preview.
+
+### Changed
+
+- **Async tmux spawn**: the live-pane fetch uses `Bun.spawn` instead
+  of `spawnSync`, so a busy tmux server cannot block the TUI's
+  event loop during auto-refresh.
+- **`captureLivePaneTail` returns null on empty stdout** so the
+  caller can fall back to the file path during the brief window
+  before a child has drawn anything to the pane.
+- **file-tail noise filter (`isLowValueTranscriptLine`) is no longer
+  applied to capture-pane content.** That filter was tuned for the
+  redraw-history file; capture-pane is the post-render screen, so
+  filtering it can hide legitimate child output.
+
+### Documentation
+
+- New design note: `docs/designs/cuekit-tui-live-pane-transcript-design.md`
+  capturing the data-source switch, why other approaches were
+  rejected, non-goals, and trade-offs.
+- README's TUI section gains a one-paragraph operator note pointing
+  at the design.
+- AGENTS.md adds a TUI transcript pane pitfall row.
+
 ## [0.0.2] — 2026-05-08
 
 ### Added
