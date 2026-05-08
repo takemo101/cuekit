@@ -1,6 +1,10 @@
+import { Database } from "bun:sqlite";
 import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { PaneBackend } from "@cuekit/adapters";
+import { FakeTmuxRunner } from "@cuekit/adapters/testing";
+import { buildTuiAdapterRegistry } from "../src/bin.ts";
 import { classifyCuekitCommand, printMainHelp } from "../src/dispatch.ts";
 
 const workspaceRoot = resolve(import.meta.dir, "..", "..", "..");
@@ -29,17 +33,17 @@ describe("cuekit CLI binary dispatch", () => {
 		// builds its own AdapterRegistry separate from the MCP server, and a
 		// missing registration here makes tasks for that adapter look like
 		// "Selected task is not attachable" inside the TUI even when the
-		// pane is alive. Pin the expected adapter set so any future adapter
-		// addition fails loudly here unless the TUI registry is updated too.
-		const binSource = readFileSync(resolve(workspaceRoot, "packages/cli/src/bin.ts"), "utf8");
-		for (const factory of [
-			"createClaudeCodeAdapter",
-			"createPiAdapter",
-			"createOpenCodeAdapter",
-			"createJcodeAdapter",
-			"createGeminiAdapter",
-		]) {
-			expect(binSource).toContain(`registry.register(${factory}(`);
+		// pane is alive. Drive the actual factory and assert the registry's
+		// kinds — string-grepping the source would silently survive a
+		// reformat that drops a register() call.
+		const db = new Database(":memory:");
+		try {
+			const panes = new PaneBackend({ runner: new FakeTmuxRunner(), sendKeysDelayMs: 0 });
+			const registry = buildTuiAdapterRegistry(db, panes);
+
+			expect(registry.kinds().sort()).toEqual(["claude-code", "gemini", "jcode", "opencode", "pi"]);
+		} finally {
+			db.close();
 		}
 	});
 

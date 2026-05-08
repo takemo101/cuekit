@@ -38,6 +38,27 @@ function closeQuietly(db: Database): void {
 	}
 }
 
+// Build the AdapterRegistry that `cuekit tui` uses. Exported so the CLI's
+// regression test can assert the full registered adapter set without
+// resorting to brittle string-greps against this file. Keep this in sync
+// with `packages/mcp/src/bin.ts` — both registries must list the same
+// adapters or `cuekit tui` will lose access to a runtime that the MCP
+// server already supports (the bug fixed in #375).
+export function buildTuiAdapterRegistry(
+	db: Database,
+	panes: PaneBackend,
+	options: { logger?: import("@cuekit/core").Logger } = {},
+): AdapterRegistry {
+	const { logger } = options;
+	const registry = new AdapterRegistry();
+	registry.register(createClaudeCodeAdapter(db, panes, { logger }));
+	registry.register(createPiAdapter(db, panes, { logger }));
+	registry.register(createOpenCodeAdapter(db, panes, { logger }));
+	registry.register(createJcodeAdapter(db, panes, { logger }));
+	registry.register(createGeminiAdapter(db, panes, { logger }));
+	return registry;
+}
+
 async function runTuiCommand(): Promise<void> {
 	const logLevel = parseLogLevel(process.env.CUEKIT_LOG_LEVEL);
 	const logger = createStderrLogger({ minLevel: logLevel });
@@ -49,12 +70,7 @@ async function runTuiCommand(): Promise<void> {
 		runMigrations(db);
 
 		const panes = new PaneBackend();
-		const registry = new AdapterRegistry();
-		registry.register(createClaudeCodeAdapter(db, panes, { logger }));
-		registry.register(createPiAdapter(db, panes, { logger }));
-		registry.register(createOpenCodeAdapter(db, panes, { logger }));
-		registry.register(createJcodeAdapter(db, panes, { logger }));
-		registry.register(createGeminiAdapter(db, panes, { logger }));
+		const registry = buildTuiAdapterRegistry(db, panes, { logger });
 
 		const { runTuiLoop } = await import("@cuekit/tui");
 		const all = process.argv.includes("--all");
