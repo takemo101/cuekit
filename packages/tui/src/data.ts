@@ -1,4 +1,3 @@
-import { spawnSync } from "node:child_process";
 import { closeSync, existsSync, openSync, readSync, statSync } from "node:fs";
 import {
 	isTerminalTaskStatus,
@@ -18,6 +17,12 @@ import type {
 	TuiTeamListOutput,
 	TuiTeamStatusOutput,
 } from "./context.ts";
+
+// Single source of truth for the transcript pane's height. Used by both
+// the data fetch (how many lines to slice) and the render-time padding
+// (so the scrollbox sees a constant content height — see #377). Kept
+// here rather than in `task-detail.tsx` so they cannot drift apart.
+export const DEFAULT_TRANSCRIPT_LINES = 80;
 
 type LoadTaskListOptions = Pick<
 	TaskListFilter,
@@ -115,8 +120,8 @@ export async function loadTaskDetail(
 		teamStatusResult && "run_summary" in teamStatusResult
 			? teamStatusResult.run_summary
 			: undefined;
-	const maxLines = options.transcriptLines ?? 80;
-	const transcriptTail = resolveTranscriptTail(status, transcriptPath, maxLines);
+	const maxLines = options.transcriptLines ?? DEFAULT_TRANSCRIPT_LINES;
+	const transcriptTail = await resolveTranscriptTail(status, transcriptPath, maxLines);
 	return {
 		status,
 		events: "events" in eventsResult ? eventsResult.events : [],
@@ -140,15 +145,21 @@ export async function loadTaskDetail(
 // terminal tasks, or when the session is unknown / the capture fails for
 // any reason, fall back to the existing file-tail path so postmortem
 // reading still works.
-export function resolveTranscriptTail(
+//
+// Async because the live-pane probe spawns tmux off the event loop;
+// loadTaskDetail already awaits, so this addition is transparent to the
+// TUI render path. Keeping the spawn off the synchronous critical path
+// matters because auto-refresh fires this every few seconds and a busy
+// tmux server (heavy IO, many sessions) would otherwise stall the TUI.
+export async function resolveTranscriptTail(
 	status: TaskStatusView,
 	transcriptPath: string | undefined,
 	maxLines: number,
-): string[] {
+): Promise<string[]> {
 	if (!isTerminalTaskStatus(status.status)) {
 		const sessionName = getTmuxSessionName(status);
 		if (sessionName) {
-			const live = captureLivePaneTail(sessionName, maxLines);
+			const live = await captureLivePaneTail(sessionName, maxLines);
 			if (live !== null) return live;
 		}
 	}
@@ -238,34 +249,52 @@ export function readTranscriptTail(
 // the persisted transcript file. For frequently-redrawing TUI children
 // (Gemini CLI, opencode TUI, ...) the file-tail mostly captures cursor-
 // move / clear escapes; capture-pane returns the post-render content the
-// human would actually see. We still strip ANSI here because OpenTUI
-// renders text components as plain strings (no built-in escape parser);
-// color preservation is a separate follow-up that would require building
-// a StyledText conversion path.
+// human would actually see. We still strip residual control characters
+// here because OpenTUI renders text components as plain strings (no
+// built-in escape parser); color preservation is a separate follow-up
+// that would require building a StyledText conversion path.
 //
-// Returns null on any failure (tmux missing, session does not exist,
-// process error) so the caller can fall back to the file-tail without
-// having to decide between "no live data" and "live data is empty".
-export function captureLivePaneTail(
+// Why the numbers:
+// - `captureLines = 200`: pull 200 lines from history (`-S -200`) so we
+//   have margin above the visible viewport for users that grow the TUI
+//   pane vertically. tmux clamps to whatever exists in the buffer, so a
+//   shorter pane just returns what is there.
+// - `maxLines` defaults to `DEFAULT_TRANSCRIPT_LINES` and is the upper
+//   bound on what we hand back to the renderer (matches `loadTaskDetail`'s
+//   default and the scrollbox's stable padding height).
+//
+// We deliberately do NOT apply `isLowValueTranscriptLine` here: that
+// filter was tuned for the file-tail path, where the persisted transcript
+// is dominated by re-rendered UI chrome and known stop-hook noise. The
+// capture-pane output is the post-render screen the human actually sees,
+// so dropping lines from it would hide content the user is staring at.
+//
+// Returns `null` on any failure mode that should fall back to the file
+// tail: tmux missing, session does not exist, capture-pane exits non-
+// zero, throw during spawn, or the captured screen is entirely empty.
+// Treating "successful but empty" as null lets the caller show
+// postmortem content during the brief window before the child has
+// drawn anything to the pane.
+export async function captureLivePaneTail(
 	sessionName: string,
-	maxLines = 80,
+	maxLines = DEFAULT_TRANSCRIPT_LINES,
 	options: { tmuxBin?: string; captureLines?: number } = {},
-): string[] | null {
+): Promise<string[] | null> {
 	const tmuxBin = options.tmuxBin ?? "tmux";
 	const captureLines = options.captureLines ?? 200;
 	try {
-		const result = spawnSync(
-			tmuxBin,
-			["capture-pane", "-p", "-J", "-S", `-${captureLines}`, "-t", sessionName],
-			{ encoding: "utf8" },
+		const proc = Bun.spawn(
+			[tmuxBin, "capture-pane", "-p", "-J", "-S", `-${captureLines}`, "-t", sessionName],
+			{ stdout: "pipe", stderr: "ignore" },
 		);
-		if (result.status !== 0) return null;
-		const stdout = result.stdout ?? "";
-		return stdout
-			.split(/\r?\n/)
-			.map(sanitizeTerminalText)
-			.filter((line) => !isLowValueTranscriptLine(line))
-			.slice(-maxLines);
+		const [stdout, exitCode] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+		if (exitCode !== 0) return null;
+		const lines = stdout.split(/\r?\n/).map(sanitizeTerminalText);
+		// Drop trailing empty lines tmux capture-pane uses to fill the
+		// viewport; if everything was empty/whitespace, fall back.
+		while (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
+		if (lines.length === 0) return null;
+		return lines.slice(-maxLines);
 	} catch {
 		return null;
 	}
