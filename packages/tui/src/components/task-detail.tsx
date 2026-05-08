@@ -29,6 +29,13 @@ function outputLines(detail: TuiTaskDetail | undefined): string[] {
 	return (detail?.transcriptTail ?? []).filter((line) => !isOutputNoise(line));
 }
 
+// Visual marker placed at the top of the padding region so a user
+// who scrolls up sees a clear "no earlier content" anchor instead of
+// a silent blank region. Kept short and distinctive so it doesn't
+// compete with real content for attention. (See #383 for the UX
+// discussion.)
+const LIVE_OUTPUT_PADDING_HEAD = "── (no earlier pane content) ──";
+
 // LIVE OUTPUT scroll position is shared with OpenTUI's scrollbox sticky-
 // scroll machinery. The capture-pane source returns a variable number of
 // lines per refresh (anywhere from 0 to maxLines), which would shift the
@@ -41,11 +48,20 @@ function outputLines(detail: TuiTaskDetail | undefined): string[] {
 //
 // The newest content keeps its position at the bottom of the canvas
 // because we pad only at the head; this matches `stickyStart="bottom"`.
+//
+// When the content is shorter than the target height, the very first
+// padded line is replaced with a marker (`LIVE_OUTPUT_PADDING_HEAD`)
+// so a user who scrolls up sees an anchor instead of an unexplained
+// blank canvas. The remaining padding stays as empty strings to keep
+// the visual weight light.
+//
 // Exported so the padding is unit-testable in isolation.
 export function padLinesForLiveOutput(lines: string[], targetHeight: number): string[] {
 	if (targetHeight <= 0) return lines;
 	if (lines.length >= targetHeight) return lines.slice(-targetHeight);
-	const padding = new Array<string>(targetHeight - lines.length).fill("");
+	const padCount = targetHeight - lines.length;
+	const padding = new Array<string>(padCount).fill("");
+	if (padCount >= 1) padding[0] = LIVE_OUTPUT_PADDING_HEAD;
 	return [...padding, ...lines];
 }
 

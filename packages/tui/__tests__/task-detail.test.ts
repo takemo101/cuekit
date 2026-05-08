@@ -272,10 +272,23 @@ describe("TaskDetail contextHeight", () => {
 });
 
 describe("padLinesForLiveOutput", () => {
-	it("pads short input with empty lines at the head so newest content stays at bottom", () => {
+	it("pads short input with a head marker followed by empty lines so newest content stays at bottom", () => {
 		const out = padLinesForLiveOutput(["alpha", "beta"], 5);
 
-		expect(out).toEqual(["", "", "", "alpha", "beta"]);
+		// First padded line is the "no earlier content" anchor; remaining
+		// padding stays empty so the visual weight is low; content
+		// lands at the bottom for sticky-scroll compatibility.
+		expect(out[0]).toContain("no earlier pane content");
+		expect(out.slice(1, 3)).toEqual(["", ""]);
+		expect(out.slice(-2)).toEqual(["alpha", "beta"]);
+		expect(out).toHaveLength(5);
+	});
+
+	it("places the head marker even when only one padding slot exists", () => {
+		const out = padLinesForLiveOutput(["a", "b"], 3);
+
+		expect(out[0]).toContain("no earlier pane content");
+		expect(out.slice(-2)).toEqual(["a", "b"]);
 	});
 
 	it("returns the input unchanged when length already matches the target", () => {
