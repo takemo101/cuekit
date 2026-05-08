@@ -535,9 +535,9 @@ describe("tui data helpers", () => {
 					metadata: { tmux_session_name: "cuekit-task-t_abc" },
 				});
 
-				const lines = await resolveTranscriptTail(status, transcriptPath, 10);
+				const result = await resolveTranscriptTail(status, transcriptPath, 10);
 
-				expect(lines).toEqual(["first", "second", "third"]);
+				expect(result).toEqual({ lines: ["first", "second", "third"], source: "file" });
 			} finally {
 				rmSync(dir, { recursive: true, force: true });
 			}
@@ -550,9 +550,9 @@ describe("tui data helpers", () => {
 				writeFileSync(transcriptPath, "alpha\nbeta\n");
 				const status = statusFor({}); // no metadata.tmux_session_name, no attach_hint
 
-				const lines = await resolveTranscriptTail(status, transcriptPath, 10);
+				const result = await resolveTranscriptTail(status, transcriptPath, 10);
 
-				expect(lines).toEqual(["alpha", "beta"]);
+				expect(result).toEqual({ lines: ["alpha", "beta"], source: "file" });
 			} finally {
 				rmSync(dir, { recursive: true, force: true });
 			}
@@ -570,9 +570,9 @@ describe("tui data helpers", () => {
 					metadata: { tmux_session_name: "cuekit-task-definitely-not-running-anywhere" },
 				});
 
-				const lines = await resolveTranscriptTail(status, transcriptPath, 10);
+				const result = await resolveTranscriptTail(status, transcriptPath, 10);
 
-				expect(lines).toEqual(["fallback-line"]);
+				expect(result).toEqual({ lines: ["fallback-line"], source: "file" });
 			} finally {
 				rmSync(dir, { recursive: true, force: true });
 			}

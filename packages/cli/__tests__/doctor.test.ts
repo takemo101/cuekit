@@ -1,9 +1,17 @@
 import { describe, expect, it } from "bun:test";
 import { createDoctorExec, type DoctorExec, runDoctor } from "../src/doctor.ts";
 
-const okExec: DoctorExec = async (command) => {
+const okExec: DoctorExec = async (command, args) => {
 	if (command === "bun") return { ok: true, stdout: "1.3.11\n" };
-	if (command === "tmux") return { ok: true, stdout: "tmux 3.5a\n" };
+	if (command === "tmux") {
+		if (args[0] === "capture-pane") {
+			// Real tmux returns exit 1 with this stderr when the target session
+			// doesn't exist — that's the success path of doctor's probe (the
+			// subcommand is recognised, just the fake target is missing).
+			return { ok: false, stderr: "can't find session: cuekit-doctor-probe-no-such-session" };
+		}
+		return { ok: true, stdout: "tmux 3.5a\n" };
+	}
 	return { ok: false, stderr: "not found" };
 };
 
@@ -23,6 +31,7 @@ describe("cuekit doctor", () => {
 		expect(result.stdout).toContain("✓ cuekit: v0.1.0");
 		expect(result.stdout).toContain("✓ bun: 1.3.11");
 		expect(result.stdout).toContain("✓ tmux: tmux 3.5a");
+		expect(result.stdout).toContain("✓ tmux capture-pane: supported");
 		expect(result.stdout).toContain("✓ state db: ~/.cuekit/state.db writable");
 		expect(result.stdout).toContain("✓ project config: /repo/.cuekit.yaml");
 		expect(result.stdout).toContain("✓ MCP config helper: cuekit mcp config");
