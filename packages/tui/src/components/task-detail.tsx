@@ -1,7 +1,7 @@
 import type { TaskStatus, TaskSummary } from "@cuekit/core";
 import type { ReactNode } from "react";
 import type { TuiTaskEvent } from "../context.ts";
-import type { TuiTaskDetail } from "../data.ts";
+import { DEFAULT_TRANSCRIPT_LINES, type TuiTaskDetail } from "../data.ts";
 import { truncateEnd, truncateMiddle } from "../format.ts";
 import { statusAccent, statusGlyph, theme } from "../theme.ts";
 
@@ -49,7 +49,11 @@ export function padLinesForLiveOutput(lines: string[], targetHeight: number): st
 	return [...padding, ...lines];
 }
 
-const LIVE_OUTPUT_TARGET_HEIGHT = 80;
+// Padding target tracks the data layer's max-lines so the rendered
+// canvas height matches what loadTaskDetail actually fetches. Both come
+// from `DEFAULT_TRANSCRIPT_LINES` to prevent drift if either default is
+// retuned later.
+const LIVE_OUTPUT_TARGET_HEIGHT = DEFAULT_TRANSCRIPT_LINES;
 
 function formatUpdatedAt(value: string): string {
 	const date = new Date(value);
