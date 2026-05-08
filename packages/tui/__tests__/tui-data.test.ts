@@ -1,8 +1,10 @@
 import { Database } from "bun:sqlite";
-import { describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it } from "bun:test";
+import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { hasTmux } from "@cuekit/adapters/testing";
 import type { TaskStatusView } from "@cuekit/core";
 import {
 	appendTaskEvent,
@@ -513,6 +515,88 @@ describe("tui data helpers", () => {
 				tmuxBin: "/var/empty/this-tmux-does-not-exist",
 			});
 			expect(out).toBeNull();
+		});
+	});
+
+	const realTmuxSuite = hasTmux() ? describe : describe.skip;
+	realTmuxSuite("captureLivePaneTail (real tmux)", () => {
+		// Each test creates a unique session name so concurrent runs and
+		// the fact that the session may already exist on the user's tmux
+		// server cannot collide. afterEach kills it whether the test
+		// succeeds or fails.
+		const sessionsToKill: string[] = [];
+
+		afterEach(() => {
+			for (const session of sessionsToKill) {
+				spawnSync("tmux", ["kill-session", "-t", session]);
+			}
+			sessionsToKill.length = 0;
+		});
+
+		function freshSession(): string {
+			const name = `cuekit-test-capture-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+			sessionsToKill.push(name);
+			return name;
+		}
+
+		it("returns the rendered pane content when tmux serves a known session", async () => {
+			const session = freshSession();
+			// Detached session running `cat` so the pane stays alive while
+			// we feed text into stdin. `cat` echoes input back to the
+			// pane, which is what capture-pane will see.
+			const create = spawnSync("tmux", [
+				"new-session",
+				"-d",
+				"-s",
+				session,
+				"-x",
+				"80",
+				"-y",
+				"24",
+				"cat",
+			]);
+			expect(create.status).toBe(0);
+			// Send a known marker line into the pane.
+			spawnSync("tmux", ["send-keys", "-t", session, "live-pane-marker-line", "Enter"]);
+			// tmux send-keys is async w.r.t. the pane redrawing; small wait.
+			await Bun.sleep(150);
+
+			const lines = await captureLivePaneTail(session, 80);
+
+			expect(lines).not.toBeNull();
+			// At least one captured line should contain the marker.
+			expect((lines ?? []).some((line) => line.includes("live-pane-marker-line"))).toBe(true);
+		});
+
+		it("trims trailing blank lines tmux uses to fill the viewport", async () => {
+			const session = freshSession();
+			spawnSync("tmux", ["new-session", "-d", "-s", session, "-x", "80", "-y", "24", "cat"]);
+			spawnSync("tmux", ["send-keys", "-t", session, "only-line", "Enter"]);
+			await Bun.sleep(150);
+
+			const lines = (await captureLivePaneTail(session, 80)) ?? [];
+
+			// The last non-empty line should be the marker; trailing blanks
+			// the viewport adds to fill 24 rows must already be trimmed.
+			expect(lines[lines.length - 1]).not.toBe("");
+		});
+
+		it("returns null when the session exists but capture is empty", async () => {
+			const session = freshSession();
+			// `true` exits immediately so the pane has no rendered content.
+			// tmux's default `remain-on-exit off` will reap the pane; the
+			// session may still exist briefly, but capture-pane should
+			// return either no rows or only blank rows. captureLivePaneTail
+			// trims blanks and treats the empty result as null fallback.
+			spawnSync("tmux", ["new-session", "-d", "-s", session, "-x", "80", "-y", "24", "true"]);
+			await Bun.sleep(100);
+
+			const lines = await captureLivePaneTail(session, 80);
+
+			// Either the pane is gone (capture-pane fails → null) or it
+			// rendered only blanks (trim → empty → null). Both map to the
+			// fallback path.
+			expect(lines).toBeNull();
 		});
 	});
 

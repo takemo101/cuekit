@@ -17,6 +17,7 @@
 		"react": "19.2.5"
 	},
 	"devDependencies": {
+		"@cuekit/adapters": "workspace:*",
 		"@cuekit/store": "workspace:*",
 		"@types/react": "19.2.14"
 	}

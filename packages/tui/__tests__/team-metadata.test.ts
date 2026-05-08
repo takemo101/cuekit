@@ -31,6 +31,7 @@ describe("TUI task metadata", () => {
 			} satisfies TaskStatusView,
 			events: [],
 			transcriptTail: [],
+			transcriptSource: "file",
 		};
 
 		const entries = metadataEntries(task, detail);
@@ -55,6 +56,7 @@ describe("TUI task metadata", () => {
 			} satisfies TaskStatusView,
 			events: [],
 			transcriptTail: [],
+			transcriptSource: "file",
 		};
 
 		const entries = metadataEntries(task, detail);
