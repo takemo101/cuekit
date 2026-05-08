@@ -11,7 +11,10 @@ install:
     chmod 755 "$HOME/.bun/bin/cuekit"
     "$HOME/.bun/bin/cuekit" --help
 
-# Remove the local cuekit CLI wrapper.
+# Remove the local cuekit CLI wrapper that `just install` created.
+# This recipe only removes the dev-loop shell wrapper at
+# ~/.bun/bin/cuekit. It does NOT touch any globally-installed
+# `cuekit-workspace` package — for that, see the Uninstall section
+# in README.md (`bun remove -g cuekit-workspace`).
 uninstall:
     rm -f "$HOME/.bun/bin/cuekit"
-    bun unlink @cuekit/mcp || true
