@@ -29,6 +29,28 @@ function outputLines(detail: TuiTaskDetail | undefined): string[] {
 	return (detail?.transcriptTail ?? []).filter((line) => !isOutputNoise(line));
 }
 
+// LIVE OUTPUT scroll position is shared with OpenTUI's scrollbox sticky-
+// scroll machinery. The capture-pane source returns a variable number of
+// lines per refresh (anywhere from 0 to maxLines), which would shift the
+// scrollbox's total content height on every poll and clamp the user's
+// scroll offset back to the bottom — exactly the "scroll resets on
+// reload" symptom. Padding the rendered content with empty lines at the
+// **top** to a stable target height makes the scrollbox see a constant-
+// size canvas, so a user who scrolled up to read older content stays
+// where they were while live data continues to land at the bottom edge.
+//
+// The newest content keeps its position at the bottom of the canvas
+// because we pad only at the head; this matches `stickyStart="bottom"`.
+// Exported so the padding is unit-testable in isolation.
+export function padLinesForLiveOutput(lines: string[], targetHeight: number): string[] {
+	if (targetHeight <= 0) return lines;
+	if (lines.length >= targetHeight) return lines.slice(-targetHeight);
+	const padding = new Array<string>(targetHeight - lines.length).fill("");
+	return [...padding, ...lines];
+}
+
+const LIVE_OUTPUT_TARGET_HEIGHT = 80;
+
 function formatUpdatedAt(value: string): string {
 	const date = new Date(value);
 	if (Number.isNaN(date.getTime())) return value;
@@ -342,7 +364,9 @@ export function TaskDetail(props: { task?: TaskSummary; detail?: TuiTaskDetail }
 					<scrollbox flexGrow={1} flexShrink={1} stickyScroll stickyStart="bottom" viewportCulling>
 						<text fg={theme.text}>{
 							lines.length > 0
-								? lines.map((line) => truncateEnd(line, 150)).join("\n")
+								? padLinesForLiveOutput(lines, LIVE_OUTPUT_TARGET_HEIGHT)
+										.map((line) => truncateEnd(line, 150))
+										.join("\n")
 								: "No output available yet."
 						}</text>
 					</scrollbox>
