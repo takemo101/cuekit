@@ -108,6 +108,8 @@ c           cancel selected    d  delete terminal task
 q / Esc     quit
 ```
 
+The task detail panel's `LIVE OUTPUT` section sources from the running task's tmux pane (`tmux capture-pane`) so the rendered screen matches what `tmux attach` would show — useful for TUI children (Gemini CLI, opencode TUI) whose output gets buried by redraws in the persisted transcript. Terminal tasks fall back to the file-tail. The header indicates which source is active. See [`docs/designs/cuekit-tui-live-pane-transcript-design.md`](docs/designs/cuekit-tui-live-pane-transcript-design.md).
+
 ## MCP
 
 Start the stdio server:

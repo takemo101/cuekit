@@ -35,6 +35,7 @@ Teams は関連子タスクの軽量ビュー、Strategies は開発の playbook
 - **Agent profile の解決順**: project (`<repo>/.cuekit/agents/*.md`) → user (`~/.cuekit/agents/*.md`) → builtin。`role: "auto"` は決定的キーワード選択で、選んだ role と理由を task status に記録する。 → [agent profiles](docs/designs/cuekit-agent-profiles-design.md) / [guide](docs/guides/agent-profiles.md)
 - **`wait` は境界付きポーリング**: 1 回の長い MCP リクエストではなく、短い `timeout_ms` で再ポーリングする。タイムアウトは待機をやめるだけで子の作業はキャンセルしない。coordinator-led / strategy-backed なチームでは、待機後に新メンバーが追加されるなら `follow_new_tasks: true`。
 - **Team の主結果は `task_events` ベース**: `run_summary` / `get_team_result` は transcript 末尾ではなく `task_events` を主結果源とする。 → [task observability](docs/designs/cuekit-task-observability-design.md) / [team attention items](docs/designs/cuekit-team-attention-items-design.md)
+- **TUI の transcript pane は live tmux pane が一次ソース**: running task で tmux session が生きていれば `tmux capture-pane` の現在画面を表示。terminal / capture 失敗時は永続 transcript file に fallback。永続ファイル自体は postmortem 用にそのまま残る。 → [TUI live-pane transcript](docs/designs/cuekit-tui-live-pane-transcript-design.md)
 - **PR 周辺の安全側操作**: PR 作成 / マージ / 同期 / クリーンアップは builtin `pr-finisher` profile と `position: finisher` strategy slot で行う。コーディネータ通知のルーティングもこの slot に乗せる。 → [pr-finisher](docs/designs/cuekit-pr-finisher-profile-design.md) / [coordinator notifications routing](docs/designs/cuekit-coordinator-notifications-routing-design.md)
 
 ## パッケージ境界 (実装時に必ず確認)
