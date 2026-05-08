@@ -177,6 +177,37 @@ export async function runDoctor(options: RunDoctorOptions = {}): Promise<DoctorR
 			: { level: "fail", label: "tmux", detail: tmuxVersion.stderr || "not found" },
 	);
 
+	// Confirm `capture-pane` is recognised as a subcommand. cuekit's TUI
+	// reads live pane content through `tmux capture-pane -p -e -J ...`
+	// (#376), so a tmux without that subcommand would silently fall back
+	// to the file-tail and the operator would never know why the live
+	// view stayed stale. Probing against a guaranteed-missing target
+	// returns a 1 with "no such session" — that's the success path here.
+	if (tmuxVersion.ok) {
+		const capture = await exec("tmux", [
+			"capture-pane",
+			"-p",
+			"-t",
+			"cuekit-doctor-probe-no-such-session",
+		]);
+		const stderr = (capture.stderr ?? "").toLowerCase();
+		const supportsCapture =
+			capture.ok || stderr.includes("session") || stderr.includes("can't find");
+		checks.push(
+			supportsCapture
+				? {
+						level: "ok",
+						label: "tmux capture-pane",
+						detail: "supported",
+					}
+				: {
+						level: "warn",
+						label: "tmux capture-pane",
+						detail: capture.stderr || "subcommand not recognised",
+					},
+		);
+	}
+
 	const writableState = await (options.checkWritableState ?? defaultCheckWritableState)(env);
 	checks.push(
 		writableState.ok

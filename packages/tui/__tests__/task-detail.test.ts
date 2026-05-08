@@ -110,6 +110,7 @@ describe("TaskDetail contextHeight", () => {
 				},
 			],
 			transcriptTail: [],
+			transcriptSource: "file",
 		};
 
 		expect(attentionEntries(detail)).toEqual([
@@ -150,6 +151,7 @@ describe("TaskDetail contextHeight", () => {
 				},
 			],
 			transcriptTail: [],
+			transcriptSource: "file",
 		};
 
 		expect(attentionEntries(detail)).toEqual([
@@ -175,6 +177,7 @@ describe("TaskDetail contextHeight", () => {
 			events: [],
 			teamStatusError: "team unavailable",
 			transcriptTail: [],
+			transcriptSource: "file",
 		};
 
 		expect(attentionEntries(detail)).toEqual([
@@ -207,6 +210,7 @@ describe("TaskDetail contextHeight", () => {
 				},
 			],
 			transcriptTail: [],
+			transcriptSource: "file",
 		};
 
 		expect(attentionEntries(detail)).toEqual([]);
@@ -232,6 +236,7 @@ describe("TaskDetail contextHeight", () => {
 			events: [],
 			teamStatusError: "team status failed",
 			transcriptTail: [],
+			transcriptSource: "file",
 		};
 
 		expect(metadataEntries(task, detail)).toContainEqual(
@@ -259,6 +264,7 @@ describe("TaskDetail contextHeight", () => {
 			},
 			events: [],
 			transcriptTail: [],
+			transcriptSource: "file",
 		};
 
 		expect(metadataEntries(task, detail).map((entry) => entry.label)).not.toContain("attach");

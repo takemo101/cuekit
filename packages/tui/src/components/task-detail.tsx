@@ -363,7 +363,11 @@ export function TaskDetail(props: { task?: TaskSummary; detail?: TuiTaskDetail }
 			) : (
 				<>
 					<box backgroundColor={theme.panelAlt} height={1} flexShrink={0}>
-						<text fg={theme.cyan}>{`LIVE OUTPUT (${lines.length} line${lines.length === 1 ? "" : "s"})`}</text>
+						<text fg={theme.cyan}>
+							{`LIVE OUTPUT (${lines.length} line${lines.length === 1 ? "" : "s"}, ${
+								detail?.transcriptSource === "live" ? "tmux pane" : "transcript file"
+							})`}
+						</text>
 					</box>
 					<scrollbox flexGrow={1} flexShrink={1} stickyScroll stickyStart="bottom" viewportCulling>
 						<text fg={theme.text}>{

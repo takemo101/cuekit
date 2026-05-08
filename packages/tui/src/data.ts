@@ -29,6 +29,13 @@ type LoadTaskListOptions = Pick<
 	"cwd" | "project_root" | "limit" | "status" | "agent_kind" | "session_id" | "cursor"
 >;
 
+// Where the rendered `transcriptTail` actually came from for this load.
+// "live" means the live tmux pane snapshot (capture-pane); "file" means
+// the persisted transcript fallback. The TUI surfaces this as a header
+// label so operators can tell at a glance why the panel content matches
+// or differs from what `tmux attach` would show.
+export type TranscriptSource = "live" | "file";
+
 export type TuiTaskDetail = {
 	status: TaskStatusView;
 	events: TuiTaskEvent[];
@@ -38,6 +45,7 @@ export type TuiTaskDetail = {
 	teamStatusError?: string;
 	transcriptPath?: string;
 	transcriptTail: string[];
+	transcriptSource: TranscriptSource;
 };
 
 export async function loadTaskList(
@@ -121,7 +129,11 @@ export async function loadTaskDetail(
 			? teamStatusResult.run_summary
 			: undefined;
 	const maxLines = options.transcriptLines ?? DEFAULT_TRANSCRIPT_LINES;
-	const transcriptTail = await resolveTranscriptTail(status, transcriptPath, maxLines);
+	const { lines: transcriptTail, source: transcriptSource } = await resolveTranscriptTail(
+		status,
+		transcriptPath,
+		maxLines,
+	);
 	return {
 		status,
 		events: "events" in eventsResult ? eventsResult.events : [],
@@ -135,6 +147,7 @@ export async function loadTaskDetail(
 		...(teamStatusError ? { teamStatusError } : {}),
 		...(transcriptPath ? { transcriptPath } : {}),
 		transcriptTail,
+		transcriptSource,
 	};
 }
 
@@ -146,6 +159,12 @@ export async function loadTaskDetail(
 // any reason, fall back to the existing file-tail path so postmortem
 // reading still works.
 //
+// Returns both the lines and a `source` discriminator so the renderer
+// can show the operator which path produced the displayed content. The
+// header-label distinction matters when a task is "running" but the
+// pane is missing (capture failed → file fallback) — without the
+// indicator the operator sees stale-looking content with no hint of why.
+//
 // Async because the live-pane probe spawns tmux off the event loop;
 // loadTaskDetail already awaits, so this addition is transparent to the
 // TUI render path. Keeping the spawn off the synchronous critical path
@@ -155,15 +174,15 @@ export async function resolveTranscriptTail(
 	status: TaskStatusView,
 	transcriptPath: string | undefined,
 	maxLines: number,
-): Promise<string[]> {
+): Promise<{ lines: string[]; source: TranscriptSource }> {
 	if (!isTerminalTaskStatus(status.status)) {
 		const sessionName = getTmuxSessionName(status);
 		if (sessionName) {
 			const live = await captureLivePaneTail(sessionName, maxLines);
-			if (live !== null) return live;
+			if (live !== null) return { lines: live, source: "live" };
 		}
 	}
-	return readTranscriptTail(transcriptPath, maxLines);
+	return { lines: readTranscriptTail(transcriptPath, maxLines), source: "file" };
 }
 
 const ESC = String.fromCharCode(27);
