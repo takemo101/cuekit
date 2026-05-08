@@ -20,7 +20,7 @@
     },
     "packages/adapters": {
       "name": "@cuekit/adapters",
-      "version": "0.0.1",
+      "version": "0.0.3",
       "dependencies": {
         "@cuekit/core": "workspace:*",
         "@cuekit/store": "workspace:*",
@@ -29,7 +29,7 @@
     },
     "packages/agent-profiles": {
       "name": "@cuekit/agent-profiles",
-      "version": "0.0.1",
+      "version": "0.0.3",
       "dependencies": {
         "@cuekit/core": "workspace:*",
         "zod": "^4.3.6",
@@ -37,7 +37,7 @@
     },
     "packages/cli": {
       "name": "@cuekit/cli",
-      "version": "0.0.1",
+      "version": "0.0.3",
       "bin": {
         "cuekit": "./src/bin.ts",
       },
@@ -53,14 +53,14 @@
     },
     "packages/core": {
       "name": "@cuekit/core",
-      "version": "0.0.1",
+      "version": "0.0.3",
       "dependencies": {
         "zod": "^4.3.6",
       },
     },
     "packages/mcp": {
       "name": "@cuekit/mcp",
-      "version": "0.0.1",
+      "version": "0.0.3",
       "dependencies": {
         "@cuekit/adapters": "workspace:*",
         "@cuekit/agent-profiles": "workspace:*",
@@ -72,7 +72,7 @@
     },
     "packages/project-config": {
       "name": "@cuekit/project-config",
-      "version": "0.0.1",
+      "version": "0.0.3",
       "dependencies": {
         "@cuekit/core": "workspace:*",
         "yaml": "^2.6.0",
@@ -81,7 +81,7 @@
     },
     "packages/store": {
       "name": "@cuekit/store",
-      "version": "0.0.1",
+      "version": "0.0.3",
       "dependencies": {
         "@cuekit/core": "workspace:*",
         "zod": "^4.3.6",
@@ -89,7 +89,7 @@
     },
     "packages/tui": {
       "name": "@cuekit/tui",
-      "version": "0.0.1",
+      "version": "0.0.3",
       "dependencies": {
         "@cuekit/core": "workspace:*",
         "@opentui/core": "0.2.1",
@@ -97,6 +97,7 @@
         "react": "19.2.5",
       },
       "devDependencies": {
+        "@cuekit/adapters": "workspace:*",
         "@cuekit/store": "workspace:*",
         "@types/react": "19.2.14",
       },
