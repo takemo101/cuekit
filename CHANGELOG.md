@@ -10,6 +10,50 @@ still be affected.
 
 ## [Unreleased]
 
+## [0.0.4] — 2026-05-08
+
+A maintenance release: docs, tests, refactors, and release-engineering
+hardening from the post-v0.0.3 self-review and follow-up issues. No
+runtime behaviour changes for end users beyond the TUI padding cosmetics.
+
+### Changed
+
+- **TUI LIVE OUTPUT** padding now anchors with a
+  `── (no earlier pane content) ──` marker at the head of the empty
+  region, so users who scroll up see an explicit "nothing earlier"
+  indicator instead of an unexplained blank canvas (#394).
+
+### Internal
+
+- **Adapter registry unified.** `cuekit --mcp` and `cuekit tui` now
+  share a single `buildAdapterRegistry` factory in `@cuekit/adapters`,
+  so adding a new adapter only requires one `registry.register(...)`
+  line. The hand-maintained twin registries that produced the
+  v0.0.2 gemini-not-attachable-from-TUI bug are eliminated (#391).
+- **Release process safety net.** `bun run release:check` regenerates
+  `bin/cuekit.js`, fails if the committed bundle was stale, and pins
+  the embedded version against `packages/cli/package.json`. Catches
+  the v0.0.2 / v0.0.3 stale-bundle class of bug at release time, not
+  in the field (#392).
+
+### Documentation
+
+- README's Install section gains a "Naming gotcha" callout flagging
+  that the workspace package is `cuekit-workspace` even though its
+  binary is `cuekit`. New `### Uninstall` subsection plus a deeper
+  `## Full uninstall` section for state DB / transcripts / project
+  artifacts / tmux sessions / MCP client config (#389).
+- README's Development section gains a "Cutting a release" subsection
+  documenting the `release:check` workflow (#392).
+
+### Tests
+
+- `captureLivePaneTail` gains real-tmux integration tests (3 cases)
+  gated on `hasTmux()` — happy path, trailing-blank trim, empty
+  capture (#390).
+- `loadTaskDetail` gains real-tmux integration tests (2 cases) for
+  the live-pane data flow (live source vs file fallback) (#393).
+
 ## [0.0.3] — 2026-05-08
 
 ### Fixed
