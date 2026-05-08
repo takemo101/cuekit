@@ -4,6 +4,7 @@ import {
 	attentionEntries,
 	contextHeight,
 	metadataEntries,
+	padLinesForLiveOutput,
 } from "../src/components/task-detail.tsx";
 import type { TuiTaskDetail } from "../src/data.ts";
 
@@ -261,5 +262,30 @@ describe("TaskDetail contextHeight", () => {
 		};
 
 		expect(metadataEntries(task, detail).map((entry) => entry.label)).not.toContain("attach");
+	});
+});
+
+describe("padLinesForLiveOutput", () => {
+	it("pads short input with empty lines at the head so newest content stays at bottom", () => {
+		const out = padLinesForLiveOutput(["alpha", "beta"], 5);
+
+		expect(out).toEqual(["", "", "", "alpha", "beta"]);
+	});
+
+	it("returns the input unchanged when length already matches the target", () => {
+		const out = padLinesForLiveOutput(["a", "b", "c"], 3);
+
+		expect(out).toEqual(["a", "b", "c"]);
+	});
+
+	it("trims to the last `target` lines when input is longer than target", () => {
+		const out = padLinesForLiveOutput(["a", "b", "c", "d", "e"], 3);
+
+		expect(out).toEqual(["c", "d", "e"]);
+	});
+
+	it("returns the input untouched for a non-positive target", () => {
+		expect(padLinesForLiveOutput(["a", "b"], 0)).toEqual(["a", "b"]);
+		expect(padLinesForLiveOutput(["a", "b"], -1)).toEqual(["a", "b"]);
 	});
 });
