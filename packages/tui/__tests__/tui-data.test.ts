@@ -662,4 +662,138 @@ describe("tui data helpers", () => {
 			}
 		});
 	});
+
+	// End-to-end coverage for the live-pane render path's data flow:
+	// real tmux session → loadTaskDetail → TuiTaskDetail. A render-level
+	// assertion (mounting TaskDetail in a test renderer, then
+	// captureCharFrame) is intentionally not done here — the hard
+	// invariant is the data layer correctly carrying capture-pane bytes
+	// through resolveTranscriptTail into TuiTaskDetail; the render
+	// layer joins lines with `\n` and is exercised by the scrollbox
+	// padding tests in `task-detail.test.ts`. If a render regression
+	// shows up later, the right move is to add a TaskDetail-mounting
+	// test using `createTestRenderer` from `@opentui/core/testing`.
+	const liveIntegSuite = hasTmux() ? describe : describe.skip;
+	liveIntegSuite("loadTaskDetail (real tmux integration)", () => {
+		const sessionsToKill: string[] = [];
+
+		afterEach(() => {
+			for (const session of sessionsToKill) {
+				spawnSync("tmux", ["kill-session", "-t", session]);
+			}
+			sessionsToKill.length = 0;
+		});
+
+		function freshTaskAndSession(db: Database): { taskId: string; sessionName: string } {
+			const taskId = `t_live_integ_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+			const sessionName = `cuekit-task-${taskId}`;
+			sessionsToKill.push(sessionName);
+			createSession(db, {
+				id: `s_${taskId}`,
+				project_root: "/tmp/cuekit-live-integ",
+				worktree_path: "/tmp/cuekit-live-integ",
+				parent_agent_kind: "cli",
+			});
+			createTask(db, {
+				id: taskId,
+				session_id: `s_${taskId}`,
+				agent_kind: "claude-code",
+				objective: "x",
+				status: "running",
+				native_task_ref: sessionName,
+			});
+			return { taskId, sessionName };
+		}
+
+		it("loadTaskDetail returns transcriptSource: 'live' with the captured pane content", async () => {
+			const { db, tui } = makeCtx();
+			const { taskId, sessionName } = freshTaskAndSession(db);
+
+			// Boot a real tmux session backing the task and stamp a known
+			// marker into its rendered screen.
+			const create = spawnSync("tmux", [
+				"new-session",
+				"-d",
+				"-s",
+				sessionName,
+				"-x",
+				"80",
+				"-y",
+				"24",
+				"cat",
+			]);
+			expect(create.status).toBe(0);
+			spawnSync("tmux", ["send-keys", "-t", sessionName, "live-integ-marker-token", "Enter"]);
+			await Bun.sleep(150);
+
+			// `loadTaskDetail` reads the task row, then resolves the
+			// transcript via the live-pane path because the task is
+			// running and `metadata.tmux_session_name` is populated by
+			// the test ctx (we expose it through `getTaskStatus`).
+			const integCtx: TuiContext = {
+				...tui,
+				async getTaskStatus(id) {
+					const base = await tui.getTaskStatus(id);
+					return {
+						...base,
+						metadata: { tmux_session_name: sessionName },
+					};
+				},
+			};
+
+			const detail = await loadTaskDetail(integCtx, taskId);
+
+			expect(detail.transcriptSource).toBe("live");
+			expect(detail.transcriptTail.some((line) => line.includes("live-integ-marker-token"))).toBe(
+				true,
+			);
+		});
+
+		it("loadTaskDetail falls back to transcriptSource: 'file' when the session is gone", async () => {
+			const { db, tui } = makeCtx();
+			const taskId = `t_live_integ_fallback_${Date.now()}`;
+			createSession(db, {
+				id: `s_${taskId}`,
+				project_root: "/tmp/cuekit-live-integ",
+				worktree_path: "/tmp/cuekit-live-integ",
+				parent_agent_kind: "cli",
+			});
+			createTask(db, {
+				id: taskId,
+				session_id: `s_${taskId}`,
+				agent_kind: "claude-code",
+				objective: "x",
+				status: "running",
+				native_task_ref: `cuekit-task-${taskId}`,
+			});
+			// Plant a transcript file so the file-fallback can return
+			// content; the session name we hand to the test ctx points
+			// at a guaranteed-missing tmux session, forcing capture-pane
+			// to fail.
+			const dir = mkdtempSync(`${tmpdir()}/cuekit-live-integ-fallback-`);
+			try {
+				const transcriptPath = join(dir, "transcript.txt");
+				writeFileSync(transcriptPath, "fallback-marker-token\n");
+				updateTaskRefs(db, taskId, { transcript_ref: transcriptPath });
+
+				const integCtx: TuiContext = {
+					...tui,
+					async getTaskStatus(id) {
+						const base = await tui.getTaskStatus(id);
+						return {
+							...base,
+							metadata: { tmux_session_name: "cuekit-task-definitely-not-running" },
+						};
+					},
+				};
+
+				const detail = await loadTaskDetail(integCtx, taskId);
+
+				expect(detail.transcriptSource).toBe("file");
+				expect(detail.transcriptTail).toContain("fallback-marker-token");
+			} finally {
+				rmSync(dir, { recursive: true, force: true });
+			}
+		});
+	});
 });
