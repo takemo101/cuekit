@@ -226,6 +226,23 @@ Adapter end-to-end checks against real runtimes are documented per adapter:
 - [gemini adapter smoke test](docs/guides/gemini-adapter.md)
 - Real `claude` CLI: `just install`, then submit a task with `--agent_kind claude-code` and `tmux attach-session -t cuekit-task-<id>`. The transcript persists at `<cwd>/.cuekit/tasks/<task_id>/transcript.txt` after the session is killed.
 
+### Cutting a release
+
+Releases are GitHub-tagged (`v0.0.x`) and consumed via `bun install -g github:takemo101/cuekit#vX.Y.Z`. The published binary is the pre-built bundle at `bin/cuekit.js` — `package.json#bin.cuekit` points at it directly, so Bun installs it verbatim.
+
+```sh
+# 1. Bump version in every workspace package's package.json (and the
+#    project root if it tracks one). Update CHANGELOG.md.
+# 2. Verify the bundle is in sync with the new version:
+bun run release:check
+# 3. If `release:check` reports the bundle was stale, commit the
+#    regenerated bin/cuekit.js it produced, then re-run.
+# 4. Open the release PR and merge. After merge, tag the merge commit
+#    with `vX.Y.Z` and push.
+```
+
+`release:check` rebuilds the bundle, fails if the committed `bin/cuekit.js` differs from the freshly-built output (= the bundle was stale), and double-checks that the bundle contains the expected version string. Without this gate v0.0.2 and v0.0.3 both shipped a stale bundle that reported `0.0.1` from its baked-in `package.json` copy — see [#388](https://github.com/takemo101/cuekit/issues/388).
+
 ## v0 scope
 
 | Supported | Deferred |
