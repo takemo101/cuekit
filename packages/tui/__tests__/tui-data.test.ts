@@ -20,11 +20,13 @@ import {
 } from "@cuekit/store";
 import type { TuiContext } from "../src/context.ts";
 import {
+	captureLivePaneTail,
 	loadTaskDetail,
 	loadTaskList,
 	loadTeamDetail,
 	loadTeamList,
 	readTranscriptTail,
+	resolveTranscriptTail,
 	sanitizeTerminalText,
 } from "../src/data.ts";
 
@@ -503,5 +505,77 @@ describe("tui data helpers", () => {
 		} finally {
 			rmSync(dir, { recursive: true, force: true });
 		}
+	});
+
+	describe("captureLivePaneTail", () => {
+		it("returns null when tmux is missing or the session does not exist", () => {
+			const out = captureLivePaneTail("cuekit-task-bogus", 10, {
+				tmuxBin: "/var/empty/this-tmux-does-not-exist",
+			});
+			expect(out).toBeNull();
+		});
+	});
+
+	describe("resolveTranscriptTail", () => {
+		function statusFor(overrides: Partial<TaskStatusView>): TaskStatusView {
+			return {
+				task_id: "t_abc",
+				status: "running",
+				...overrides,
+			};
+		}
+
+		it("falls back to file tail when the task is terminal", () => {
+			const dir = mkdtempSync(`${tmpdir()}/cuekit-resolve-terminal-`);
+			try {
+				const transcriptPath = join(dir, "transcript.txt");
+				writeFileSync(transcriptPath, "first\nsecond\nthird\n");
+				const status = statusFor({
+					status: "completed",
+					metadata: { tmux_session_name: "cuekit-task-t_abc" },
+				});
+
+				const lines = resolveTranscriptTail(status, transcriptPath, 10);
+
+				expect(lines).toEqual(["first", "second", "third"]);
+			} finally {
+				rmSync(dir, { recursive: true, force: true });
+			}
+		});
+
+		it("falls back to file tail when no tmux session is known", () => {
+			const dir = mkdtempSync(`${tmpdir()}/cuekit-resolve-no-session-`);
+			try {
+				const transcriptPath = join(dir, "transcript.txt");
+				writeFileSync(transcriptPath, "alpha\nbeta\n");
+				const status = statusFor({}); // no metadata.tmux_session_name, no attach_hint
+
+				const lines = resolveTranscriptTail(status, transcriptPath, 10);
+
+				expect(lines).toEqual(["alpha", "beta"]);
+			} finally {
+				rmSync(dir, { recursive: true, force: true });
+			}
+		});
+
+		it("falls back to file tail when capture-pane fails", () => {
+			// Running status + session name BUT tmux server has no such session.
+			// captureLivePaneTail returns null, so resolve must use file.
+			const dir = mkdtempSync(`${tmpdir()}/cuekit-resolve-capture-fail-`);
+			try {
+				const transcriptPath = join(dir, "transcript.txt");
+				writeFileSync(transcriptPath, "fallback-line\n");
+				const status = statusFor({
+					status: "running",
+					metadata: { tmux_session_name: "cuekit-task-definitely-not-running-anywhere" },
+				});
+
+				const lines = resolveTranscriptTail(status, transcriptPath, 10);
+
+				expect(lines).toEqual(["fallback-line"]);
+			} finally {
+				rmSync(dir, { recursive: true, force: true });
+			}
+		});
 	});
 });

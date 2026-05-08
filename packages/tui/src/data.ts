@@ -1,5 +1,13 @@
+import { spawnSync } from "node:child_process";
 import { closeSync, existsSync, openSync, readSync, statSync } from "node:fs";
-import type { TaskListFilter, TaskStatusView, TaskSummary, TeamSummary } from "@cuekit/core";
+import {
+	isTerminalTaskStatus,
+	type TaskListFilter,
+	type TaskStatusView,
+	type TaskSummary,
+	type TeamSummary,
+} from "@cuekit/core";
+import { getTmuxSessionName } from "./attach.ts";
 import type {
 	TuiContext,
 	TuiManualSteerHint,
@@ -107,6 +115,8 @@ export async function loadTaskDetail(
 		teamStatusResult && "run_summary" in teamStatusResult
 			? teamStatusResult.run_summary
 			: undefined;
+	const maxLines = options.transcriptLines ?? 80;
+	const transcriptTail = resolveTranscriptTail(status, transcriptPath, maxLines);
 	return {
 		status,
 		events: "events" in eventsResult ? eventsResult.events : [],
@@ -119,8 +129,30 @@ export async function loadTaskDetail(
 			: {}),
 		...(teamStatusError ? { teamStatusError } : {}),
 		...(transcriptPath ? { transcriptPath } : {}),
-		transcriptTail: readTranscriptTail(transcriptPath, options.transcriptLines ?? 80),
+		transcriptTail,
 	};
+}
+
+// Decide between the live tmux pane snapshot and the persisted transcript
+// file. For running tasks with a known tmux session, prefer capture-pane —
+// it returns the current rendered screen (what a human attaching would
+// see) rather than the raw redraw history that piles up in the file. For
+// terminal tasks, or when the session is unknown / the capture fails for
+// any reason, fall back to the existing file-tail path so postmortem
+// reading still works.
+export function resolveTranscriptTail(
+	status: TaskStatusView,
+	transcriptPath: string | undefined,
+	maxLines: number,
+): string[] {
+	if (!isTerminalTaskStatus(status.status)) {
+		const sessionName = getTmuxSessionName(status);
+		if (sessionName) {
+			const live = captureLivePaneTail(sessionName, maxLines);
+			if (live !== null) return live;
+		}
+	}
+	return readTranscriptTail(transcriptPath, maxLines);
 }
 
 const ESC = String.fromCharCode(27);
@@ -198,5 +230,43 @@ export function readTranscriptTail(
 		return [];
 	} finally {
 		if (fd !== undefined) closeSync(fd);
+	}
+}
+
+// `tmux capture-pane -p -J -S -<N>` returns the **current rendered screen**
+// of the live tmux pane, not the raw redraw history that gets piped into
+// the persisted transcript file. For frequently-redrawing TUI children
+// (Gemini CLI, opencode TUI, ...) the file-tail mostly captures cursor-
+// move / clear escapes; capture-pane returns the post-render content the
+// human would actually see. We still strip ANSI here because OpenTUI
+// renders text components as plain strings (no built-in escape parser);
+// color preservation is a separate follow-up that would require building
+// a StyledText conversion path.
+//
+// Returns null on any failure (tmux missing, session does not exist,
+// process error) so the caller can fall back to the file-tail without
+// having to decide between "no live data" and "live data is empty".
+export function captureLivePaneTail(
+	sessionName: string,
+	maxLines = 80,
+	options: { tmuxBin?: string; captureLines?: number } = {},
+): string[] | null {
+	const tmuxBin = options.tmuxBin ?? "tmux";
+	const captureLines = options.captureLines ?? 200;
+	try {
+		const result = spawnSync(
+			tmuxBin,
+			["capture-pane", "-p", "-J", "-S", `-${captureLines}`, "-t", sessionName],
+			{ encoding: "utf8" },
+		);
+		if (result.status !== 0) return null;
+		const stdout = result.stdout ?? "";
+		return stdout
+			.split(/\r?\n/)
+			.map(sanitizeTerminalText)
+			.filter((line) => !isLowValueTranscriptLine(line))
+			.slice(-maxLines);
+	} catch {
+		return null;
 	}
 }
