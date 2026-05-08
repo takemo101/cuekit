@@ -10,6 +10,7 @@
 	},
 	"scripts": {
 		"bundle": "bun build packages/cli/src/bin.ts --target=bun --outdir=bin --entry-naming=cuekit.js",
+		"release:check": "bun run scripts/release-check.ts",
 		"build": "bun run --filter '*' build",
 		"typecheck": "bun run --filter '*' typecheck",
 		"test": "bun test",
