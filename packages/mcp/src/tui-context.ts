@@ -77,12 +77,19 @@ export function createTuiContext(ctx: CommandContext, scope: TuiScopeOptions = {
 			return { ok: true as const, message: `Deleted team ${result.team_id}.` };
 		},
 		getTranscriptPath: (taskId: string) => getTaskById(ctx.db, taskId)?.transcript_ref ?? undefined,
+		capturePane: ctx.panes
+			? (taskId: string) => ctx.panes!.capturePane(taskId)
+			: undefined,
 	};
 }
 
 // Keep the structural type useful to callers without making @cuekit/tui a dependency of @cuekit/mcp.
 export type TuiCommandContext = ReturnType<typeof createTuiContext>;
 
-export function makeCommandContext(db: Database, registry: AdapterRegistry): CommandContext {
-	return { db, registry };
+export function makeCommandContext(
+	db: Database,
+	registry: AdapterRegistry,
+	panes?: import("@cuekit/adapters").MultiplexerBackend,
+): CommandContext {
+	return { db, registry, panes };
 }

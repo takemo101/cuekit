@@ -98,4 +98,8 @@ export type TuiContext = {
 	cleanupTeam?(teamId: string): Promise<Ack>;
 	deleteTeam?(teamId: string): Promise<Ack>;
 	getTranscriptPath?(taskId: string): string | undefined;
+	/** Capture the rendered screen for a running task via the configured
+	 * multiplexer backend. When absent, the TUI falls back to spawning
+	 * `tmux capture-pane` directly with the resolved session name. */
+	capturePane?(taskId: string): Promise<string | null>;
 };
