@@ -1,12 +1,12 @@
 import { Database } from "bun:sqlite";
 import { beforeEach, describe, expect, it } from "bun:test";
-import { createSession, getTaskById, runMigrations } from "@cuekit/store";
+import { appendTaskEvent, createSession, getTaskById, runMigrations } from "@cuekit/store";
 import type { AgentAdapter } from "../src/agent-adapter.ts";
 import { createClaudeCodeAdapter } from "../src/claude-code-adapter.ts";
 import { createOpenCodeAdapter } from "../src/opencode-adapter.ts";
-import { TmuxBackend } from "../src/tmux-backend.ts";
 import { createPiAdapter } from "../src/pi-adapter.ts";
 import { FakeTmuxRunner } from "../src/testing.ts";
+import { TmuxBackend } from "../src/tmux-backend.ts";
 
 // Shared contract suite. Every pane-backed adapter (`claude-code`,
 // `pi`, `opencode`) must satisfy the same submit → status → cancel
@@ -137,6 +137,27 @@ describe.each(CASES)("AgentAdapter contract — $kind", (testCase) => {
 		// Multiplexer-agnostic alias ships alongside the tmux-named legacy
 		// field; both must agree during the deprecation window.
 		expect(view.metadata?.pane_session_name).toBe(`cuekit-task-${result.value.task_id}`);
+	});
+
+	it("status defers missing-sentinel failure when a recent child event exists", async () => {
+		const result = await adapter.submit({
+			spec: { agent_kind: testCase.kind, objective: "recent event race" },
+			session_id: "s1",
+		});
+		if (!result.ok) throw new Error(`submit failed: ${result.error.message}`);
+		const task_id = result.value.task_id;
+
+		appendTaskEvent(db, {
+			id: `e_${task_id}`,
+			task_id,
+			type: "progress",
+			message: "still working",
+		});
+		await panes.killPane(task_id);
+
+		const view = await adapter.status(task_id);
+		expect(view.status).toBe("running");
+		expect(getTaskById(db, task_id)?.status).toBe("running");
 	});
 
 	it("status reflects batch mode and disables steering", async () => {

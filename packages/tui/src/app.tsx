@@ -5,7 +5,7 @@ import type { TuiContext } from "./context.ts";
 import {
 	buildTuiTaskAttachExit,
 	buildTuiTeamMemberAttachExit,
-	getTmuxSessionName,
+	getPaneAttachCommand,
 } from "./attach.ts";
 import { ConfirmDialog } from "./components/confirm-dialog.tsx";
 import { Footer } from "./components/footer.tsx";
@@ -286,12 +286,12 @@ export function App(props: {
 				setError("Selected team member is not attachable.");
 				return;
 			}
-			const sessionName = getTmuxSessionName(memberStatus);
-			if (!sessionName) {
-				setError("Selected team member does not expose a tmux session name.");
+			const command = getPaneAttachCommand(memberStatus);
+			if (!command) {
+				setError("Selected team member does not expose an attach command.");
 				return;
 			}
-			exit(buildTuiTeamMemberAttachExit(sessionName, selectedTeam.team_id, selectedMember.task_id));
+			exit(buildTuiTeamMemberAttachExit(command, selectedTeam.team_id, selectedMember.task_id));
 		} catch (err) {
 			setError(err instanceof Error ? err.message : String(err));
 		}
@@ -389,12 +389,12 @@ export function App(props: {
 				setError("Selected task is not attachable.");
 				return;
 			}
-			const sessionName = getTmuxSessionName(detail.status);
-			if (!sessionName) {
-				setError("Selected task does not expose a tmux session name.");
+			const command = getPaneAttachCommand(detail.status);
+			if (!command) {
+				setError("Selected task does not expose an attach command.");
 				return;
 			}
-			exit(buildTuiTaskAttachExit(sessionName, detail.status.task_id));
+			exit(buildTuiTaskAttachExit(command, detail.status.task_id));
 			return;
 		}
 		if (key.name === "c") {

@@ -10,19 +10,19 @@ beforeEach(() => {
 });
 
 describe("sessionNameFor / attachCommand", () => {
-	it("builds the flat 'cuekit-task-{id}' name", () => {
-		expect(panes.sessionNameFor("t_abc")).toBe("cuekit-task-t_abc");
+	it("builds the flat 'ct-{id}' name", () => {
+		expect(panes.sessionNameFor("t_abc")).toBe("ct-t_abc");
 	});
 
 	it("returns a structured zellij attach argv", () => {
 		expect(panes.attachCommand("t_abc")).toEqual({
-			argv: ["zellij", "attach", "cuekit-task-t_abc"],
+			argv: ["zellij", "attach", "ct-t_abc"],
 		});
 	});
 });
 
 describe("spawnPane", () => {
-	it("creates a background session, spawns a pane in it, returns a structured handle", async () => {
+	it("creates a background session from a command layout and returns a structured handle", async () => {
 		const handle = await panes.spawnPane({
 			task_id: "t_abc",
 			command: "sleep 60",
@@ -30,32 +30,33 @@ describe("spawnPane", () => {
 		});
 		expect(handle.task_id).toBe("t_abc");
 		expect(handle.backend_kind).toBe("zellij");
-		expect(handle.backend_session).toBe("cuekit-task-t_abc");
+		expect(handle.backend_session).toBe("ct-t_abc");
 		// Synthetic pane id (0.43 has no runtime stdout pane id).
-		expect(handle.backend_pane_id).toBe("cuekit-task-t_abc/pane");
+		expect(handle.backend_pane_id).toBe("ct-t_abc/pane");
 
-		// Background-create call shape.
+		// Background-create call shape. Use a default layout rather than a follow-up
+		// `action new-pane`: zellij 0.43 cannot reliably apply actions to fully
+		// detached sessions with no connected clients.
 		const create = runner.calls.find((c) => c[0] === "attach");
-		expect(create).toEqual(["attach", "--create-background", "cuekit-task-t_abc"]);
-
-		// new-pane targets the session, uses --cwd, and ends with the user's command.
-		const newPane = runner.calls.find(
-			(c) => c[0] === "--session" && c[3] === "new-pane",
-		);
-		expect(newPane).toBeDefined();
-		expect(newPane!.slice(0, 7)).toEqual([
-			"--session",
-			"cuekit-task-t_abc",
-			"action",
-			"new-pane",
-			"--close-on-exit",
-			"--cwd",
+		expect(create?.slice(0, 7)).toEqual([
+			"attach",
+			"--create-background",
+			"ct-t_abc",
+			"options",
+			"--default-cwd",
 			"/tmp",
+			"--default-layout",
 		]);
-		expect(newPane![newPane!.length - 1]).toBe("sleep 60");
+
+		const layout = runner.lastLayout();
+		expect(layout).toContain('pane command="sh" close_on_exit=true');
+		const launchScriptPath = layout.match(/args "([^"]+launch\.sh)"/)?.[1];
+		expect(launchScriptPath).toBeString();
+		expect(await Bun.file(launchScriptPath ?? "").text()).toContain("sleep 60");
+		expect(runner.calls.some((c) => c[0] === "--session" && c[3] === "new-pane")).toBe(false);
 	});
 
-	it("passes child reporting environment via env-prefix in the wrapped command", async () => {
+	it("passes child reporting environment via a temp env file outside KDL and argv", async () => {
 		await panes.spawnPane({
 			task_id: "t_env",
 			command: "sleep 60",
@@ -65,13 +66,47 @@ describe("spawnPane", () => {
 				CUEKIT_CHILD_TOKEN: "raw-token",
 			},
 		});
-		const newPane = runner.calls.find(
-			(c) => c[0] === "--session" && c[3] === "new-pane",
-		);
-		expect(newPane).toBeDefined();
-		const wrapped = newPane![newPane!.length - 1] ?? "";
-		expect(wrapped).toContain("env CUEKIT_TASK_ID=t_env CUEKIT_CHILD_TOKEN=raw-token");
-		expect(wrapped).toContain("sleep 60");
+		const wrapped = runner.lastLayout();
+		expect(wrapped).toContain('pane command="sh" close_on_exit=true');
+		expect(wrapped).not.toContain("raw-token");
+		const launchScriptPath = wrapped.match(/"([^"]+launch\.sh)"/)?.[1];
+		expect(await Bun.file(launchScriptPath ?? "").text()).not.toContain("raw-token");
+		expect(await Bun.file(launchScriptPath ?? "").text()).toContain("sleep 60");
+		const envScriptPath = (await Bun.file(launchScriptPath ?? "").text()).match(
+			/\. (.+env\.sh)/,
+		)?.[1];
+		expect(await Bun.file(envScriptPath ?? "").text()).toContain("CUEKIT_CHILD_TOKEN=raw-token");
+	});
+
+	it("mirrors task output to transcriptPath when provided", async () => {
+		await panes.spawnPane({
+			task_id: "t_log",
+			command: "echo hello",
+			cwd: "/tmp",
+			transcriptPath: "/tmp/cuekit task transcript.txt",
+		});
+
+		const wrapped = runner.lastLayout();
+		expect(wrapped).toContain('pane command="script" close_on_exit=true');
+		expect(wrapped).toContain('args "-q" "/tmp/cuekit task transcript.txt" "sh"');
+		const launchScriptPath = wrapped.match(/"([^"]+launch\.sh)"/)?.[1];
+		expect(launchScriptPath).toBeString();
+		expect(await Bun.file(launchScriptPath ?? "").text()).toContain("echo hello");
+	});
+
+	it("preserves native zellij TTY for interactive tasks even with a transcript path", async () => {
+		await panes.spawnPane({
+			task_id: "t_interactive",
+			command: "pi prompt",
+			cwd: "/tmp",
+			transcriptPath: "/tmp/cuekit task transcript.txt",
+			preserveNativeTty: true,
+		});
+
+		const wrapped = runner.lastLayout();
+		expect(wrapped).toContain('pane command="sh" close_on_exit=true');
+		expect(wrapped).not.toContain('pane command="script"');
+		expect(wrapped).not.toContain('"script" "-q"');
 	});
 
 	it("rejects invalid environment variable names", async () => {
@@ -85,9 +120,8 @@ describe("spawnPane", () => {
 		).rejects.toThrow(/invalid zellij environment key/);
 	});
 
-	it("kills the session when new-pane fails after the session was created", async () => {
-		runner.queueResponse({ stdout: "", stderr: "", exitCode: 0 }); // create
-		runner.queueResponse({ stdout: "", stderr: "boom", exitCode: 1 }); // new-pane
+	it("surfaces create-background layout failures", async () => {
+		runner.queueResponse({ stdout: "", stderr: "boom", exitCode: 1 });
 
 		await expect(
 			panes.spawnPane({
@@ -95,11 +129,7 @@ describe("spawnPane", () => {
 				command: "x",
 				cwd: "/tmp",
 			}),
-		).rejects.toThrow(/zellij action new-pane.*failed/);
-
-		expect(
-			runner.calls.some((c) => c[0] === "kill-session" && c[1] === "cuekit-task-t_fail"),
-		).toBe(true);
+		).rejects.toThrow(/zellij attach --create-background.*failed/);
 	});
 });
 
@@ -111,6 +141,17 @@ describe("isAlive", () => {
 
 	it("returns false for a missing session", async () => {
 		expect(await panes.isAlive("t_nope")).toBe(false);
+	});
+
+	it("returns false for an exited zellij session", async () => {
+		runner.queueResponse({
+			stdout:
+				"\u001b[32;1mct-t_done\u001b[m [Created 1s ago] (\u001b[31;1mEXITED\u001b[m - attach to resurrect)",
+			stderr: "",
+			exitCode: 0,
+		});
+
+		expect(await panes.isAlive("t_done")).toBe(false);
 	});
 });
 
@@ -127,20 +168,8 @@ describe("sendKeys", () => {
 			(c) => c[0] === "--session" && (c[3] === "write-chars" || c[3] === "write"),
 		);
 		expect(writes).toHaveLength(2);
-		expect(writes[0]).toEqual([
-			"--session",
-			"cuekit-task-t_steer",
-			"action",
-			"write-chars",
-			"hello world",
-		]);
-		expect(writes[1]).toEqual([
-			"--session",
-			"cuekit-task-t_steer",
-			"action",
-			"write",
-			"13",
-		]);
+		expect(writes[0]).toEqual(["--session", "ct-t_steer", "action", "write-chars", "hello world"]);
+		expect(writes[1]).toEqual(["--session", "ct-t_steer", "action", "write", "13"]);
 	});
 });
 
@@ -154,7 +183,7 @@ describe("capturePane", () => {
 		expect(dump).toBeDefined();
 		expect(dump).toContain("--full");
 		// Path is the last argument (positional, not flag-paired).
-		const lastArg = dump![dump!.length - 1] ?? "";
+		const lastArg = dump?.at(-1) ?? "";
 		expect(lastArg).toMatch(/cuekit-zellij-.*\/dump\.txt$/);
 	});
 });
@@ -162,14 +191,23 @@ describe("capturePane", () => {
 describe("killPane", () => {
 	it("issues kill-session (singular) and removes the session from the simulator", async () => {
 		await panes.spawnPane({ task_id: "t_kill", command: "x", cwd: "/tmp" });
-		expect(runner.knownSessions()).toContain("cuekit-task-t_kill");
+		expect(runner.knownSessions()).toContain("ct-t_kill");
 
 		await panes.killPane("t_kill");
-		expect(runner.knownSessions()).not.toContain("cuekit-task-t_kill");
+		expect(runner.knownSessions()).not.toContain("ct-t_kill");
 	});
 
 	it("treats 'no such session' as idempotent success", async () => {
 		runner.queueResponse({ stdout: "", stderr: "no such session: x", exitCode: 1 });
 		await expect(panes.killPane("t_already_gone")).resolves.toBeUndefined();
+	});
+
+	it("falls back to delete-session for exited sessions", async () => {
+		runner.queueResponse({ stdout: "", stderr: "No session named ct-t_done found", exitCode: 1 });
+		runner.queueResponse({ stdout: "", stderr: "", exitCode: 0 });
+
+		await panes.killPane("t_done");
+
+		expect(runner.calls.at(-1)).toEqual(["delete-session", "ct-t_done"]);
 	});
 });

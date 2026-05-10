@@ -156,6 +156,17 @@ function hasTimeoutDiagnosticEvent(task: Task, db: Database): boolean {
 	);
 }
 
+function shouldDeferMissingSentinel(task: Task, db: Database, nowMs = Date.now()): boolean {
+	const startedAtMs = Date.parse(task.started_at ?? task.updated_at);
+	if (Number.isFinite(startedAtMs) && nowMs - startedAtMs < 15_000) return true;
+
+	const latestEventMs = listTaskEvents(db, task.id).reduce((latest, event) => {
+		const eventMs = Date.parse(event.created_at);
+		return Number.isFinite(eventMs) ? Math.max(latest, eventMs) : latest;
+	}, 0);
+	return latestEventMs > 0 && nowMs - latestEventMs < 60_000;
+}
+
 function generateChildToken(): string {
 	return randomBytes(32).toString("base64url");
 }
@@ -342,6 +353,7 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 			const launchCommand = sentinelPath
 				? wrapLaunchCommandWithExitCode(rawLaunchCommand, sentinelPath)
 				: rawLaunchCommand;
+			const mode = adapterRunModeFor(input.spec);
 
 			try {
 				const handle = await panes.spawnPane({
@@ -349,6 +361,7 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 					command: launchCommand,
 					cwd,
 					transcriptPath,
+					preserveNativeTty: supportsAttachForMode(mode),
 					env: {
 						CUEKIT_TASK_ID: task_id,
 						CUEKIT_CHILD_TOKEN: childToken,
@@ -412,6 +425,7 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 				};
 			}
 			let live = owned.task;
+			let deferredDeadPane = false;
 			if (!isTerminalTaskStatus(live.status)) {
 				const alive = await panes.isAlive(task_id);
 				if (!alive) {
@@ -437,19 +451,37 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 							globalTaskArtifactPaths(cuekitHomeDir, task_id).exitCodePath,
 						);
 					}
-					const decision = onPaneDisappeared({
-						task: live,
-						exitCode,
-						transcriptPath: live.transcript_ref ?? undefined,
-					});
-					const completed = completeTask(db, {
-						id: task_id,
-						status: decision.status,
-						summary: decision.summary ?? live.summary ?? undefined,
-					});
-					if (completed) {
-						live = completed;
-						if (config.onTerminal) config.onTerminal(completed, db);
+					if (exitCode === null) {
+						for (let attempt = 0; attempt < 10 && exitCode === null; attempt += 1) {
+							await Bun.sleep(250);
+							if (live.transcript_ref) {
+								exitCode = readExitCodeSentinel(join(dirname(live.transcript_ref), "exit-code"));
+							}
+							if (exitCode === null) {
+								exitCode = readExitCodeSentinel(
+									globalTaskArtifactPaths(cuekitHomeDir, task_id).exitCodePath,
+								);
+							}
+						}
+					}
+					if (exitCode === null && shouldDeferMissingSentinel(live, db)) {
+						deferredDeadPane = true;
+					}
+					if (!deferredDeadPane) {
+						const decision = onPaneDisappeared({
+							task: live,
+							exitCode,
+							transcriptPath: live.transcript_ref ?? undefined,
+						});
+						const completed = completeTask(db, {
+							id: task_id,
+							status: decision.status,
+							summary: decision.summary ?? live.summary ?? undefined,
+						});
+						if (completed) {
+							live = completed;
+							if (config.onTerminal) config.onTerminal(completed, db);
+						}
 					}
 				} else {
 					const timeout = hasTimedOut(live);
@@ -481,8 +513,10 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 			const mode = adapterRunModeFor(
 				taskSpecFor(live) ?? { agent_kind: config.kind, objective: live.objective },
 			);
-			const supportsSteering = caps.supports_steering && supportsSteeringForMode(mode);
-			const supportsAttach = caps.supports_attach && supportsAttachForMode(mode);
+			const supportsSteering =
+				!deferredDeadPane && caps.supports_steering && supportsSteeringForMode(mode);
+			const supportsAttach =
+				!deferredDeadPane && caps.supports_attach && supportsAttachForMode(mode);
 			return {
 				task_id,
 				agent_kind: config.kind,

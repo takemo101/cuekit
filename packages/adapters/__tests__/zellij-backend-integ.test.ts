@@ -1,4 +1,7 @@
 import { describe, expect, it } from "bun:test";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { hasZellij } from "../src/testing.ts";
 import { ZellijBackend } from "../src/zellij-backend.ts";
 
@@ -13,44 +16,36 @@ const enabled = process.env.CUEKIT_ZELLIJ_INTEG === "1" && hasZellij();
 const suite = enabled ? describe : describe.skip;
 
 suite("ZellijBackend (real zellij integration)", () => {
-	it("round-trips background-create → new-pane → isAlive → killPane", async () => {
+	it("runs the task command from the background-created layout", async () => {
 		const panes = new ZellijBackend({ sendKeysDelayMs: 0 });
 		const task_id = `integ_${Date.now()}_${Math.floor(Math.random() * 100000)}`;
+		const dir = mkdtempSync(join(tmpdir(), "cuekit-zellij-integ-"));
+		const marker = join(dir, "marker.txt");
 
 		try {
 			const handle = await panes.spawnPane({
 				task_id,
-				// Short-lived child so the bun:test runner doesn't have to
-				// wait on long-running pane processes after the test
-				// asserts. kill-session in finally still tears the whole
-				// session down regardless.
-				command: "sleep 5",
+				command: `echo zellij-layout-ok > ${marker}`,
 				cwd: "/tmp",
 			});
-			expect(handle.backend_session).toBe(`cuekit-task-${task_id}`);
+			expect(handle.backend_session).toBe(`ct-${task_id}`);
 			// Synthetic pane id (zellij 0.43 doesn't print one; backend
 			// fabricates `<session>/pane` so PaneHandle.backend_pane_id
 			// is non-empty).
-			expect(handle.backend_pane_id).toBe(`cuekit-task-${task_id}/pane`);
-			expect(panes.attachCommand(task_id)?.argv).toContain(`cuekit-task-${task_id}`);
+			expect(handle.backend_pane_id).toBe(`ct-${task_id}/pane`);
+			expect(panes.attachCommand(task_id)?.argv).toContain(`ct-${task_id}`);
 
-			expect(await panes.isAlive(task_id)).toBe(true);
-
-			// Capture is best-effort against a freshly-spawned pane: zellij
-			// may not have rendered the first frame in the brief window
-			// before this assertion runs, so we accept either null or a
-			// string. The contract we exercise here is "the dump-screen
-			// CLI invocation completes without throwing".
-			const captured = await panes.capturePane(task_id);
-			expect(captured === null || typeof captured === "string").toBe(true);
+			await Bun.sleep(1000);
+			expect(readFileSync(marker, "utf8")).toBe("zellij-layout-ok\n");
 		} finally {
 			await panes.killPane(task_id);
+			rmSync(dir, { recursive: true, force: true });
 		}
 
 		// list-sessions can take a moment to reflect; allow either result.
 		// The contract is "killPane succeeded without throwing", which we
 		// already asserted by reaching this line.
-	});
+	}, 15000);
 
 	it("kill on a missing task is idempotent success", async () => {
 		const panes = new ZellijBackend({ sendKeysDelayMs: 0 });

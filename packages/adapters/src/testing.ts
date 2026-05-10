@@ -93,8 +93,8 @@ import type { ZellijRunner, ZellijRunResult } from "./zellij-runner.ts";
  */
 export class FakeZellijRunner implements ZellijRunner {
 	readonly calls: string[][] = [];
+	private layoutContent: string | undefined;
 	private readonly sessions = new Set<string>();
-	private paneCounter = 0;
 	private readonly queuedResponses: ZellijRunResult[] = [];
 
 	queueResponse(result: ZellijRunResult): void {
@@ -103,6 +103,10 @@ export class FakeZellijRunner implements ZellijRunner {
 
 	knownSessions(): string[] {
 		return [...this.sessions];
+	}
+
+	lastLayout(): string {
+		return this.layoutContent ?? "";
 	}
 
 	async run(args: string[]): Promise<ZellijRunResult> {
@@ -114,10 +118,16 @@ export class FakeZellijRunner implements ZellijRunner {
 		// Top-level commands first.
 		const cmd = args[0];
 		if (cmd === "attach") {
-			// `zellij attach --create-background <name>`
+			// `zellij attach --create-background <name> [options --default-layout <path>]`
 			const idx = args.indexOf("--create-background");
-			if (idx >= 0 && args[idx + 1]) {
-				this.sessions.add(args[idx + 1]!);
+			const sessionName = args[idx + 1];
+			if (idx >= 0 && sessionName) {
+				this.sessions.add(sessionName);
+				const layoutIdx = args.indexOf("--default-layout");
+				const layoutPath = args[layoutIdx + 1];
+				if (layoutIdx >= 0 && layoutPath) {
+					this.layoutContent = await Bun.file(layoutPath).text();
+				}
 				return { stdout: "", stderr: "", exitCode: 0 };
 			}
 			return { stdout: "", stderr: "", exitCode: 0 };
@@ -140,7 +150,6 @@ export class FakeZellijRunner implements ZellijRunner {
 				if (!this.sessions.has(sessionName)) {
 					return { stdout: "", stderr: "session not found", exitCode: 1 };
 				}
-				this.paneCounter += 1;
 				// Real zellij 0.43 doesn't print a pane id; backend
 				// fabricates a synthetic one. Mirror that by returning
 				// empty stdout.
@@ -154,8 +163,8 @@ export class FakeZellijRunner implements ZellijRunner {
 				// we find a non-flag argument.
 				let pathArg: string | undefined;
 				for (let i = 4; i < args.length; i++) {
-					const arg = args[i]!;
-					if (!arg.startsWith("--") && arg !== "-f") {
+					const arg = args[i];
+					if (arg && !arg.startsWith("--") && arg !== "-f") {
 						pathArg = arg;
 						break;
 					}
