@@ -14,6 +14,7 @@ Use these notes when working on an existing cuekit feature area. For current ope
 - [`cuekit-task-teams-design.md`](cuekit-task-teams-design.md) — lightweight session-scoped task teams for multi-task coding workflows.
 - [`cuekit-team-strategies-design.md`](cuekit-team-strategies-design.md) — project-local strategy profiles that guide coordinator-led teams without becoming rigid workflows.
 - [`cuekit-task-observability-design.md`](cuekit-task-observability-design.md) — minimal task event payloads for child file self-reporting, diagnostics, and team stale-read warnings.
+- [`cuekit-parent-session-task-design.md`](cuekit-parent-session-task-design.md) — proposed simple parent-session-as-long-lived-task model, generic handoff events, task snapshots, and TUI parent-session creation without adding a separate session API.
 - [`cuekit-adapter-permission-bypass-design.md`](cuekit-adapter-permission-bypass-design.md) — default permission bypass behavior for unattended child agents.
 - [`cuekit-adapter-run-modes-design.md`](cuekit-adapter-run-modes-design.md) — shared interactive/default and batch/non-interactive adapter mode design.
 - [`cuekit-jcode-repl-adapter-design.md`](cuekit-jcode-repl-adapter-design.md) — `jcode repl` adapter design for tmux attach and steering support.
