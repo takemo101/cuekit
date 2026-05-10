@@ -10,11 +10,11 @@ import {
 	buildJcodeRunLaunchCommand,
 	createJcodeAdapter,
 } from "../src/jcode-adapter.ts";
-import { PaneBackend } from "../src/tmux-backend.ts";
+import { TmuxBackend } from "../src/tmux-backend.ts";
 import { FakeTmuxRunner, hasTmux } from "../src/testing.ts";
 
 let db: Database;
-let panes: PaneBackend;
+let panes: TmuxBackend;
 let runner: FakeTmuxRunner;
 
 beforeEach(() => {
@@ -28,7 +28,7 @@ beforeEach(() => {
 		parent_agent_kind: "pi",
 	});
 	runner = new FakeTmuxRunner();
-	panes = new PaneBackend({ runner, sendKeysDelayMs: 0 });
+	panes = new TmuxBackend({ runner, sendKeysDelayMs: 0 });
 });
 
 describe("createJcodeAdapter", () => {
@@ -241,7 +241,7 @@ const realTmuxSuite = hasTmux() ? describe : describe.skip;
 
 realTmuxSuite("JcodeAdapter (real tmux integration)", () => {
 	let realDb: Database;
-	let realPanes: PaneBackend;
+	let realPanes: TmuxBackend;
 	let tmpRoot: string;
 
 	beforeEach(() => {
@@ -255,7 +255,7 @@ realTmuxSuite("JcodeAdapter (real tmux integration)", () => {
 			worktree_path: tmpRoot,
 			parent_agent_kind: "pi",
 		});
-		realPanes = new PaneBackend({ sendKeysDelayMs: 0 });
+		realPanes = new TmuxBackend({ sendKeysDelayMs: 0 });
 	});
 
 	afterEach(async () => {

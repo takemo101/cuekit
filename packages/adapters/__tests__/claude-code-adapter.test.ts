@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createSession, getTaskById, runMigrations } from "@cuekit/store";
 import { createClaudeCodeAdapter } from "../src/claude-code-adapter.ts";
-import { PaneBackend } from "../src/tmux-backend.ts";
+import { TmuxBackend } from "../src/tmux-backend.ts";
 import { createPiAdapter } from "../src/pi-adapter.ts";
 import { taskArtifactPaths } from "../src/task-artifacts.ts";
 import { FakeTmuxRunner } from "../src/testing.ts";
@@ -26,7 +26,7 @@ beforeEach(() => {
 		parent_agent_kind: "claude-code",
 	});
 	runner = new FakeTmuxRunner();
-	const panes = new PaneBackend({ runner, sendKeysDelayMs: 0 });
+	const panes = new TmuxBackend({ runner, sendKeysDelayMs: 0 });
 	adapter = createClaudeCodeAdapter(db, panes, {
 		launchCommandOverride: () => "sleep 60",
 	});
@@ -45,7 +45,7 @@ describe("capabilities()", () => {
 	});
 
 	it("respects a custom availableModels option (round-trip)", () => {
-		const customPanes = new PaneBackend({ runner, sendKeysDelayMs: 0 });
+		const customPanes = new TmuxBackend({ runner, sendKeysDelayMs: 0 });
 		const custom = createClaudeCodeAdapter(db, customPanes, {
 			availableModels: ["haiku"],
 			launchCommandOverride: () => "sleep 60",
@@ -260,7 +260,7 @@ describe("status", () => {
 		// not `task_not_found`. The row exists; the caller routed it to
 		// the wrong runtime. Conflating the two codes blinds operators
 		// to a real control-surface routing bug.
-		const piAdapter = createPiAdapter(db, new PaneBackend({ runner, sendKeysDelayMs: 0 }), {
+		const piAdapter = createPiAdapter(db, new TmuxBackend({ runner, sendKeysDelayMs: 0 }), {
 			launchCommandOverride: () => "sleep 60",
 		});
 		const piResult = await piAdapter.submit({
@@ -379,7 +379,7 @@ describe("cancel", () => {
 	});
 
 	it("returns permission_denied for cross-adapter task (guard)", async () => {
-		const piAdapter = createPiAdapter(db, new PaneBackend({ runner, sendKeysDelayMs: 0 }), {
+		const piAdapter = createPiAdapter(db, new TmuxBackend({ runner, sendKeysDelayMs: 0 }), {
 			launchCommandOverride: () => "sleep 60",
 		});
 		const piResult = await piAdapter.submit({
@@ -446,7 +446,7 @@ describe("list (agent_kind safety)", () => {
 		});
 		// Insert a task from a different adapter directly, so we can
 		// verify `list()` does not leak it.
-		const pi = createPiAdapter(db, new PaneBackend({ runner, sendKeysDelayMs: 0 }), {
+		const pi = createPiAdapter(db, new TmuxBackend({ runner, sendKeysDelayMs: 0 }), {
 			launchCommandOverride: () => "sleep 60",
 		});
 		await pi.submit({
@@ -499,7 +499,7 @@ describe("status — pane-death terminal inference (the completed path)", () => 
 		paneDeathRunner = new FakeTmuxRunner();
 		paneDeathAdapter = createClaudeCodeAdapter(
 			paneDeathDb,
-			new PaneBackend({ runner: paneDeathRunner, sendKeysDelayMs: 0 }),
+			new TmuxBackend({ runner: paneDeathRunner, sendKeysDelayMs: 0 }),
 			{ launchCommandOverride: () => "sleep 60" },
 		);
 	});

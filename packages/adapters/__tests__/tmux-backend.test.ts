@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it } from "bun:test";
-import { PaneBackend } from "../src/tmux-backend.ts";
+import { TmuxBackend } from "../src/tmux-backend.ts";
 import { FakeTmuxRunner } from "../src/testing.ts";
 
 let runner: FakeTmuxRunner;
-let panes: PaneBackend;
+let panes: TmuxBackend;
 beforeEach(() => {
 	runner = new FakeTmuxRunner();
-	panes = new PaneBackend({ runner, sendKeysDelayMs: 0 });
+	panes = new TmuxBackend({ runner, sendKeysDelayMs: 0 });
 });
 
 describe("sessionNameFor / attachCommand", () => {
@@ -93,7 +93,7 @@ describe("spawnPane", () => {
 
 	it("kills the tmux session when pipe-pane fails after new-session succeeds", async () => {
 		const calls: string[][] = [];
-		const failingPipePanes = new PaneBackend({
+		const failingPipePanes = new TmuxBackend({
 			runner: {
 				async run(args) {
 					calls.push([...args]);

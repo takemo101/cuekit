@@ -7,7 +7,7 @@ import {
 	AdapterRegistry,
 	createClaudeCodeAdapter,
 	createPiAdapter,
-	PaneBackend,
+	TmuxBackend,
 } from "@cuekit/adapters";
 import { FakeTmuxRunner } from "@cuekit/adapters/testing";
 import {
@@ -60,7 +60,7 @@ beforeEach(() => {
 	db.exec("pragma foreign_keys = ON;");
 	runMigrations(db);
 	runner = new FakeTmuxRunner();
-	const panes = new PaneBackend({ runner, sendKeysDelayMs: 0 });
+	const panes = new TmuxBackend({ runner, sendKeysDelayMs: 0 });
 	const registry = new AdapterRegistry();
 	registry.register(
 		createClaudeCodeAdapter(db, panes, {

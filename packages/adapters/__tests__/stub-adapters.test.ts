@@ -10,12 +10,12 @@ import {
 	buildOpenCodeTuiLaunchCommand,
 	createOpenCodeAdapter,
 } from "../src/opencode-adapter.ts";
-import { PaneBackend } from "../src/tmux-backend.ts";
+import { TmuxBackend } from "../src/tmux-backend.ts";
 import { buildPiLaunchCommand, createPiAdapter } from "../src/pi-adapter.ts";
 import { FakeTmuxRunner } from "../src/testing.ts";
 
 let db: Database;
-let panes: PaneBackend;
+let panes: TmuxBackend;
 let runner: FakeTmuxRunner;
 
 beforeEach(() => {
@@ -29,7 +29,7 @@ beforeEach(() => {
 		parent_agent_kind: "pi",
 	});
 	runner = new FakeTmuxRunner();
-	panes = new PaneBackend({ runner, sendKeysDelayMs: 0 });
+	panes = new TmuxBackend({ runner, sendKeysDelayMs: 0 });
 });
 
 describe("createPiAdapter (truthful stub)", () => {

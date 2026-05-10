@@ -3,7 +3,7 @@ import type { Logger, TaskSpec } from "@cuekit/core";
 import { adapterRunModeFor, shouldDangerouslySkipPermissions } from "./adapter-options.ts";
 import type { AgentAdapter } from "./agent-adapter.ts";
 import { createPaneAdapter } from "./pane-adapter.ts";
-import type { PaneBackend } from "./tmux-backend.ts";
+import type { MultiplexerBackend } from "./multiplexer-backend.ts";
 import { shellQuote } from "./shell-quote.ts";
 import { renderTaskSpecPrompt } from "./task-spec-prompt.ts";
 
@@ -46,7 +46,7 @@ export function buildOpenCodeRunLaunchCommand(spec: TaskSpec, openCodeBin = "ope
 
 export function createOpenCodeAdapter(
 	db: Database,
-	panes: PaneBackend,
+	panes: MultiplexerBackend,
 	options: OpenCodeAdapterOptions = {},
 ): AgentAdapter {
 	const bin = options.openCodeBin ?? "opencode";

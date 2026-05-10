@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createSession, getTaskById, runMigrations } from "@cuekit/store";
 import { createClaudeCodeAdapter } from "../src/claude-code-adapter.ts";
-import { PaneBackend } from "../src/tmux-backend.ts";
+import { TmuxBackend } from "../src/tmux-backend.ts";
 import { hasTmux } from "../src/testing.ts";
 
 // Real tmux integration for the ClaudeCode adapter: exercises the whole
@@ -24,7 +24,7 @@ import { hasTmux } from "../src/testing.ts";
 const suite = hasTmux() ? describe : describe.skip;
 
 let db: Database;
-let panes: PaneBackend;
+let panes: TmuxBackend;
 let tmpRoot: string;
 let adapter: ReturnType<typeof createClaudeCodeAdapter>;
 
@@ -39,7 +39,7 @@ beforeEach(() => {
 		worktree_path: tmpRoot,
 		parent_agent_kind: "claude-code",
 	});
-	panes = new PaneBackend({ sendKeysDelayMs: 0 });
+	panes = new TmuxBackend({ sendKeysDelayMs: 0 });
 	// `cat` with no args reads stdin forever. Inside a tmux PTY the driver
 	// echoes typed keys into the pane buffer, so send-keys messages become
 	// visible to `tmux capture-pane`. Cancel or kill-session tears it down.

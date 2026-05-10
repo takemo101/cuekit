@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import type { Database } from "bun:sqlite";
-import { buildAdapterRegistry, PaneBackend } from "@cuekit/adapters";
+import { buildAdapterRegistry, TmuxBackend } from "@cuekit/adapters";
 import { createStderrLogger, parseLogLevel } from "@cuekit/core";
 import { openDatabase, runMigrations } from "@cuekit/store";
 import { createCli, createMcpCli, createMcpConfigCli } from "./cli.ts";
@@ -104,7 +104,7 @@ export async function runCuekitMcpBin(): Promise<void> {
 		db = openDatabase(useCustomPath ? { path: dbPath } : {});
 		runMigrations(db);
 
-		const panes = new PaneBackend();
+		const panes = new TmuxBackend();
 		const registry = buildAdapterRegistry(db, panes, { logger });
 
 		installSignalHandlers(db);

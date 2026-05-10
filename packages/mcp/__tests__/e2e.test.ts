@@ -8,7 +8,7 @@ import {
 	createClaudeCodeAdapter,
 	createOpenCodeAdapter,
 	createPiAdapter,
-	PaneBackend,
+	TmuxBackend,
 } from "@cuekit/adapters";
 import { FakeTmuxRunner } from "@cuekit/adapters/testing";
 import { getTaskById, runMigrations } from "@cuekit/store";
@@ -36,7 +36,7 @@ beforeEach(() => {
 	db.exec("pragma foreign_keys = ON;");
 	runMigrations(db);
 	runner = new FakeTmuxRunner();
-	const panes = new PaneBackend({
+	const panes = new TmuxBackend({
 		runner,
 		sendKeysDelayMs: 0,
 	});
@@ -120,7 +120,7 @@ describe("e2e: submit → status → cancel → result", () => {
 		runMigrations(fileDb);
 		try {
 			const localRunner = new FakeTmuxRunner();
-			const localPanes = new PaneBackend({ runner: localRunner, sendKeysDelayMs: 0 });
+			const localPanes = new TmuxBackend({ runner: localRunner, sendKeysDelayMs: 0 });
 			const localRegistry = new AdapterRegistry();
 			localRegistry.register(
 				createClaudeCodeAdapter(fileDb, localPanes, { launchCommandOverride: () => "sleep 60" }),
