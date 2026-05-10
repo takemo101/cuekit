@@ -188,6 +188,32 @@ function attachCommandForBackend(
 	return null;
 }
 
+function paneHandleForTask(task: Task): {
+	task_id: string;
+	backend_kind: string;
+	backend_session?: string;
+	backend_pane_id?: string;
+} | null {
+	const backendKind = nativeBackendKind(task);
+	if (!backendKind) return null;
+	return {
+		task_id: task.id,
+		backend_kind: backendKind,
+		...(sessionNameForBackend(backendKind, task.id, task.native_task_ref)
+			? {
+					backend_session: sessionNameForBackend(
+						backendKind,
+						task.id,
+						task.native_task_ref,
+					) as string,
+				}
+			: {}),
+		...(displayNativeTaskRef(task.native_task_ref)
+			? { backend_pane_id: displayNativeTaskRef(task.native_task_ref) as string }
+			: {}),
+	};
+}
+
 function backendMismatchError(
 	task: Task,
 	currentBackendKind: string,
@@ -415,6 +441,8 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 			try {
 				const handle = await panes.spawnPane({
 					task_id,
+					team_id: input.team_id,
+					team_position: input.position,
 					command: launchCommand,
 					cwd,
 					transcriptPath,
@@ -488,22 +516,12 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 			let deferredDeadPane = false;
 			const ownerBackendKind = nativeBackendKind(live);
 			const backendMismatch = ownerBackendKind !== null && ownerBackendKind !== panes.kind;
+			const persistedHandle = paneHandleForTask(live);
+			if (!backendMismatch && persistedHandle && panes.restorePaneHandle) {
+				panes.restorePaneHandle(persistedHandle);
+			}
 			if (!isTerminalTaskStatus(live.status) && !backendMismatch) {
-				const alive = await panes.isAlive(task_id);
-				if (!alive) {
-					// Pane is gone but the row isn't terminal — infer the
-					// terminal status from the exit-code sentinel (or the
-					// adapter's override), then drive the same completeTask
-					// path the explicit cancel flow uses so summary / timestamps
-					// land consistently.
-					// Exit-code sentinel lookup. Worktree-local first
-					// (the happy path — same dir as the transcript per
-					// `taskArtifactPaths`), then the global fallback
-					// under cuekit's home (see submit's mkdir cascade).
-					// The fallback is what makes completed inference work
-					// on read-only worktrees: without transcript_ref the
-					// only place a sentinel could exist is the global
-					// dir.
+				const readTaskExitCode = () => {
 					let exitCode: number | null = null;
 					if (live.transcript_ref) {
 						exitCode = readExitCodeSentinel(join(dirname(live.transcript_ref), "exit-code"));
@@ -513,60 +531,93 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 							globalTaskArtifactPaths(cuekitHomeDir, task_id).exitCodePath,
 						);
 					}
-					if (exitCode === null) {
-						for (let attempt = 0; attempt < 10 && exitCode === null; attempt += 1) {
-							await Bun.sleep(250);
-							if (live.transcript_ref) {
-								exitCode = readExitCodeSentinel(join(dirname(live.transcript_ref), "exit-code"));
-							}
-							if (exitCode === null) {
-								exitCode = readExitCodeSentinel(
-									globalTaskArtifactPaths(cuekitHomeDir, task_id).exitCodePath,
-								);
-							}
-						}
+					return exitCode;
+				};
+				const completeFromExitCode = (exitCode: number) => {
+					const decision = onPaneDisappeared({
+						task: live,
+						exitCode,
+						transcriptPath: live.transcript_ref ?? undefined,
+					});
+					const completed = completeTask(db, {
+						id: task_id,
+						status: decision.status,
+						summary: decision.summary ?? live.summary ?? undefined,
+					});
+					if (completed) {
+						live = completed;
+						if (config.onTerminal) config.onTerminal(completed, db);
 					}
-					if (exitCode === null && shouldDeferMissingSentinel(live, db)) {
-						deferredDeadPane = true;
-					}
-					if (!deferredDeadPane) {
-						const decision = onPaneDisappeared({
-							task: live,
-							exitCode,
-							transcriptPath: live.transcript_ref ?? undefined,
-						});
-						const completed = completeTask(db, {
-							id: task_id,
-							status: decision.status,
-							summary: decision.summary ?? live.summary ?? undefined,
-						});
-						if (completed) {
-							live = completed;
-							if (config.onTerminal) config.onTerminal(completed, db);
-						}
-					}
+				};
+
+				const alreadyExited = readTaskExitCode();
+				if (alreadyExited !== null) {
+					completeFromExitCode(alreadyExited);
 				} else {
-					const timeout = hasTimedOut(live);
-					if (timeout) {
-						const timeoutMessage = `timed out after ${timeout.timeoutMs}ms`;
-						await panes.killPane(task_id);
-						const completed = completeTask(db, {
-							id: task_id,
-							status: "timed_out",
-							summary: timeoutMessage,
-						});
-						if (completed && !hasTimeoutDiagnosticEvent(completed, db)) {
-							appendTaskEvent(db, {
-								id: `e_${randomUUID()}`,
-								task_id,
-								type: "log",
-								message: `task ${timeoutMessage}`,
-								payload: { diagnostic: { kind: "timeout", message: timeoutMessage } },
-							});
+					const alive = await panes.isAlive(task_id);
+					if (!alive) {
+						// Pane is gone but the row isn't terminal — infer the
+						// terminal status from the exit-code sentinel (or the
+						// adapter's override), then drive the same completeTask
+						// path the explicit cancel flow uses so summary / timestamps
+						// land consistently.
+						// Exit-code sentinel lookup. Worktree-local first
+						// (the happy path — same dir as the transcript per
+						// `taskArtifactPaths`), then the global fallback
+						// under cuekit's home (see submit's mkdir cascade).
+						// The fallback is what makes completed inference work
+						// on read-only worktrees: without transcript_ref the
+						// only place a sentinel could exist is the global
+						// dir.
+						let exitCode: number | null = readTaskExitCode();
+						if (exitCode === null) {
+							for (let attempt = 0; attempt < 10 && exitCode === null; attempt += 1) {
+								await Bun.sleep(250);
+								exitCode = readTaskExitCode();
+							}
 						}
-						if (completed) {
-							live = completed;
-							if (config.onTerminal) config.onTerminal(completed, db);
+						if (exitCode === null && shouldDeferMissingSentinel(live, db)) {
+							deferredDeadPane = true;
+						}
+						if (!deferredDeadPane) {
+							const decision = onPaneDisappeared({
+								task: live,
+								exitCode,
+								transcriptPath: live.transcript_ref ?? undefined,
+							});
+							const completed = completeTask(db, {
+								id: task_id,
+								status: decision.status,
+								summary: decision.summary ?? live.summary ?? undefined,
+							});
+							if (completed) {
+								live = completed;
+								if (config.onTerminal) config.onTerminal(completed, db);
+							}
+						}
+					} else {
+						const timeout = hasTimedOut(live);
+						if (timeout) {
+							const timeoutMessage = `timed out after ${timeout.timeoutMs}ms`;
+							await panes.killPane(task_id);
+							const completed = completeTask(db, {
+								id: task_id,
+								status: "timed_out",
+								summary: timeoutMessage,
+							});
+							if (completed && !hasTimeoutDiagnosticEvent(completed, db)) {
+								appendTaskEvent(db, {
+									id: `e_${randomUUID()}`,
+									task_id,
+									type: "log",
+									message: `task ${timeoutMessage}`,
+									payload: { diagnostic: { kind: "timeout", message: timeoutMessage } },
+								});
+							}
+							if (completed) {
+								live = completed;
+								if (config.onTerminal) config.onTerminal(completed, db);
+							}
 						}
 					}
 				}
@@ -638,6 +689,8 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 
 			const backendMismatch = backendMismatchError(owned.task, panes.kind, "steer");
 			if (backendMismatch) return { ok: false, error: backendMismatch };
+			const persistedHandle = paneHandleForTask(owned.task);
+			if (persistedHandle && panes.restorePaneHandle) panes.restorePaneHandle(persistedHandle);
 
 			const mode = adapterRunModeFor(
 				taskSpecFor(owned.task) ?? { agent_kind: config.kind, objective: owned.task.objective },
@@ -706,6 +759,8 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 			if (!cancelCheck.ok) return { ok: false, error: cancelCheck.error };
 			const backendMismatch = backendMismatchError(owned.task, panes.kind, "cancel");
 			if (backendMismatch) return { ok: false, error: backendMismatch };
+			const persistedHandle = paneHandleForTask(owned.task);
+			if (persistedHandle && panes.restorePaneHandle) panes.restorePaneHandle(persistedHandle);
 			try {
 				await panes.killPane(task_id);
 			} catch (err) {
@@ -742,6 +797,8 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 				});
 				return;
 			}
+			const persistedHandle = paneHandleForTask(task);
+			if (persistedHandle && panes.restorePaneHandle) panes.restorePaneHandle(persistedHandle);
 			await panes.killPane(task_id);
 		},
 

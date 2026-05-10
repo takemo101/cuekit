@@ -436,7 +436,7 @@ Exit criteria before Phase 4:
    - zellij-created task remains `running` and attachable after switching
      config to tmux.
 
-### Phase 4 — Zellij team dashboard (zellij-only feature)
+### Phase 4 — Zellij team dashboard (zellij-only feature, requires zellij >= 0.44.2)
 
 When `multiplexer.backend: zellij` and a task has `team_id`, all team members
 share one zellij session so the operator can see the whole team in
@@ -446,7 +446,7 @@ one attach. tmux operators see no behavioural change.
 |---|---|---|
 | `multiplexer.backend: tmux` | yes or no | per-task tmux session (no change) |
 | `multiplexer.backend: zellij` | no | per-task zellij session (Phase 3 baseline) |
-| `multiplexer.backend: zellij` | yes | shared compact zellij team session (exact name confirmed by P4.0) |
+| `multiplexer.backend: zellij` | yes | shared compact zellij team session (`ctm-<team_id_without_prefix>`) |
 
 Why zellij-only: tmux's session-grouping primitives don't give a
 clean "all members tiled, auto-reflow on add/remove". Forcing tmux
@@ -456,11 +456,13 @@ separate effort.
 **Session model.** One zellij session per team, one tab, one pane per
 member named `<position>:<task_id_suffix>` (e.g.,
 `worker:t_a1b2c3d4`). Use compact session names such as
-`ctm-<team_id_suffix>` rather than `cuekit-team-<team_id>` unless the
-spike proves the longer form is safe on macOS socket paths. Created
-lazily on first member spawn via an initial layout; do not rely on
-detached `action new-pane` until the spike verifies the installed
-zellij version can target sessions with no connected clients. Use
+`ctm-<team_id_without_prefix>` rather than `cuekit-team-<team_id>` because
+macOS socket paths are tight, especially on zellij 0.44's
+`contract_version_1` socket directory. Created lazily on first member spawn
+via an initial layout; later members use zellij 0.44.2's pane-id-returning
+`action new-pane`. Keep the temporary layout file alive with the launch
+script rather than deleting it immediately after `attach --create-background`:
+0.44 can read the layout asynchronously after the CLI returns. Use
 `swap_tiled_layout` only if real dogfood shows the default tiled layout
 is insufficient.
 **Layout details (split direction, swap blocks per pane count) are
@@ -472,7 +474,8 @@ its pane stays open in zellij's "held" state and is renamed to
 `<position>:<task_id_suffix> [<status>]`. Matches cuekit's existing
 transcript-retention model (transcripts live until cleanup).
 `cleanup_team` tears down the whole session via
-`zellij kill-sessions`. No `--close-on-exit`.
+`zellij kill-session`. No `--close-on-exit` for team panes; individual
+task cancellation uses `action close-pane -p <pane_id>`.
 
 **Attach UX.** `attachCommand(handle)` for any team-member task
 returns `["zellij", "attach", "<team-session>"]`, so the TUI's `a`
@@ -491,17 +494,19 @@ SpawnPaneParams {
 }
 MultiplexerBackend {
   // ... existing methods
-  killTeamSession?(team_id: string): Promise<void>;
+  restorePaneHandle?(handle: PaneHandle): void; // for post-restart team pane targeting
+  killTeamSession?(team_id: string): Promise<void>; // optional later cleanup convenience
 }
 ```
 
 `team_id` is the only new piece of state flowing from cuekit core
 into the backend. Zellij reads it to pick session sharing; tmux
-ignores it. Concurrency, fallback for missing/old zellij, operator manually
-killing a pane, and similar edge cases must be answered by the Phase 4
-spike before implementation. The goal is still the simplest thing that
-works, but Phase 3 dogfood showed that detached zellij behaviour needs
-real verification before coding.
+ignores it. Zellij team sessions must fail fast with a clear error when
+`zellij --version` reports older than 0.44.2; Phase 3 solo zellij tasks may
+continue to support 0.43.x. Persisted `native_task_ref` must include both the
+team session and pane id (`zellij:ctm-abc/terminal_1`) so a restarted backend
+can restore the handle before `isAlive`, `sendKeys`, `capturePane`, or
+`killPane`.
 
 **v0 = simplest. Stay minimal at implementation time.** These are
 intentionally deferred — file separate issues if any becomes needed,
@@ -512,25 +517,13 @@ do not expand v0 scope:
   event-driven completion (polling stays for v0), read-only attach,
   per-pane focus-on-attach.
 
-**Open questions for the implementation spike** (verify before
-committing to full Phase 4):
-
-1. Can the target zellij version add panes to a detached team session
-   with no connected clients? If not, what layout/session bootstrap
-   pattern safely adds later team members?
-2. Does `zellij action write-chars` accept stable pane targeting in the
-   supported version, or does steering need focus-then-write?
-3. Can cuekit obtain a stable pane id for layout-created and later-added
-   panes, or must Phase 4 continue using synthetic handles?
-4. Does the held-pane state stay readable after `rename-pane`, and does
-   rename work without stealing focus from other members?
-5. Do attach-time resize events reach interactive children in shared team
-   panes without a `script(1)` wrapper?
-6. What compact team session naming scheme stays below zellij's socket
-   path limit on macOS?
-
-Spike answers these in a throwaway branch first; only then commit
-to full Phase 4 implementation.
+**P4.0 spike answers (zellij 0.44.2).** The target version can add panes to a
+detached session and returns `terminal_N`; `write-chars`, `write`,
+`dump-screen`, `rename-pane`, and `close-pane` accept `-p <pane_id>`;
+held/exited panes remain readable after rename. Initial layout panes are
+addressable as `terminal_0` in the one-pane bootstrap layout. Attach-time
+resize still requires manual dogfood before broad release, but the headless
+backend primitives are sufficient for Phase 4 implementation.
 
 ### Phase 5 — deprecation + cleanup
 

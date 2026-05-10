@@ -32,12 +32,13 @@ function taskCompactHotkeys(attachable: boolean): string {
 function teamHotkeys(focus: TeamFocus, attachable: boolean, compact: boolean): string {
 	if (compact) {
 		return focus === "members"
-			? `${attachable ? "a att  " : ""}esc list  j/k member  r ref  t tasks  q quit  auto3s`
-			: "j/k team  enter  c clean  d del empty  t tasks  r ref  q quit  auto3s";
+			? `${attachable ? "a att  " : ""}A team  esc list  j/k member  r ref  t tasks  q quit  auto3s`
+			: "j/k team  enter  A attach team  c clean  d del empty  t tasks  r ref  q quit  auto3s";
 	}
 	return focus === "members"
 		? [
 				...(attachable ? ["a attach member"] : []),
+				"A attach team",
 				"esc team list",
 				"↑/↓|j/k member",
 				"r refresh",
@@ -48,6 +49,7 @@ function teamHotkeys(focus: TeamFocus, attachable: boolean, compact: boolean): s
 		: [
 				"↑/↓|j/k team",
 				"enter members",
+				"A attach team",
 				"c cleanup",
 				"d delete empty",
 				"t tasks",

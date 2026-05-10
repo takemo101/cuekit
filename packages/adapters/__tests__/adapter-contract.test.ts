@@ -1,11 +1,15 @@
 import { Database } from "bun:sqlite";
 import { beforeEach, describe, expect, it } from "bun:test";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
 	appendTaskEvent,
 	createSession,
 	getTaskById,
 	runMigrations,
 	updateTaskNativeRef,
+	updateTaskRefs,
 } from "@cuekit/store";
 import type { AgentAdapter } from "../src/agent-adapter.ts";
 import { createClaudeCodeAdapter } from "../src/claude-code-adapter.ts";
@@ -164,6 +168,23 @@ describe.each(CASES)("AgentAdapter contract — $kind", (testCase) => {
 		const view = await adapter.status(task_id);
 		expect(view.status).toBe("running");
 		expect(getTaskById(db, task_id)?.status).toBe("running");
+	});
+
+	it("status completes from an exit-code sentinel even when the pane session still exists", async () => {
+		const result = await adapter.submit({
+			spec: { agent_kind: testCase.kind, objective: "sentinel while alive" },
+			session_id: "s1",
+		});
+		if (!result.ok) throw new Error(`submit failed: ${result.error.message}`);
+		const task_id = result.value.task_id;
+		const artifactDir = mkdtempSync(join(tmpdir(), "cuekit-adapter-sentinel-"));
+		updateTaskRefs(db, task_id, { transcript_ref: join(artifactDir, "transcript.txt") });
+		writeFileSync(join(artifactDir, "exit-code"), "cuekit_exit=0\n");
+
+		const view = await adapter.status(task_id);
+
+		expect(view.status).toBe("completed");
+		expect(getTaskById(db, task_id)?.status).toBe("completed");
 	});
 
 	it("status preserves attach for stored backend when the current backend differs", async () => {

@@ -95,7 +95,9 @@ export class FakeZellijRunner implements ZellijRunner {
 	readonly calls: string[][] = [];
 	private layoutContent: string | undefined;
 	private readonly sessions = new Set<string>();
+	private readonly panesBySession = new Map<string, Set<number>>();
 	private readonly queuedResponses: ZellijRunResult[] = [];
+	private paneCounter = 0;
 
 	queueResponse(result: ZellijRunResult): void {
 		this.queuedResponses.push(result);
@@ -103,6 +105,10 @@ export class FakeZellijRunner implements ZellijRunner {
 
 	knownSessions(): string[] {
 		return [...this.sessions];
+	}
+
+	closePane(sessionName: string, paneId: number): void {
+		this.panesBySession.get(sessionName)?.delete(paneId);
 	}
 
 	lastLayout(): string {
@@ -117,12 +123,16 @@ export class FakeZellijRunner implements ZellijRunner {
 
 		// Top-level commands first.
 		const cmd = args[0];
+		if (cmd === "--version") {
+			return { stdout: "zellij 0.44.2\n", stderr: "", exitCode: 0 };
+		}
 		if (cmd === "attach") {
 			// `zellij attach --create-background <name> [options --default-layout <path>]`
 			const idx = args.indexOf("--create-background");
 			const sessionName = args[idx + 1];
 			if (idx >= 0 && sessionName) {
 				this.sessions.add(sessionName);
+				this.panesBySession.set(sessionName, new Set([0]));
 				const layoutIdx = args.indexOf("--default-layout");
 				const layoutPath = args[layoutIdx + 1];
 				if (layoutIdx >= 0 && layoutPath) {
@@ -138,7 +148,10 @@ export class FakeZellijRunner implements ZellijRunner {
 		if (cmd === "kill-session") {
 			// args: ["kill-session", "<session-name>"]
 			const sessionName = args[1];
-			if (sessionName) this.sessions.delete(sessionName);
+			if (sessionName) {
+				this.sessions.delete(sessionName);
+				this.panesBySession.delete(sessionName);
+			}
 			return { stdout: "", stderr: "", exitCode: 0 };
 		}
 
@@ -150,23 +163,38 @@ export class FakeZellijRunner implements ZellijRunner {
 				if (!this.sessions.has(sessionName)) {
 					return { stdout: "", stderr: "session not found", exitCode: 1 };
 				}
-				// Real zellij 0.43 doesn't print a pane id; backend
-				// fabricates a synthetic one. Mirror that by returning
-				// empty stdout.
+				this.paneCounter += 1;
+				this.panesBySession.get(sessionName)?.add(this.paneCounter);
+				return { stdout: `terminal_${this.paneCounter}\n`, stderr: "", exitCode: 0 };
+			}
+			if (verb === "list-panes") {
+				const panes = [...(this.panesBySession.get(sessionName) ?? [])].map((id) => ({
+					id,
+					exited: false,
+				}));
+				return { stdout: JSON.stringify(panes), stderr: "", exitCode: 0 };
+			}
+			if (verb === "close-pane") {
+				const paneFlag = args.indexOf("-p");
+				const paneId = paneFlag >= 0 ? args[paneFlag + 1] : undefined;
+				const numeric = paneId?.match(/^terminal_(\d+)$/)?.[1];
+				if (numeric) this.panesBySession.get(sessionName)?.delete(Number.parseInt(numeric, 10));
 				return { stdout: "", stderr: "", exitCode: 0 };
 			}
-			if (verb === "close-pane" || verb === "write-chars" || verb === "write") {
+			if (verb === "write-chars" || verb === "write") {
 				return { stdout: "", stderr: "", exitCode: 0 };
 			}
 			if (verb === "dump-screen") {
-				// Path is the last non-flag positional. Walk forward until
-				// we find a non-flag argument.
-				let pathArg: string | undefined;
-				for (let i = 4; i < args.length; i++) {
-					const arg = args[i];
-					if (arg && !arg.startsWith("--") && arg !== "-f") {
-						pathArg = arg;
-						break;
+				const pathFlag = args.indexOf("--path");
+				let pathArg = pathFlag >= 0 ? args[pathFlag + 1] : undefined;
+				if (!pathArg) {
+					// 0.43 compatibility: path is positional.
+					for (let i = 4; i < args.length; i++) {
+						const arg = args[i];
+						if (arg && !arg.startsWith("--") && arg !== "-f" && arg !== "--full" && arg !== "-p") {
+							pathArg = arg;
+							break;
+						}
 					}
 				}
 				if (pathArg) {

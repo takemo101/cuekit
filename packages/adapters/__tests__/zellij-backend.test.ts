@@ -14,10 +14,49 @@ describe("sessionNameFor / attachCommand", () => {
 		expect(panes.sessionNameFor("t_abc")).toBe("ct-t_abc");
 	});
 
+	it("builds compact team session names when a task was spawned in a team", async () => {
+		await panes.spawnPane({
+			task_id: "t_team",
+			team_id: "tm_123456789abc",
+			command: "sleep 60",
+			cwd: "/tmp",
+		});
+
+		expect(panes.sessionNameFor("t_team")).toBe("ctm-123456789abc");
+		expect(panes.attachCommand("t_team")).toEqual({
+			argv: ["zellij", "attach", "ctm-123456789abc"],
+		});
+	});
+
 	it("returns a structured zellij attach argv", () => {
 		expect(panes.attachCommand("t_abc")).toEqual({
 			argv: ["zellij", "attach", "ct-t_abc"],
 		});
+	});
+
+	it("restores persisted team pane handles after a process restart", async () => {
+		panes.restorePaneHandle({
+			task_id: "t_restored",
+			backend_kind: "zellij",
+			backend_session: "ctm-restored",
+			backend_pane_id: "ctm-restored/terminal_3",
+		});
+
+		expect(panes.sessionNameFor("t_restored")).toBe("ctm-restored");
+		expect(panes.attachCommand("t_restored")).toEqual({
+			argv: ["zellij", "attach", "ctm-restored"],
+		});
+
+		await panes.sendKeys("t_restored", "hello restored");
+		expect(runner.calls.at(-2)).toEqual([
+			"--session",
+			"ctm-restored",
+			"action",
+			"write-chars",
+			"-p",
+			"terminal_3",
+			"hello restored",
+		]);
 	});
 });
 
@@ -49,7 +88,7 @@ describe("spawnPane", () => {
 		]);
 
 		const layout = runner.lastLayout();
-		expect(layout).toContain('pane command="sh" close_on_exit=true');
+		expect(layout).toContain('pane command="sh" cwd="/tmp" close_on_exit=true');
 		const launchScriptPath = layout.match(/args "([^"]+launch\.sh)"/)?.[1];
 		expect(launchScriptPath).toBeString();
 		expect(await Bun.file(launchScriptPath ?? "").text()).toContain("sleep 60");
@@ -67,7 +106,7 @@ describe("spawnPane", () => {
 			},
 		});
 		const wrapped = runner.lastLayout();
-		expect(wrapped).toContain('pane command="sh" close_on_exit=true');
+		expect(wrapped).toContain('pane command="sh" cwd="/tmp" close_on_exit=true');
 		expect(wrapped).not.toContain("raw-token");
 		const launchScriptPath = wrapped.match(/"([^"]+launch\.sh)"/)?.[1];
 		expect(await Bun.file(launchScriptPath ?? "").text()).not.toContain("raw-token");
@@ -87,7 +126,7 @@ describe("spawnPane", () => {
 		});
 
 		const wrapped = runner.lastLayout();
-		expect(wrapped).toContain('pane command="script" close_on_exit=true');
+		expect(wrapped).toContain('pane command="script" cwd="/tmp" close_on_exit=true');
 		expect(wrapped).toContain('args "-q" "/tmp/cuekit task transcript.txt" "sh"');
 		const launchScriptPath = wrapped.match(/"([^"]+launch\.sh)"/)?.[1];
 		expect(launchScriptPath).toBeString();
@@ -104,7 +143,7 @@ describe("spawnPane", () => {
 		});
 
 		const wrapped = runner.lastLayout();
-		expect(wrapped).toContain('pane command="sh" close_on_exit=true');
+		expect(wrapped).toContain('pane command="sh" cwd="/tmp" close_on_exit=true');
 		expect(wrapped).not.toContain('pane command="script"');
 		expect(wrapped).not.toContain('"script" "-q"');
 	});
@@ -131,6 +170,84 @@ describe("spawnPane", () => {
 			}),
 		).rejects.toThrow(/zellij attach --create-background.*failed/);
 	});
+
+	it("uses zellij 0.44 pane-targeted shared sessions for team members", async () => {
+		const first = await panes.spawnPane({
+			task_id: "t_coord",
+			team_id: "tm_abc123",
+			team_position: "coordinator",
+			command: "coord",
+			cwd: "/repo",
+		});
+		const second = await panes.spawnPane({
+			task_id: "t_worker",
+			team_id: "tm_abc123",
+			team_position: "worker",
+			command: "worker",
+			cwd: "/repo",
+		});
+
+		expect(first.backend_session).toBe("ctm-abc123");
+		expect(first.backend_pane_id).toBe("ctm-abc123/terminal_0");
+		expect(second.backend_session).toBe("ctm-abc123");
+		expect(second.backend_pane_id).toBe("ctm-abc123/terminal_1");
+		expect(runner.calls.some((c) => c[0] === "--version")).toBe(true);
+		expect(runner.calls.some((c) => c[0] === "--session" && c[3] === "new-pane")).toBe(true);
+
+		await panes.sendKeys("t_worker", "hello team");
+		const writes = runner.calls.filter(
+			(c) => c[0] === "--session" && (c[3] === "write-chars" || c[3] === "write"),
+		);
+		expect(writes.at(-2)).toEqual([
+			"--session",
+			"ctm-abc123",
+			"action",
+			"write-chars",
+			"-p",
+			"terminal_1",
+			"hello team",
+		]);
+		expect(writes.at(-1)).toEqual([
+			"--session",
+			"ctm-abc123",
+			"action",
+			"write",
+			"-p",
+			"terminal_1",
+			"13",
+		]);
+	});
+
+	it("serializes concurrent first team member spawns into one session create", async () => {
+		const [first, second] = await Promise.all([
+			panes.spawnPane({ task_id: "t_a", team_id: "tm_parallel", command: "a", cwd: "/repo" }),
+			panes.spawnPane({ task_id: "t_b", team_id: "tm_parallel", command: "b", cwd: "/repo" }),
+		]);
+
+		expect(first.backend_session).toBe("ctm-parallel");
+		expect(second.backend_session).toBe("ctm-parallel");
+		expect(runner.calls.filter((c) => c[0] === "attach" && c[2] === "ctm-parallel")).toHaveLength(
+			1,
+		);
+		expect(
+			runner.calls.filter(
+				(c) => c[0] === "--session" && c[1] === "ctm-parallel" && c[3] === "new-pane",
+			),
+		).toHaveLength(1);
+	});
+
+	it("rejects team sessions when zellij is older than 0.44.2", async () => {
+		runner.queueResponse({ stdout: "zellij 0.43.1\n", stderr: "", exitCode: 0 });
+
+		await expect(
+			panes.spawnPane({
+				task_id: "t_old",
+				team_id: "tm_old",
+				command: "x",
+				cwd: "/tmp",
+			}),
+		).rejects.toThrow(/zellij >= 0\.44\.2/);
+	});
 });
 
 describe("isAlive", () => {
@@ -152,6 +269,16 @@ describe("isAlive", () => {
 		});
 
 		expect(await panes.isAlive("t_done")).toBe(false);
+	});
+
+	it("returns false for a closed team pane even while the shared session remains", async () => {
+		await panes.spawnPane({ task_id: "t_one", team_id: "tm_alive", command: "one", cwd: "/tmp" });
+		await panes.spawnPane({ task_id: "t_two", team_id: "tm_alive", command: "two", cwd: "/tmp" });
+
+		runner.closePane("ctm-alive", 1);
+
+		expect(await panes.isAlive("t_one")).toBe(true);
+		expect(await panes.isAlive("t_two")).toBe(false);
 	});
 });
 
@@ -185,6 +312,17 @@ describe("capturePane", () => {
 		// Path is the last argument (positional, not flag-paired).
 		const lastArg = dump?.at(-1) ?? "";
 		expect(lastArg).toMatch(/cuekit-zellij-.*\/dump\.txt$/);
+	});
+
+	it("dumps a team pane by pane id using the zellij 0.44 --path form", async () => {
+		await panes.spawnPane({ task_id: "t_team_cap", team_id: "tm_cap", command: "x", cwd: "/tmp" });
+		const captured = await panes.capturePane("t_team_cap");
+		expect(captured).toBe("fake screen output\n");
+
+		const dump = runner.calls.find((c) => c[0] === "--session" && c[3] === "dump-screen");
+		expect(dump).toContain("-p");
+		expect(dump).toContain("terminal_0");
+		expect(dump).toContain("--path");
 	});
 });
 

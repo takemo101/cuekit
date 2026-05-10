@@ -97,6 +97,18 @@ export function buildTuiTeamMemberAttachExit(
 	};
 }
 
+export function buildTuiTeamAttachExit(command: { argv: string[] }, teamId: string): TuiExit {
+	return {
+		kind: "attach",
+		args: attachArgsForTui(command),
+		returnState: {
+			mode: "teams",
+			selected_team_id: teamId,
+			team_focus: "list",
+		},
+	};
+}
+
 export async function runAttachArgs(args: string[]): Promise<number> {
 	const proc = Bun.spawn(args, {
 		stdin: "inherit",
