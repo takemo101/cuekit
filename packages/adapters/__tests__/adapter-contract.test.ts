@@ -121,6 +121,16 @@ describe.each(CASES)("AgentAdapter contract — $kind", (testCase) => {
 		expect(view.status).toBe("running");
 		expect(view.attach_hint).toBeDefined();
 		expect(view.attach_hint).toContain(`cuekit-task-${result.value.task_id}`);
+		// New structured form ships alongside attach_hint and the two
+		// must agree (hint is derived from the argv).
+		expect(view.attach_command).not.toBeNull();
+		expect(view.attach_command?.argv).toEqual([
+			"tmux",
+			"attach-session",
+			"-t",
+			`cuekit-task-${result.value.task_id}`,
+		]);
+		expect(view.attach_command?.argv.join(" ")).toBe(view.attach_hint);
 		expect(view.started_at).toBeDefined();
 		expect(view.metadata?.adapter_mode).toBe("interactive");
 		expect(view.metadata?.tmux_session_name).toBe(`cuekit-task-${result.value.task_id}`);
@@ -141,6 +151,7 @@ describe.each(CASES)("AgentAdapter contract — $kind", (testCase) => {
 		expect(view.supports_steering).toBe(false);
 		expect(view.supports_attach).toBe(false);
 		expect(view.attach_hint).toBeUndefined();
+		expect(view.attach_command).toBeNull();
 	});
 
 	it("invalid adapter mode falls back to interactive", async () => {
