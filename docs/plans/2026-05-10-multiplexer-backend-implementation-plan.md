@@ -92,7 +92,7 @@ Phase 1 (refactor) ──→ Phase 2 (schema gen) ──→ Phase 3 (zellij basi
 
 **No behaviour change. No new feature. Pure abstraction.**
 
-### Issue P1.1: Add `MultiplexerBackend` interface
+### Issue P1.1: [#402 Add `MultiplexerBackend` interface](https://github.com/takemo101/cuekit/issues/402)
 
 **Outcome:** `@cuekit/adapters` exports `MultiplexerBackend`, `SpawnPaneParams`, `PaneHandle`, `CaptureOptions` types. No implementation, no callers changed.
 
@@ -108,7 +108,7 @@ Phase 1 (refactor) ──→ Phase 2 (schema gen) ──→ Phase 3 (zellij basi
 
 **Acceptance:** `bun test --pass-with-no-tests` and `bun run typecheck` succeed; no callers reference the new interface yet.
 
-### Issue P1.2: Move `PaneBackend` internals to `TmuxBackend`
+### Issue P1.2: [#403 Move `PaneBackend` internals to `TmuxBackend`](https://github.com/takemo101/cuekit/issues/403)
 
 **Outcome:** Existing `pane-backend.ts` is renamed/moved to `tmux-backend.ts` and now `implements MultiplexerBackend`. `PaneBackend` remains a type alias for backward compatibility within `@cuekit/adapters`.
 
@@ -126,7 +126,7 @@ Phase 1 (refactor) ──→ Phase 2 (schema gen) ──→ Phase 3 (zellij basi
 
 **Acceptance:** All existing adapter tests pass with no logic edits. `PaneBackend` type still imports from old name (alias in place).
 
-### Issue P1.3: Adapter factories accept `MultiplexerBackend`
+### Issue P1.3: [#404 Adapter factories accept `MultiplexerBackend`](https://github.com/takemo101/cuekit/issues/404)
 
 **Outcome:** `createClaudeCodeAdapter`, `createGeminiAdapter`, `createOpencodeAdapter`, `createJcodeAdapter`, `createPiAdapter`, and the shared `createPaneAdapter` all type their `panes` parameter as `MultiplexerBackend`. Production wiring continues to pass a `TmuxBackend`.
 
@@ -148,7 +148,7 @@ Phase 1 (refactor) ──→ Phase 2 (schema gen) ──→ Phase 3 (zellij basi
 
 **Backwards-compatible alias period. Both old and new fields appear simultaneously.**
 
-### Issue P2.1: Add `attach_command` to `TaskStatusView`
+### Issue P2.1: [#405 Add `attach_command` to `TaskStatusView`](https://github.com/takemo101/cuekit/issues/405)
 
 **Outcome:** Every `TaskStatusView` carries a new `attach_command: { argv: string[] } | null` field alongside the existing `attach_hint: string` field. Both are populated by deriving `attach_hint` from `attach_command`'s argv.
 
@@ -164,7 +164,7 @@ Phase 1 (refactor) ──→ Phase 2 (schema gen) ──→ Phase 3 (zellij basi
 
 **Acceptance:** Status views show both `attach_hint` (existing string) and `attach_command` (new structured); they agree.
 
-### Issue P2.2: Add `metadata.pane_session_name` alias
+### Issue P2.2: [#406 Add `metadata.pane_session_name` alias](https://github.com/takemo101/cuekit/issues/406)
 
 **Outcome:** `metadata.pane_session_name` is written alongside `metadata.tmux_session_name`. Adds a `### Deprecated` CHANGELOG entry for `tmux_session_name`.
 
@@ -179,7 +179,7 @@ Phase 1 (refactor) ──→ Phase 2 (schema gen) ──→ Phase 3 (zellij basi
 
 **Acceptance:** `metadata.pane_session_name` and `metadata.tmux_session_name` both appear and match.
 
-### Issue P2.3: TUI uses `MultiplexerBackend.attachCommand`
+### Issue P2.3: [#407 TUI uses `MultiplexerBackend.attachCommand`](https://github.com/takemo101/cuekit/issues/407)
 
 **Outcome:** `packages/tui/src/attach.ts` builds the attach command from `backend.attachCommand(handle)` (or the new `attach_command` field on the view) instead of constructing tmux-specific argv inline.
 
@@ -193,7 +193,7 @@ Phase 1 (refactor) ──→ Phase 2 (schema gen) ──→ Phase 3 (zellij basi
 
 **Acceptance:** TUI `a` shortcut still attaches to tmux sessions exactly as before. No zellij-specific code is added in this issue.
 
-### Issue P2.4: TUI `captureLivePaneTail` goes through backend
+### Issue P2.4: [#408 TUI `captureLivePaneTail` goes through backend](https://github.com/takemo101/cuekit/issues/408)
 
 **Outcome:** `packages/tui/src/data.ts` calls `backend.capturePane(handle, opts)` rather than spawning `tmux capture-pane` directly. The "transcript file fallback" branch is unchanged.
 
@@ -208,7 +208,7 @@ Phase 1 (refactor) ──→ Phase 2 (schema gen) ──→ Phase 3 (zellij basi
 
 **Acceptance:** TUI live transcript pane works unchanged for tmux. No zellij-specific code yet.
 
-### Issue P2.5: `cuekit doctor` backend-aware probe
+### Issue P2.5: [#409 `cuekit doctor` backend-aware probe](https://github.com/takemo101/cuekit/issues/409)
 
 **Outcome:** `cuekit doctor` reads `multiplexer` from project config (or defaults to tmux) and probes whichever backend is configured. Always shows a one-line "active backend" row at the top.
 
@@ -228,7 +228,7 @@ Phase 1 (refactor) ──→ Phase 2 (schema gen) ──→ Phase 3 (zellij basi
 
 **This is where solo-task zellij value lands. Team dashboard is Phase 4.**
 
-### Issue P3.0: Spike — verify zellij CLI forms
+### Issue P3.0: [#410 Spike — verify zellij CLI forms](https://github.com/takemo101/cuekit/issues/410)
 
 **Outcome:** A throwaway branch + investigation issue with concrete answers to the spike questions before P3.2 begins. Result: a short markdown note posted in the issue that pins exact zellij CLI invocations.
 
@@ -242,7 +242,7 @@ Phase 1 (refactor) ──→ Phase 2 (schema gen) ──→ Phase 3 (zellij basi
 
 **Acceptance:** Issue is closed with a markdown block listing the verified CLI forms. P3.2 cites this comment.
 
-### Issue P3.1: Add `multiplexer` config to `.cuekit.yaml`
+### Issue P3.1: [#411 Add `multiplexer` config to `.cuekit.yaml`](https://github.com/takemo101/cuekit/issues/411)
 
 **Outcome:** `.cuekit.yaml` accepts `multiplexer: tmux | zellij` and `multiplexer_strict: boolean`, parsed and validated. Default is `tmux`. No runtime effect yet.
 
@@ -257,7 +257,7 @@ Phase 1 (refactor) ──→ Phase 2 (schema gen) ──→ Phase 3 (zellij basi
 
 **Acceptance:** Project config tests pass with new fields parsing correctly.
 
-### Issue P3.2: `ZellijBackend` basic implementation
+### Issue P3.2: [#412 `ZellijBackend` basic implementation](https://github.com/takemo101/cuekit/issues/412)
 
 **Outcome:** A working `ZellijBackend implements MultiplexerBackend` that mirrors tmux's per-task-session model: 1 task → 1 `cuekit-task-<id>` zellij session. No team awareness.
 
@@ -273,7 +273,7 @@ Phase 1 (refactor) ──→ Phase 2 (schema gen) ──→ Phase 3 (zellij basi
 
 **Acceptance:** Unit tests pin argv shapes; integration test (when zellij present) submits a one-shot task and round-trips spawn → capture → kill.
 
-### Issue P3.3: `buildMultiplexerBackend` factory
+### Issue P3.3: [#413 `buildMultiplexerBackend` factory](https://github.com/takemo101/cuekit/issues/413)
 
 **Outcome:** A factory that reads `multiplexer` / `multiplexer_strict` from project config, runs the requested backend's `probe()`, and falls back to tmux on failure (with a one-time `logger.warn`). Strict mode hard-fails.
 
@@ -288,7 +288,7 @@ Phase 1 (refactor) ──→ Phase 2 (schema gen) ──→ Phase 3 (zellij basi
 
 **Acceptance:** All three branches (success / soft fallback / strict failure) covered by tests.
 
-### Issue P3.4: `cuekit doctor` zellij probe
+### Issue P3.4: [#414 `cuekit doctor` zellij probe](https://github.com/takemo101/cuekit/issues/414)
 
 **Outcome:** `cuekit doctor` runs the zellij version probe when zellij is the configured (or fallback-detected) backend, and reports a per-backend status line.
 
@@ -301,7 +301,7 @@ Phase 1 (refactor) ──→ Phase 2 (schema gen) ──→ Phase 3 (zellij basi
 
 **Acceptance:** Doctor output covers tmux, zellij, and fallback states.
 
-### Issue P3.5: Docs — README + AGENTS.md + smoke guide
+### Issue P3.5: [#415 Docs — README + AGENTS.md + smoke guide](https://github.com/takemo101/cuekit/issues/415)
 
 **Outcome:** Docs explain how to opt into zellij, what fallback looks like, and add an end-to-end smoke recipe for the zellij path.
 
@@ -323,7 +323,7 @@ Phase 1 (refactor) ──→ Phase 2 (schema gen) ──→ Phase 3 (zellij basi
 
 **Layered on top of Phase 3. tmux behaviour unchanged.**
 
-### Issue P4.0: Spike — team-dashboard zellij behaviour
+### Issue P4.0: [#416 Spike — team-dashboard zellij behaviour](https://github.com/takemo101/cuekit/issues/416)
 
 **Outcome:** The four Phase 4 spike open questions answered on real zellij before implementation begins.
 
@@ -338,7 +338,7 @@ Phase 1 (refactor) ──→ Phase 2 (schema gen) ──→ Phase 3 (zellij basi
 
 **Acceptance:** Issue resolution lists each question's answer + reference command output.
 
-### Issue P4.1: Extend `SpawnPaneParams` with `team_id` / `team_position`
+### Issue P4.1: [#417 Extend `SpawnPaneParams` with `team_id` / `team_position`](https://github.com/takemo101/cuekit/issues/417)
 
 **Outcome:** `MultiplexerBackend.SpawnPaneParams` gets two optional fields. `pane-adapter.ts` threads them from `AdapterSubmitInput`. Tmux backend ignores them.
 
@@ -354,7 +354,7 @@ Phase 1 (refactor) ──→ Phase 2 (schema gen) ──→ Phase 3 (zellij basi
 
 **Acceptance:** Typecheck passes; tmux integration tests pass with no behaviour change.
 
-### Issue P4.2: `ZellijBackend` team-session sharing
+### Issue P4.2: [#418 `ZellijBackend` team-session sharing](https://github.com/takemo101/cuekit/issues/418)
 
 **Outcome:** When `team_id` is set, `ZellijBackend.spawnPane` lazy-creates a shared `cuekit-team-<team_id>` session and adds the new pane to it (named `<position>:<task_id_suffix>`). Existing per-task path is unchanged.
 
@@ -370,7 +370,7 @@ Phase 1 (refactor) ──→ Phase 2 (schema gen) ──→ Phase 3 (zellij basi
 
 **Acceptance:** Integration test (real zellij) shows one `cuekit-team-<id>` session with three named panes after submitting a 3-member team in parallel.
 
-### Issue P4.3: `onTerminalStatus` rename hook
+### Issue P4.3: [#419 `onTerminalStatus` rename hook](https://github.com/takemo101/cuekit/issues/419)
 
 **Outcome:** `MultiplexerBackend` gets an optional `onTerminalStatus(handle, status)` method. `ZellijBackend` implements it as `rename-pane` for team-session panes (no-op for per-task sessions). `pane-adapter.ts` calls it after `completeTask`.
 
@@ -386,7 +386,7 @@ Phase 1 (refactor) ──→ Phase 2 (schema gen) ──→ Phase 3 (zellij basi
 
 **Acceptance:** Integration test: complete one team member, observe pane renamed to `worker:t_xxx [completed]`.
 
-### Issue P4.4: `killTeamSession` + `cleanup_team` wiring
+### Issue P4.4: [#420 `killTeamSession` + `cleanup_team` wiring](https://github.com/takemo101/cuekit/issues/420)
 
 **Outcome:** `MultiplexerBackend` gets an optional `killTeamSession(team_id)`. `ZellijBackend` implements it as `kill-sessions cuekit-team-<id>`. The MCP `cleanup_team` handler calls it after individual cleanups.
 
@@ -402,7 +402,7 @@ Phase 1 (refactor) ──→ Phase 2 (schema gen) ──→ Phase 3 (zellij basi
 
 **Acceptance:** Integration test: after `cleanup_team`, the zellij session is gone (`zellij list-sessions` does not list it).
 
-### Issue P4.5: TUI capital-`A` team-attach shortcut
+### Issue P4.5: [#421 TUI capital-`A` team-attach shortcut](https://github.com/takemo101/cuekit/issues/421)
 
 **Outcome:** Pressing `A` (Shift-`a`) on the team list attaches to the team's zellij session. For tmux teams (which are not actually shared), the shortcut falls back to attaching to the first member's per-task session — or surfaces a helpful "team attach is zellij-only" notice.
 
@@ -423,7 +423,7 @@ Phase 1 (refactor) ──→ Phase 2 (schema gen) ──→ Phase 3 (zellij basi
 
 **Open these issues only after Phase 2 has been in a tagged release for at least one minor version.**
 
-### Issue P5.1: Remove `attach_hint` (string) field
+### Issue P5.1: [#422 Remove `attach_hint` (string) field](https://github.com/takemo101/cuekit/issues/422)
 
 **Outcome:** `attach_hint` is removed from `TaskStatusView`. All consumers use `attach_command`.
 
@@ -435,7 +435,7 @@ Phase 1 (refactor) ──→ Phase 2 (schema gen) ──→ Phase 3 (zellij basi
 
 **Acceptance:** No remaining references to `attach_hint` in the codebase.
 
-### Issue P5.2: Remove `metadata.tmux_session_name` alias
+### Issue P5.2: [#423 Remove `metadata.tmux_session_name` alias](https://github.com/takemo101/cuekit/issues/423)
 
 **Outcome:** `metadata.tmux_session_name` is no longer written; readers use `pane_session_name` (or the structured `pane_handle` if introduced).
 
@@ -446,7 +446,7 @@ Phase 1 (refactor) ──→ Phase 2 (schema gen) ──→ Phase 3 (zellij basi
 
 **Acceptance:** No remaining references to `tmux_session_name`.
 
-### Issue P5.3: Drop `PaneBackend` type alias
+### Issue P5.3: [#424 Drop `PaneBackend` type alias](https://github.com/takemo101/cuekit/issues/424)
 
 **Outcome:** The legacy `PaneBackend` alias on `@cuekit/adapters` is removed.
 
