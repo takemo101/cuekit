@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type {
@@ -18,17 +18,16 @@ export interface ZellijBackendOptions {
 
 /**
  * Zellij implementation of MultiplexerBackend. Phase 3 baseline: one task
- * per zellij session named `cuekit-task-<task_id>`. Phase 4 (#418) extends
+ * per zellij session named `ct-<task_id>`. Phase 4 (#418) extends
  * this with team-session sharing.
  *
  * CLI forms (verified against real zellij 0.43.x in spike #410 follow-up;
  * earlier librarian research conflated 0.43 / 0.44 forms — corrected here):
- *   - `zellij attach --create-background <name>` for headless session create
- *   - `zellij --session <name> action new-pane --close-on-exit --cwd <cwd>
- *      -- <cmd>` — note `--cwd` rather than wrapping the command with `cd`.
- *      In 0.43 there is no per-pane stdout-id return (`new-pane` exits 0
- *      with empty stdout when successful), so we generate a synthetic
- *      handle id from the task id.
+ *   - `zellij attach --create-background <name> options --default-cwd <cwd>
+ *      --default-layout <layout.kdl>` for headless session create with the
+ *      task command as the initial pane. We intentionally do not send a
+ *      follow-up `action new-pane` because zellij 0.43 cannot apply it
+ *      reliably to sessions with no attached clients.
  *   - `zellij --session <name> action write-chars <text>` then
  *     `action write 13` for steering. Both target the focused pane;
  *     for the Phase 3 1-task-per-session model this is always the worker
@@ -50,72 +49,79 @@ export class ZellijBackend implements MultiplexerBackend {
 	}
 
 	sessionNameFor(task_id: string): string {
-		return `cuekit-task-${task_id}`;
+		// zellij stores session sockets under a platform temp dir and enforces
+		// the Unix socket path limit. Keep names compact so normal cuekit task ids
+		// do not trip "socket path should not be longer than 104 bytes" on macOS.
+		return `ct-${task_id}`;
 	}
 
 	async spawnPane(params: SpawnPaneParams): Promise<PaneHandle> {
 		const sessionName = this.sessionNameFor(params.task_id);
 
-		// Step 1 — create the session in the background so subsequent
-		// `--session` action calls have a target.
-		const createResult = await this.runner.run([
-			"attach",
-			"--create-background",
-			sessionName,
-		]);
-		if (createResult.exitCode !== 0) {
-			throw new Error(
-				`zellij attach --create-background for task ${params.task_id} failed (exit ${createResult.exitCode}): ${createResult.stderr.trim()}`,
-			);
-		}
-
-		// Step 2 — spawn the command into a new pane in that session.
-		// `--close-on-exit` removes the pane when the command exits, matching
-		// tmux's session-dies-when-process-exits semantics for solo tasks.
 		// Validate env keys before serialising so callers see the same
-		// invalid-key error tmux raises.
+		// invalid-key error tmux raises, and before creating any zellij session.
 		for (const key of Object.keys(params.env ?? {})) {
 			if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) {
 				throw new Error(`invalid zellij environment key '${key}'`);
 			}
 		}
-		const envPrefix =
-			Object.entries(params.env ?? {})
-				.map(([key, value]) => `${key}=${shellQuote(value)}`)
-				.join(" ");
-		const wrappedCommand = envPrefix.length > 0 ? `env ${envPrefix} ${params.command}` : params.command;
-
-		const spawnResult = await this.runner.run([
-			"--session",
+		// zellij 0.43 cannot reliably apply `zellij --session <name> action
+		// new-pane ...` to a fully detached session: the server tries to place
+		// the pane relative to a connected client's active tab, logs "No client
+		// ids in screen found", and the CLI exits successfully without a worker
+		// pane. Start the task as the initial layout pane instead. With
+		// `close_on_exit=true`, the session disappears when the task command
+		// exits, matching tmux's per-task-session lifecycle.
+		const layoutDir = await mkdtemp(join(tmpdir(), "cuekit-zellij-layout-"));
+		const scriptDir = await mkdtemp(join(tmpdir(), "cuekit-zellij-launch-"));
+		const envScriptPath = join(scriptDir, "env.sh");
+		const envExports = Object.entries(params.env ?? {})
+			.map(([key, value]) => `export ${key}=${shellQuote(value)}`)
+			.join("\n");
+		await writeFile(envScriptPath, `${envExports}\n`);
+		await chmod(envScriptPath, 0o600);
+		const launchScriptPath = join(scriptDir, "launch.sh");
+		await writeFile(
+			launchScriptPath,
+			`#!/bin/sh\ntrap 'rm -rf ${shellQuote(scriptDir)}' EXIT HUP INT TERM\n. ${shellQuote(envScriptPath)}\nprintf '[cuekit] zellij task started: %s\\n' ${shellQuote(params.task_id)}\n${params.command}\nstatus=$?\nprintf '[cuekit] zellij task launcher exited: %s\\n' "$status"\nexit "$status"\n`,
+		);
+		await chmod(launchScriptPath, 0o600);
+		// Use a temporary launch script instead of embedding the full prompt in KDL.
+		// Batch tasks with a transcript path are wrapped in `script` so stdout/stderr
+		// are captured while the child still sees a TTY. Interactive tasks skip
+		// `script`: script(1)'s inner pty starts at zellij's headless default size
+		// and does not reliably propagate later attach resizes, making full-width
+		// TUIs render in a narrow 80-column box.
+		// Child-reporting secrets live in a 0600 temp env file, not KDL or argv.
+		const useScriptTranscript = Boolean(params.transcriptPath && !params.preserveNativeTty);
+		const layoutCommand = useScriptTranscript ? "script" : "sh";
+		const layoutCommandArgs = useScriptTranscript
+			? scriptArgsFor(params.transcriptPath as string, launchScriptPath)
+			: [launchScriptPath];
+		const layoutPath = join(layoutDir, "task.kdl");
+		await writeFile(layoutPath, renderTaskLayout(layoutCommand, layoutCommandArgs));
+		const createResult = await this.runner.run([
+			"attach",
+			"--create-background",
 			sessionName,
-			"action",
-			"new-pane",
-			"--close-on-exit",
-			"--cwd",
+			"options",
+			"--default-cwd",
 			params.cwd,
-			"--",
-			"sh",
-			"-c",
-			wrappedCommand,
+			"--default-layout",
+			layoutPath,
 		]);
-		if (spawnResult.exitCode !== 0) {
-			// Best-effort: tear down the session we just created so a retry
-			// doesn't trip over an orphan.
-			try {
-				await this.runner.run(["kill-session", sessionName]);
-			} catch {
-				// preserve the original failure
-			}
+		await rm(layoutDir, { recursive: true, force: true }).catch(() => {});
+		if (createResult.exitCode !== 0) {
+			await rm(scriptDir, { recursive: true, force: true }).catch(() => {});
 			throw new Error(
-				`zellij action new-pane for task ${params.task_id} failed (exit ${spawnResult.exitCode}): ${spawnResult.stderr.trim()}`,
+				`zellij attach --create-background for task ${params.task_id} failed (exit ${createResult.exitCode}): ${createResult.stderr.trim()}`,
 			);
 		}
 
-		// zellij 0.43 doesn't print a runtime pane id from new-pane. We
-		// don't strictly need one for the Phase 3 model (steering / capture
-		// target the focused pane in the session, which is always the
-		// worker we just spawned). Surface a synthetic id for downstream
-		// metadata so PaneHandle.backend_pane_id is non-empty.
+		// zellij 0.43 doesn't print a runtime pane id from layout-created panes.
+		// We don't strictly need one for the Phase 3 model (steering / capture
+		// target the focused pane in the per-task session). Surface a synthetic
+		// id for downstream metadata so PaneHandle.backend_pane_id is non-empty.
 		const backend_pane_id = `${sessionName}/pane`;
 
 		return {
@@ -134,33 +140,22 @@ export class ZellijBackend implements MultiplexerBackend {
 		const result = await this.runner.run(["list-sessions"]);
 		if (result.exitCode !== 0) return false;
 		const sessionName = this.sessionNameFor(task_id);
-		const stripped = result.stdout.replace(/\[[0-9;]*m/g, "");
+		const ansiEscapePattern = "\\x1b\\[[0-9;]*m";
+		const stripped = result.stdout.replace(new RegExp(ansiEscapePattern, "g"), "");
 		const pattern = new RegExp(`(^|\\s)${escapeRegExp(sessionName)}(\\s|$|\\[)`);
-		return pattern.test(stripped);
+		return stripped.split("\n").some((line) => pattern.test(line) && !/\bEXITED\b/.test(line));
 	}
 
 	async sendKeys(task_id: string, message: string): Promise<void> {
 		const target = this.sessionNameFor(task_id);
-		const literal = await this.runner.run([
-			"--session",
-			target,
-			"action",
-			"write-chars",
-			message,
-		]);
+		const literal = await this.runner.run(["--session", target, "action", "write-chars", message]);
 		if (literal.exitCode !== 0) {
 			throw new Error(`zellij write-chars for task ${task_id} failed: ${literal.stderr.trim()}`);
 		}
 		if (this.sendKeysDelayMs > 0) {
 			await Bun.sleep(this.sendKeysDelayMs);
 		}
-		const enter = await this.runner.run([
-			"--session",
-			target,
-			"action",
-			"write",
-			"13",
-		]);
+		const enter = await this.runner.run(["--session", target, "action", "write", "13"]);
 		if (enter.exitCode !== 0) {
 			throw new Error(`zellij write Enter for task ${task_id} failed: ${enter.stderr.trim()}`);
 		}
@@ -197,15 +192,31 @@ export class ZellijBackend implements MultiplexerBackend {
 		const target = this.sessionNameFor(task_id);
 		// Phase 3 model is one session per task, so killing the whole session
 		// is the simplest mapping. Phase 4 (#420) will use close-pane on a
-		// shared team session instead.
+		// shared team session instead. zellij can leave exited sessions in a
+		// resurrectable list; delete-session is the cleanup path for those.
 		const result = await this.runner.run(["kill-session", target]);
 		const errText = `${result.stderr} ${result.stdout}`.toLowerCase();
-		if (
-			result.exitCode !== 0 &&
-			!/no session named|no such session|session.*not found|does not exist|not running/.test(errText)
-		) {
-			throw new Error(`zellij kill-session for task ${task_id} failed: ${result.stderr.trim()}`);
+		if (result.exitCode === 0) return;
+		const missing =
+			/no session named|no such session|session.*not found|does not exist|not running/.test(
+				errText,
+			);
+		if (missing) {
+			const deleted = await this.runner.run(["delete-session", target]);
+			const deleteText = `${deleted.stderr} ${deleted.stdout}`.toLowerCase();
+			if (
+				deleted.exitCode !== 0 &&
+				!/no session named|no such session|session.*not found|does not exist|not running/.test(
+					deleteText,
+				)
+			) {
+				throw new Error(
+					`zellij delete-session for task ${task_id} failed: ${deleted.stderr.trim()}`,
+				);
+			}
+			return;
 		}
+		throw new Error(`zellij kill-session for task ${task_id} failed: ${result.stderr.trim()}`);
 	}
 
 	attachCommand(task_id: string): { argv: string[] } | null {
@@ -220,4 +231,25 @@ function escapeRegExp(value: string): string {
 function shellQuote(value: string): string {
 	if (/^[A-Za-z0-9_./=:-]+$/.test(value)) return value;
 	return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+function scriptArgsFor(transcriptPath: string, launchScriptPath: string): string[] {
+	if (process.platform === "darwin") {
+		return ["-q", transcriptPath, "sh", launchScriptPath];
+	}
+	return ["-q", "-c", `sh ${shellQuote(launchScriptPath)}`, transcriptPath];
+}
+
+function renderTaskLayout(command: string, args = ["-c", command]): string {
+	const renderedArgs = args.map((arg) => ` "${escapeKdlString(arg)}"`).join("");
+	return `layout {
+  pane command="${escapeKdlString(command)}" close_on_exit=true {
+    args${renderedArgs}
+  }
+}
+`;
+}
+
+function escapeKdlString(value: string): string {
+	return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n");
 }

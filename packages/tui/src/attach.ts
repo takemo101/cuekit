@@ -12,8 +12,7 @@ const ATTACH_HINT_RE = /^tmux\s+attach(?:-session)?\s+-t\s+([^\s]+)$/;
 export function getPaneAttachCommand(view: TaskStatusView): { argv: string[] } | null {
 	if (view.attach_command) return view.attach_command;
 	// Legacy fallback paths — both eventually become tmux attach-session argv.
-	const metadataSession =
-		view.metadata?.pane_session_name ?? view.metadata?.tmux_session_name;
+	const metadataSession = view.metadata?.pane_session_name ?? view.metadata?.tmux_session_name;
 	if (typeof metadataSession === "string" && metadataSession.length > 0) {
 		return { argv: ["tmux", "attach-session", "-t", metadataSession] };
 	}
@@ -59,22 +58,31 @@ export function buildTmuxAttachArgs(sessionName: string): string[] {
 	];
 }
 
-export function buildTuiTaskAttachExit(sessionName: string, taskId: string): TuiExit {
+function attachArgsForTui(command: { argv: string[] }): string[] {
+	const [bin, subcommand] = command.argv;
+	if (bin === "tmux" && (subcommand === "attach" || subcommand === "attach-session")) {
+		const sessionName = command.argv.at(-1);
+		if (sessionName) return buildTmuxAttachArgs(sessionName);
+	}
+	return command.argv;
+}
+
+export function buildTuiTaskAttachExit(command: { argv: string[] }, taskId: string): TuiExit {
 	return {
 		kind: "attach",
-		args: buildTmuxAttachArgs(sessionName),
+		args: attachArgsForTui(command),
 		returnState: { mode: "tasks", selected_task_id: taskId },
 	};
 }
 
 export function buildTuiTeamMemberAttachExit(
-	sessionName: string,
+	command: { argv: string[] },
 	teamId: string,
 	taskId: string,
 ): TuiExit {
 	return {
 		kind: "attach",
-		args: buildTmuxAttachArgs(sessionName),
+		args: attachArgsForTui(command),
 		returnState: {
 			mode: "teams",
 			selected_team_id: teamId,

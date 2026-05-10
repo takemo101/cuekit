@@ -360,21 +360,29 @@ team-dashboard UX on top once the basics are proven.
 - New `zellij-backend.ts` implementing the interface against the
   `zellij` CLI (target: 0.44+, which is when `--tab-id` non-destructive
   targeting and `subscribe` landed):
-  - `spawnPane`: creates a per-task session named
-    `cuekit-task-<task_id>` via
-    `zellij attach --create-background <name> options --default-layout <inline-kdl>`,
-    then immediately runs `zellij --session <name> action new-pane
-    --close-on-exit -- <cmd>` in the empty layout (or runs the command
-    as the session's first pane via the layout itself — exact form
-    settled in the spike). Capture the returned pane id from
-    `new-pane`'s stdout.
+  - `spawnPane`: creates a compact per-task session named
+    `ct-<task_id>` (shortened to avoid Unix socket path limits) via
+    `zellij attach --create-background <name> options --default-cwd <cwd>
+    --default-layout <layout.kdl>`, where the layout starts the task command
+    as the first pane with `close_on_exit=true`. cuekit does not send a
+    follow-up `zellij --session <name> action new-pane` in 0.43 because
+    detached sessions have no connected client tab to place the pane against.
+    zellij 0.43 does not return a stable pane id for this path, so cuekit uses
+    the synthetic `<session>/pane` handle for Phase 3. When a transcript path is
+    available for non-interactive/batch tasks, cuekit runs the pane through
+    `script -q <transcript> sh <launch.sh>` so stdout/stderr are mirrored while
+    the child still sees a TTY. Interactive attachable tasks skip `script` and
+    use zellij's native pane TTY so attach-time resize events can reach the
+    child process and full-width TUIs are not trapped in an 80-column inner pty.
+    The temporary launch script is `0600`, removes itself on exit, and receives
+    child reporting secrets via process environment rather than writing them
+    into the script body.
   - `sendKeys`: `zellij --session <name> action write-chars <text>`
     plus a synthetic Enter via `action write 13`.
-  - `capturePane`: `zellij --session <name> action dump-screen
-    --pane-id <id> --full --ansi --path <tmp>` (backend reads + cleans
-    up). Output formatting differs subtly from tmux (escape sequence
-    canonicalisation) — accept the difference.
-  - `killPane`: `zellij --session <name> action close-pane --pane-id <id>`.
+  - `capturePane`: `zellij --session <name> action dump-screen --full <tmp>`
+    (backend reads + cleans up). Output formatting differs subtly from tmux
+    (escape sequence canonicalisation) — accept the difference.
+  - `killPane`: `zellij kill-session <name>` for the Phase 3 one-session-per-task model.
   - `attachCommand`: `["zellij", "attach", "<name>"]`.
 - Backend selection wiring (`.cuekit.yaml` `multiplexer.backend` +
   `multiplexer.strict`, with fallback to tmux on probe failure).

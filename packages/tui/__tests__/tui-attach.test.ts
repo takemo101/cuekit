@@ -1,6 +1,11 @@
 import { describe, expect, it } from "bun:test";
 import type { TaskStatusView } from "@cuekit/core";
-import { buildTmuxAttachArgs, buildTuiTaskAttachExit, getTmuxSessionName } from "../src/attach.ts";
+import {
+	buildTmuxAttachArgs,
+	buildTuiTaskAttachExit,
+	getPaneAttachCommand,
+	getTmuxSessionName,
+} from "../src/attach.ts";
 
 const baseView: TaskStatusView = {
 	task_id: "t_abc",
@@ -53,9 +58,29 @@ describe("tui tmux attach helpers", () => {
 	});
 
 	it("builds task attach exits with return state for attach-and-return", () => {
-		expect(buildTuiTaskAttachExit("cuekit-task-t_abc", "t_abc")).toEqual({
+		expect(
+			buildTuiTaskAttachExit(
+				{ argv: ["tmux", "attach-session", "-t", "cuekit-task-t_abc"] },
+				"t_abc",
+			),
+		).toEqual({
 			kind: "attach",
 			args: buildTmuxAttachArgs("cuekit-task-t_abc"),
+			returnState: { mode: "tasks", selected_task_id: "t_abc" },
+		});
+	});
+
+	it("preserves structured zellij attach argv", () => {
+		const command = getPaneAttachCommand({
+			...baseView,
+			attach_command: { argv: ["zellij", "attach", "ct-t_abc"] },
+			attach_hint: "zellij attach ct-t_abc",
+		});
+		expect(command).toEqual({ argv: ["zellij", "attach", "ct-t_abc"] });
+		if (!command) throw new Error("expected attach command");
+		expect(buildTuiTaskAttachExit(command, "t_abc")).toEqual({
+			kind: "attach",
+			args: ["zellij", "attach", "ct-t_abc"],
 			returnState: { mode: "tasks", selected_task_id: "t_abc" },
 		});
 	});

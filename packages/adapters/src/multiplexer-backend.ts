@@ -22,6 +22,13 @@ export interface SpawnPaneParams {
 	 * (e.g. zellij) may populate the file via periodic snapshots.
 	 */
 	transcriptPath?: string;
+	/**
+	 * Prefer the backend's native pane TTY over transcript mirroring wrappers.
+	 * Interactive TUI agents need this so resize events from attach propagate to
+	 * the child process; batch tasks can trade native resizing for transcript
+	 * capture when a backend lacks tmux-style pipe-pane.
+	 */
+	preserveNativeTty?: boolean;
 }
 
 export interface PaneHandle {
