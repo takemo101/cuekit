@@ -4,7 +4,7 @@ import { chmodSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createSession, getTaskById, runMigrations } from "@cuekit/store";
-import { PaneBackend } from "../src/pane-backend.ts";
+import { PaneBackend } from "../src/tmux-backend.ts";
 import { createPiAdapter } from "../src/pi-adapter.ts";
 import { globalTaskArtifactPaths, taskArtifactPaths } from "../src/task-artifacts.ts";
 import { hasTmux } from "../src/testing.ts";
@@ -64,7 +64,7 @@ suite("pane-adapter end-to-end against real tmux (dogfood)", () => {
 		// Best-effort cleanup in case a test aborted mid-run.
 		try {
 			const rows = db.prepare("select id from tasks").all() as Array<{ id: string }>;
-			for (const row of rows) await panes.killTask(row.id);
+			for (const row of rows) await panes.killPane(row.id);
 		} catch {
 			// ignore — panes may already be gone
 		}

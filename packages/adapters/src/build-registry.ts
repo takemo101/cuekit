@@ -5,7 +5,7 @@ import { createClaudeCodeAdapter } from "./claude-code-adapter.ts";
 import { createGeminiAdapter } from "./gemini-adapter.ts";
 import { createJcodeAdapter } from "./jcode-adapter.ts";
 import { createOpenCodeAdapter } from "./opencode-adapter.ts";
-import type { PaneBackend } from "./pane-backend.ts";
+import type { PaneBackend } from "./tmux-backend.ts";
 import { createPiAdapter } from "./pi-adapter.ts";
 
 // Build the AdapterRegistry that every cuekit entrypoint should expose

@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from "bun:test";
 import type { TaskSpec } from "@cuekit/core";
 import { createSession, runMigrations } from "@cuekit/store";
 import { buildGeminiLaunchCommand, createGeminiAdapter } from "../src/gemini-adapter.ts";
-import { PaneBackend } from "../src/pane-backend.ts";
+import { PaneBackend } from "../src/tmux-backend.ts";
 import { FakeTmuxRunner } from "../src/testing.ts";
 
 let db: Database;

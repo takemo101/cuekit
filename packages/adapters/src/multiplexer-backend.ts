@@ -44,6 +44,18 @@ export interface MultiplexerBackend {
 	readonly kind: string;
 
 	/**
+	 * The session name the given task currently resides in. For tmux today
+	 * this is always `cuekit-task-<task_id>`; for zellij with team-dashboard
+	 * support (Phase 4) this can be `cuekit-team-<team_id>` for tasks that
+	 * belong to a team.
+	 *
+	 * Used by adapters for metadata fields and by the TUI for fallback
+	 * lookups. Backends that need internal state (e.g. zellij team-session
+	 * lookup) may resolve it from an internal map populated at spawn time.
+	 */
+	sessionNameFor(task_id: string): string;
+
+	/**
 	 * Spawn a new pane running the given command. Returns a handle the backend
 	 * can use later to address the pane.
 	 */
