@@ -502,6 +502,10 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 					: supportsAttach
 						? panes.attachCommand(task_id)?.argv.join(" ")
 						: undefined,
+				attach_command:
+					isTerminalTaskStatus(live.status) || !supportsAttach
+						? null
+						: (panes.attachCommand(task_id) ?? null),
 				metadata: {
 					adapter_mode: mode,
 					tmux_session_name: panes.sessionNameFor(task_id),
