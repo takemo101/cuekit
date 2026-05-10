@@ -10,6 +10,14 @@ still be affected.
 
 ## [Unreleased]
 
+### Deprecated
+
+- **`metadata.tmux_session_name`** on `TaskStatusView` has been
+  deprecated in favour of `metadata.pane_session_name`. Both fields
+  are populated identically during the deprecation window; the
+  legacy field will be removed in a future minor release (Phase 5
+  of the multiplexer backend abstraction, #423).
+
 ## [0.0.4] — 2026-05-08
 
 A maintenance release: docs, tests, refactors, and release-engineering
