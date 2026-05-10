@@ -5,6 +5,7 @@ export * from "./claude-code-adapter.ts";
 export * from "./gemini-adapter.ts";
 export * from "./jcode-adapter.ts";
 export * from "./opencode-adapter.ts";
+export * from "./build-multiplexer.ts";
 export * from "./multiplexer-backend.ts";
 export * from "./pane-adapter.ts";
 export * from "./tmux-backend.ts";
