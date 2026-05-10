@@ -152,11 +152,14 @@ export class TmuxBackend implements MultiplexerBackend {
 }
 
 /**
- * Backwards-compatible alias retained during the multiplexer-backend
+ * Backwards-compatible type alias retained during the multiplexer-backend
  * abstraction migration. New code should depend on `MultiplexerBackend` (the
  * interface) or `TmuxBackend` (the concrete tmux implementation).
  *
- * Removal is filed as Phase 5 (issue #424).
+ * The const alias was removed because it shadowed the type alias when
+ * TypeScript resolved annotations like `panes: PaneBackend`. Construction
+ * sites should use `new TmuxBackend()` directly.
+ *
+ * Removal of this type alias is filed as Phase 5 (issue #424).
  */
-export const PaneBackend = TmuxBackend;
 export type PaneBackend = TmuxBackend;

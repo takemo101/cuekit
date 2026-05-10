@@ -2,7 +2,7 @@ import { Database } from "bun:sqlite";
 import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { PaneBackend } from "@cuekit/adapters";
+import { TmuxBackend } from "@cuekit/adapters";
 import { FakeTmuxRunner } from "@cuekit/adapters/testing";
 import { buildTuiAdapterRegistry } from "../src/bin.ts";
 import { classifyCuekitCommand, printMainHelp } from "../src/dispatch.ts";
@@ -38,7 +38,7 @@ describe("cuekit CLI binary dispatch", () => {
 		// reformat that drops a register() call.
 		const db = new Database(":memory:");
 		try {
-			const panes = new PaneBackend({ runner: new FakeTmuxRunner(), sendKeysDelayMs: 0 });
+			const panes = new TmuxBackend({ runner: new FakeTmuxRunner(), sendKeysDelayMs: 0 });
 			const registry = buildTuiAdapterRegistry(db, panes);
 
 			expect(registry.kinds().sort()).toEqual(["claude-code", "gemini", "jcode", "opencode", "pi"]);

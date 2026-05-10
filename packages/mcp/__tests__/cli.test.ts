@@ -11,7 +11,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { AdapterRegistry, createClaudeCodeAdapter, PaneBackend } from "@cuekit/adapters";
+import { AdapterRegistry, createClaudeCodeAdapter, TmuxBackend } from "@cuekit/adapters";
 import { FakeTmuxRunner } from "@cuekit/adapters/testing";
 import {
 	createSession,
@@ -29,7 +29,7 @@ function makeCliHarness() {
 	const db = new Database(":memory:");
 	db.exec("pragma foreign_keys = ON;");
 	runMigrations(db);
-	const panes = new PaneBackend({ runner: new FakeTmuxRunner(), sendKeysDelayMs: 0 });
+	const panes = new TmuxBackend({ runner: new FakeTmuxRunner(), sendKeysDelayMs: 0 });
 	const registry = new AdapterRegistry();
 	registry.register(
 		createClaudeCodeAdapter(db, panes, { launchCommandOverride: () => "sleep 60" }),

@@ -39,7 +39,7 @@ import {
 	supportsSteeringForMode,
 } from "./adapter-options.ts";
 import { type AdapterSubmitInput, type AgentAdapter, generateTaskId } from "./agent-adapter.ts";
-import type { PaneBackend } from "./tmux-backend.ts";
+import type { MultiplexerBackend } from "./multiplexer-backend.ts";
 import { normalizeTaskResult } from "./result-normalizer.ts";
 import {
 	globalTaskArtifactPaths,
@@ -91,7 +91,7 @@ export interface PaneAdapterConfig {
 
 export interface PaneAdapterDeps {
 	db: Database;
-	panes: PaneBackend;
+	panes: MultiplexerBackend;
 	// Optional sink for warnings (e.g. "transcript capture disabled"). Tests
 	// default to the silent logger so submit failures on read-only cwds
 	// don't pollute test output; the `cuekit` binary injects an stderr

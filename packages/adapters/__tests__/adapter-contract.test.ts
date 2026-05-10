@@ -4,7 +4,7 @@ import { createSession, getTaskById, runMigrations } from "@cuekit/store";
 import type { AgentAdapter } from "../src/agent-adapter.ts";
 import { createClaudeCodeAdapter } from "../src/claude-code-adapter.ts";
 import { createOpenCodeAdapter } from "../src/opencode-adapter.ts";
-import { PaneBackend } from "../src/tmux-backend.ts";
+import { TmuxBackend } from "../src/tmux-backend.ts";
 import { createPiAdapter } from "../src/pi-adapter.ts";
 import { FakeTmuxRunner } from "../src/testing.ts";
 
@@ -19,7 +19,7 @@ import { FakeTmuxRunner } from "../src/testing.ts";
 
 interface AdapterCase {
 	kind: string;
-	make: (db: Database, panes: PaneBackend) => AgentAdapter;
+	make: (db: Database, panes: TmuxBackend) => AgentAdapter;
 	objective: string;
 }
 
@@ -53,7 +53,7 @@ const CASES: AdapterCase[] = [
 describe.each(CASES)("AgentAdapter contract — $kind", (testCase) => {
 	let db: Database;
 	let runner: FakeTmuxRunner;
-	let panes: PaneBackend;
+	let panes: TmuxBackend;
 	let adapter: AgentAdapter;
 
 	beforeEach(() => {
@@ -67,7 +67,7 @@ describe.each(CASES)("AgentAdapter contract — $kind", (testCase) => {
 			parent_agent_kind: testCase.kind,
 		});
 		runner = new FakeTmuxRunner();
-		panes = new PaneBackend({ runner, sendKeysDelayMs: 0 });
+		panes = new TmuxBackend({ runner, sendKeysDelayMs: 0 });
 		adapter = testCase.make(db, panes);
 	});
 

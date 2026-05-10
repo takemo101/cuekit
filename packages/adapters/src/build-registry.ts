@@ -5,7 +5,7 @@ import { createClaudeCodeAdapter } from "./claude-code-adapter.ts";
 import { createGeminiAdapter } from "./gemini-adapter.ts";
 import { createJcodeAdapter } from "./jcode-adapter.ts";
 import { createOpenCodeAdapter } from "./opencode-adapter.ts";
-import type { PaneBackend } from "./tmux-backend.ts";
+import type { MultiplexerBackend } from "./multiplexer-backend.ts";
 import { createPiAdapter } from "./pi-adapter.ts";
 
 // Build the AdapterRegistry that every cuekit entrypoint should expose
@@ -26,7 +26,7 @@ export interface BuildAdapterRegistryOptions {
 
 export function buildAdapterRegistry(
 	db: Database,
-	panes: PaneBackend,
+	panes: MultiplexerBackend,
 	options: BuildAdapterRegistryOptions = {},
 ): AdapterRegistry {
 	const { logger } = options;

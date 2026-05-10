@@ -3,11 +3,11 @@ import { beforeEach, describe, expect, it } from "bun:test";
 import type { TaskSpec } from "@cuekit/core";
 import { createSession, runMigrations } from "@cuekit/store";
 import { buildGeminiLaunchCommand, createGeminiAdapter } from "../src/gemini-adapter.ts";
-import { PaneBackend } from "../src/tmux-backend.ts";
+import { TmuxBackend } from "../src/tmux-backend.ts";
 import { FakeTmuxRunner } from "../src/testing.ts";
 
 let db: Database;
-let panes: PaneBackend;
+let panes: TmuxBackend;
 let runner: FakeTmuxRunner;
 
 function spec(overrides: Partial<TaskSpec> = {}): TaskSpec {
@@ -29,7 +29,7 @@ beforeEach(() => {
 		parent_agent_kind: "pi",
 	});
 	runner = new FakeTmuxRunner();
-	panes = new PaneBackend({ runner, sendKeysDelayMs: 0 });
+	panes = new TmuxBackend({ runner, sendKeysDelayMs: 0 });
 });
 
 describe("createGeminiAdapter", () => {

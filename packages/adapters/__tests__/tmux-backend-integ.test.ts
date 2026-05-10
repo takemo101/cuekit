@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { PaneBackend } from "../src/tmux-backend.ts";
+import { TmuxBackend } from "../src/tmux-backend.ts";
 import { hasTmux } from "../src/testing.ts";
 
 // Skipped automatically when `tmux` is not on PATH, so unit-test runs on
@@ -10,7 +10,7 @@ const suite = hasTmux() ? describe : describe.skip;
 
 suite("PaneBackend (real tmux integration)", () => {
 	it("round-trips new-session → has-session → kill-session", async () => {
-		const panes = new PaneBackend({ sendKeysDelayMs: 0 });
+		const panes = new TmuxBackend({ sendKeysDelayMs: 0 });
 		const task_id = `integ_${Date.now()}_${Math.floor(Math.random() * 100000)}`;
 
 		try {
@@ -32,7 +32,7 @@ suite("PaneBackend (real tmux integration)", () => {
 	});
 
 	it("kill-session on a missing task is idempotent success", async () => {
-		const panes = new PaneBackend({ sendKeysDelayMs: 0 });
+		const panes = new TmuxBackend({ sendKeysDelayMs: 0 });
 		const task_id = `integ_nope_${Date.now()}`;
 		await expect(panes.killPane(task_id)).resolves.toBeUndefined();
 	});

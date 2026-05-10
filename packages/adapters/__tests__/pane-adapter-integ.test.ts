@@ -4,7 +4,7 @@ import { chmodSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createSession, getTaskById, runMigrations } from "@cuekit/store";
-import { PaneBackend } from "../src/tmux-backend.ts";
+import { TmuxBackend } from "../src/tmux-backend.ts";
 import { createPiAdapter } from "../src/pi-adapter.ts";
 import { globalTaskArtifactPaths, taskArtifactPaths } from "../src/task-artifacts.ts";
 import { hasTmux } from "../src/testing.ts";
@@ -22,7 +22,7 @@ const suite = hasTmux() ? describe : describe.skip;
 // have its shell flush the sentinel. Poll isAlive until the pane is
 // gone or we time out.
 async function waitForPaneDeath(
-	panes: PaneBackend,
+	panes: TmuxBackend,
 	task_id: string,
 	timeoutMs = 5000,
 ): Promise<boolean> {
@@ -37,7 +37,7 @@ async function waitForPaneDeath(
 suite("pane-adapter end-to-end against real tmux (dogfood)", () => {
 	let tmpCwd: string;
 	let db: Database;
-	let panes: PaneBackend;
+	let panes: TmuxBackend;
 	let adapter: ReturnType<typeof createPiAdapter>;
 
 	beforeEach(() => {
@@ -51,7 +51,7 @@ suite("pane-adapter end-to-end against real tmux (dogfood)", () => {
 			worktree_path: tmpCwd,
 			parent_agent_kind: "cuekit-cli",
 		});
-		panes = new PaneBackend({ sendKeysDelayMs: 0 });
+		panes = new TmuxBackend({ sendKeysDelayMs: 0 });
 		// pi is a truthful stub — using it here means the test doesn't need
 		// the pi CLI or claude to be installed. We only care about the
 		// pane-adapter → tmux → sentinel → status plumbing.
@@ -138,7 +138,7 @@ suite("pane-adapter end-to-end against real tmux (dogfood)", () => {
 			worktree_path: readOnlyCwd,
 			parent_agent_kind: "cuekit-cli",
 		});
-		const localPanes = new PaneBackend({ sendKeysDelayMs: 0 });
+		const localPanes = new TmuxBackend({ sendKeysDelayMs: 0 });
 		// Pass cuekitHomeDir explicitly so the test never touches the
 		// operator's real ~/.cuekit/.
 		const localAdapter = createPiAdapter(localDb, localPanes, {
