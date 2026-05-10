@@ -236,6 +236,81 @@ multiplexer_strict: true   # optional; default false. true → no fallback to tm
   appears (one-off dogfood, integration tests that need to force a
   specific backend regardless of project config).
 
+## Per-task backend dispatch
+
+A subtle but important contract: **the backend used to attach to a task
+must be the backend that originally spawned it.** A pane spawned in tmux
+cannot be attached to via zellij and vice versa. The design carries this
+by storing `backend_kind` on every `PaneHandle` at spawn time and
+threading it through every operation that addresses an existing pane:
+
+```ts
+spawnPane({task_id, ...}) → PaneHandle {
+  task_id,
+  backend_kind: "tmux",       // recorded at spawn, persisted for the
+                              // lifetime of the task
+  backend_session,
+  backend_pane_id,
+}
+
+attachCommand(handle)   → uses handle.backend_kind to choose the form
+                          (`tmux attach-session ...` vs `zellij attach ...`)
+sendKeys(handle, msg)   → routed to the matching backend's sendKeys
+capturePane(handle, …)  → same
+killPane(handle)        → same
+```
+
+Persistence: the `backend_kind` (plus the backend-specific session /
+pane ids in the handle) is stored on the task row so it survives the
+cuekit process. Likely shape: a generic
+`metadata.pane_handle: { backend_kind, backend_session, backend_pane_id }`
+object, which subsumes today's `metadata.tmux_session_name`.
+
+This means an operator who manually attaches via the
+`attach_command` printed in `cuekit task status` always lands on the
+right multiplexer, regardless of how many times they have toggled the
+project's `multiplexer:` setting between invocations. The TUI's `a`
+shortcut behaves the same way — it reads the per-task handle, not the
+active backend, so a TUI launched after a config change can still
+attach to in-flight tasks created under the previous setting.
+
+### Edge case: cross-backend operations within one cuekit process
+
+What happens when the active backend (project config = tmux) needs to
+operate on a task whose handle says `backend_kind: "zellij"` (because a
+previous cuekit process spawned it under a different config)?
+
+- **Attach (`attach_command`)** is safe by default: `attachCommand` only
+  needs to format an argv from the handle. The argv is a self-contained
+  shell command the operator runs in another terminal — it does not
+  require the cuekit process to be "using" that backend internally.
+  Both the TUI's `a` shortcut and `cuekit task status` consumers can
+  always print the right command.
+- **Steering / cancellation / capture** require live communication with
+  the spawning backend. If the active cuekit process only loaded a
+  `TmuxBackend`, it cannot directly drive a zellij pane. Two options:
+  - **(a) Multi-backend instance.** The process pre-loads every
+    backend kind it might encounter (or lazily initialises a backend
+    on first encounter) and dispatches by `handle.backend_kind`. More
+    flexible but contradicts the "1 process = 1 backend" simplicity.
+  - **(b) Honest error.** The process refuses cross-backend operations
+    with a clear message: "this task was created with zellij; switch
+    `.cuekit.yaml` back or attach manually with the printed
+    attach_command." Simpler; matches the constraint that operators
+    shouldn't be silently fragmenting their session graph by toggling
+    the config.
+
+  **Recommendation: (b) for v0** — the cross-backend case is rare in
+  practice (operators don't usually toggle `multiplexer:` mid-project),
+  the failure mode is obvious, and the right escape hatch (the printed
+  attach_command) already works. Lazy multi-backend (option a) can be
+  added later if a real workflow demands it.
+
+A task whose terminal status is already final does not require any
+live backend communication, so terminal tasks remain readable
+(transcript file, `task_events`, `get_task_result`) regardless of
+which backend is active.
+
 ## Migration plan
 
 ### Phase 1 — `MultiplexerBackend` interface + `TmuxBackend`
