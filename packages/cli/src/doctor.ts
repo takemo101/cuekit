@@ -98,6 +98,18 @@ async function defaultCheckWritableState(
 	}
 }
 
+function readRequestedMultiplexer(cwd: string): "tmux" | "zellij" {
+	try {
+		const loaded = loadProjectConfigFromDisk(cwd);
+		if (loaded.ok && loaded.discovery.source === "config") {
+			return loaded.config.multiplexer ?? "tmux";
+		}
+	} catch {
+		// fall through
+	}
+	return "tmux";
+}
+
 function defaultLoadProjectConfig(cwd: string): DoctorProjectConfigResult {
 	const loaded = loadProjectConfigFromDisk(cwd);
 	if (!loaded.ok) return { ok: false, error: loaded.error };
@@ -170,13 +182,31 @@ export async function runDoctor(options: RunDoctorOptions = {}): Promise<DoctorR
 			: { level: "fail", label: "bun", detail: bunVersion.stderr || "not found" },
 	);
 
-	// Active multiplexer backend. Today this is always tmux; the
-	// `multiplexer:` project-config field (Phase 3, #411) makes it
-	// configurable, and #414 adds the per-backend probes (zellij version,
-	// fallback-detected status, etc.). The header row exists now so users
-	// can see at a glance which backend is active and so the doctor output
-	// shape stays stable across the abstraction landing.
-	checks.push({ level: "ok", label: "active backend", detail: "tmux" });
+	// Active multiplexer backend. Reads `multiplexer:` from project config
+	// (default tmux). When zellij is configured but its probe fails, the
+	// runtime factory soft-falls-back to tmux; doctor reports this so the
+	// operator can see at a glance whether they got the backend they asked
+	// for.
+	const cwdForConfig = options.cwd ?? process.cwd();
+	const requestedMultiplexer = readRequestedMultiplexer(cwdForConfig);
+	const zellijProbe =
+		requestedMultiplexer === "zellij" ? await exec("zellij", ["--version"]) : null;
+	const fallbackApplied =
+		requestedMultiplexer === "zellij" && zellijProbe !== null && !zellijProbe.ok;
+	const activeBackend = fallbackApplied ? "tmux (fallback from zellij)" : requestedMultiplexer;
+	checks.push({ level: "ok", label: "active backend", detail: activeBackend });
+
+	if (zellijProbe !== null) {
+		checks.push(
+			zellijProbe.ok
+				? { level: "ok", label: "zellij", detail: trimVersionOutput(zellijProbe.stdout) }
+				: {
+						level: "warn",
+						label: "zellij",
+						detail: zellijProbe.stderr || "not found (falling back to tmux)",
+					},
+		);
+	}
 
 	const tmuxVersion = await exec("tmux", ["-V"]);
 	checks.push(
