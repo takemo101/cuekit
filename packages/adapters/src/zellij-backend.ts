@@ -459,27 +459,32 @@ export class ZellijBackend implements MultiplexerBackend {
 		// resurrectable list; delete-session is the cleanup path for those.
 		const result = await this.runner.run(["kill-session", target]);
 		const errText = `${result.stderr} ${result.stdout}`.toLowerCase();
-		if (result.exitCode === 0) return;
+		if (result.exitCode === 0) {
+			await this.deleteSession(target, `task ${task_id}`);
+			return;
+		}
 		const missing =
 			/no session named|no such session|session.*not found|does not exist|not running/.test(
 				errText,
 			);
 		if (missing) {
-			const deleted = await this.runner.run(["delete-session", target]);
-			const deleteText = `${deleted.stderr} ${deleted.stdout}`.toLowerCase();
-			if (
-				deleted.exitCode !== 0 &&
-				!/no session named|no such session|session.*not found|does not exist|not running/.test(
-					deleteText,
-				)
-			) {
-				throw new Error(
-					`zellij delete-session for task ${task_id} failed: ${deleted.stderr.trim()}`,
-				);
-			}
+			await this.deleteSession(target, `task ${task_id}`);
 			return;
 		}
 		throw new Error(`zellij kill-session for task ${task_id} failed: ${result.stderr.trim()}`);
+	}
+
+	private async deleteSession(sessionName: string, label: string): Promise<void> {
+		const deleted = await this.runner.run(["delete-session", sessionName]);
+		const deleteText = `${deleted.stderr} ${deleted.stdout}`.toLowerCase();
+		if (
+			deleted.exitCode !== 0 &&
+			!/no session named|no such session|session.*not found|does not exist|not running/.test(
+				deleteText,
+			)
+		) {
+			throw new Error(`zellij delete-session for ${label} failed: ${deleted.stderr.trim()}`);
+		}
 	}
 
 	async markPaneTerminal(task_id: string, status: string): Promise<void> {
@@ -508,24 +513,16 @@ export class ZellijBackend implements MultiplexerBackend {
 		const sessionName = this.teamSessionNameFor(team_id);
 		const result = await this.runner.run(["kill-session", sessionName]);
 		const errText = `${result.stderr} ${result.stdout}`.toLowerCase();
-		if (result.exitCode === 0) return;
+		if (result.exitCode === 0) {
+			await this.deleteSession(sessionName, `team ${team_id}`);
+			return;
+		}
 		const missing =
 			/no session named|no such session|session.*not found|does not exist|not running/.test(
 				errText,
 			);
 		if (missing) {
-			const deleted = await this.runner.run(["delete-session", sessionName]);
-			const deleteText = `${deleted.stderr} ${deleted.stdout}`.toLowerCase();
-			if (
-				deleted.exitCode !== 0 &&
-				!/no session named|no such session|session.*not found|does not exist|not running/.test(
-					deleteText,
-				)
-			) {
-				throw new Error(
-					`zellij delete-session for team ${team_id} failed: ${deleted.stderr.trim()}`,
-				);
-			}
+			await this.deleteSession(sessionName, `team ${team_id}`);
 			return;
 		}
 		throw new Error(`zellij kill-session for team ${team_id} failed: ${result.stderr.trim()}`);
@@ -582,6 +579,38 @@ function renderTeamLayout(name: string, command: string, args: string[], cwd: st
 	return `layout {
   pane name="${escapeKdlString(name)}" cwd="${escapeKdlString(cwd)}" command="${escapeKdlString(command)}" {
     args${renderedArgs}
+  }
+
+  swap_tiled_layout name="cuekit-dashboard" {
+    tab max_panes=2 {
+      pane split_direction="vertical" {
+        pane
+        pane
+      }
+    }
+    tab max_panes=4 {
+      pane {
+        pane split_direction="vertical" {
+          pane
+          pane
+        }
+        pane split_direction="vertical" {
+          pane
+          pane
+        }
+      }
+    }
+    tab {
+      pane split_direction="vertical" {
+        pane { children; }
+        pane {
+          pane
+          pane
+          pane
+          pane
+        }
+      }
+    }
   }
 }
 `;

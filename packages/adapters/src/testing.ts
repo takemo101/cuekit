@@ -149,9 +149,14 @@ export class FakeZellijRunner implements ZellijRunner {
 			// args: ["kill-session", "<session-name>"]
 			const sessionName = args[1];
 			if (sessionName) {
-				this.sessions.delete(sessionName);
 				this.panesBySession.delete(sessionName);
 			}
+			return { stdout: "", stderr: "", exitCode: 0 };
+		}
+		if (cmd === "delete-session") {
+			// args: ["delete-session", "<session-name>"]
+			const sessionName = args[1];
+			if (sessionName) this.sessions.delete(sessionName);
 			return { stdout: "", stderr: "", exitCode: 0 };
 		}
 

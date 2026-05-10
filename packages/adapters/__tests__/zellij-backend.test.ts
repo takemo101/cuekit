@@ -230,6 +230,22 @@ describe("spawnPane", () => {
 		]);
 	});
 
+	it("includes a team dashboard swap layout for balanced zellij tiling", async () => {
+		await panes.spawnPane({
+			task_id: "t_team_layout",
+			team_id: "tm_layout",
+			team_position: "worker",
+			command: "sleep 60",
+			cwd: "/tmp",
+		});
+
+		const layout = runner.lastLayout();
+		expect(layout).toContain('swap_tiled_layout name="cuekit-dashboard"');
+		expect(layout).toContain("tab max_panes=2");
+		expect(layout).toContain("tab max_panes=4");
+		expect(layout).toContain('split_direction="vertical"');
+	});
+
 	it("serializes concurrent first team member spawns into one session create", async () => {
 		const [first, second] = await Promise.all([
 			panes.spawnPane({ task_id: "t_a", team_id: "tm_parallel", command: "a", cwd: "/repo" }),
@@ -339,12 +355,14 @@ describe("capturePane", () => {
 });
 
 describe("killPane", () => {
-	it("issues kill-session (singular) and removes the session from the simulator", async () => {
+	it("kills and deletes the solo session so no exited tombstone remains", async () => {
 		await panes.spawnPane({ task_id: "t_kill", command: "x", cwd: "/tmp" });
 		expect(runner.knownSessions()).toContain("ct-t_kill");
 
 		await panes.killPane("t_kill");
 		expect(runner.knownSessions()).not.toContain("ct-t_kill");
+		expect(runner.calls.at(-2)).toEqual(["kill-session", "ct-t_kill"]);
+		expect(runner.calls.at(-1)).toEqual(["delete-session", "ct-t_kill"]);
 	});
 
 	it("treats 'no such session' as idempotent success", async () => {
@@ -385,7 +403,7 @@ describe("team terminal and cleanup hooks", () => {
 		]);
 	});
 
-	it("kills compact team sessions by team id", async () => {
+	it("kills and deletes compact team sessions by team id", async () => {
 		await panes.spawnPane({
 			task_id: "t_cleanup",
 			team_id: "tm_cleanup",
@@ -396,6 +414,7 @@ describe("team terminal and cleanup hooks", () => {
 		await panes.killTeamSession("tm_cleanup");
 
 		expect(runner.knownSessions()).not.toContain("ctm-cleanup");
-		expect(runner.calls.at(-1)).toEqual(["kill-session", "ctm-cleanup"]);
+		expect(runner.calls.at(-2)).toEqual(["kill-session", "ctm-cleanup"]);
+		expect(runner.calls.at(-1)).toEqual(["delete-session", "ctm-cleanup"]);
 	});
 });

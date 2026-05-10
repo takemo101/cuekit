@@ -4,6 +4,7 @@ import {
 	buildTmuxAttachArgs,
 	buildTuiTaskAttachExit,
 	buildTuiTeamAttachExit,
+	buildTuiTeamMemberAttachExit,
 	getPaneAttachCommand,
 	getTmuxSessionName,
 } from "../src/attach.ts";
@@ -106,6 +107,59 @@ describe("tui tmux attach helpers", () => {
 			kind: "attach",
 			args: ["zellij", "attach", "ct-t_abc"],
 			returnState: { mode: "tasks", selected_task_id: "t_abc" },
+		});
+	});
+
+	it("focuses a zellij team pane before task attach", () => {
+		const view: TaskStatusView = {
+			...baseView,
+			team_id: "tm_abcd",
+			position: "worker",
+			native_task_id: "ctm-abcd/terminal_1",
+			attach_command: { argv: ["zellij", "attach", "ctm-abcd"] },
+			metadata: {
+				pane_backend_kind: "zellij",
+				pane_session_name: "ctm-abcd",
+				tmux_pane_id: "ctm-abcd/terminal_1",
+			},
+		};
+		const command = getPaneAttachCommand(view);
+		if (!command) throw new Error("expected attach command");
+
+		expect(buildTuiTaskAttachExit(command, "t_abc", view)).toEqual({
+			kind: "attach",
+			preAttachArgs: [["zellij", "--session", "ctm-abcd", "action", "focus-pane-id", "terminal_1"]],
+			args: ["zellij", "attach", "ctm-abcd"],
+			returnState: { mode: "tasks", selected_task_id: "t_abc" },
+		});
+	});
+
+	it("focuses a zellij team pane before member attach but not team dashboard attach", () => {
+		const view: TaskStatusView = {
+			...baseView,
+			team_id: "tm_abcd",
+			native_task_id: "ctm-abcd/terminal_2",
+			attach_command: { argv: ["zellij", "attach", "ctm-abcd"] },
+			metadata: { pane_backend_kind: "zellij", pane_session_name: "ctm-abcd" },
+		};
+		const command = getPaneAttachCommand(view);
+		if (!command) throw new Error("expected attach command");
+
+		expect(buildTuiTeamMemberAttachExit(command, "tm_abcd", "t_abc", view)).toEqual({
+			kind: "attach",
+			preAttachArgs: [["zellij", "--session", "ctm-abcd", "action", "focus-pane-id", "terminal_2"]],
+			args: ["zellij", "attach", "ctm-abcd"],
+			returnState: {
+				mode: "teams",
+				selected_team_id: "tm_abcd",
+				selected_member_task_id: "t_abc",
+				team_focus: "members",
+			},
+		});
+		expect(buildTuiTeamAttachExit(command, "tm_abcd")).toEqual({
+			kind: "attach",
+			args: ["zellij", "attach", "ctm-abcd"],
+			returnState: { mode: "teams", selected_team_id: "tm_abcd", team_focus: "list" },
 		});
 	});
 });
