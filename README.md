@@ -22,7 +22,7 @@ cuekit is **not a workflow engine**. The parent agent stays the decision-maker; 
 Pinned to a specific release tag (recommended):
 
 ```sh
-bun install -g github:takemo101/cuekit#v0.0.4
+bun install -g github:takemo101/cuekit#v0.0.5
 cuekit doctor
 cuekit mcp config   # prints the snippet to register cuekit with your MCP client
 ```
