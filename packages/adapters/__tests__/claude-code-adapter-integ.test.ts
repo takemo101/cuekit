@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createSession, getTaskById, runMigrations } from "@cuekit/store";
 import { createClaudeCodeAdapter } from "../src/claude-code-adapter.ts";
-import { PaneBackend } from "../src/pane-backend.ts";
+import { PaneBackend } from "../src/tmux-backend.ts";
 import { hasTmux } from "../src/testing.ts";
 
 // Real tmux integration for the ClaudeCode adapter: exercises the whole
@@ -56,7 +56,7 @@ afterEach(async () => {
 	}>;
 	for (const row of rows) {
 		try {
-			await panes.killTask(row.id);
+			await panes.killPane(row.id);
 		} catch {
 			// ignore — may already be gone
 		}

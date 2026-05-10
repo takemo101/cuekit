@@ -4,7 +4,7 @@ import { createSession, getTaskById, runMigrations } from "@cuekit/store";
 import type { AgentAdapter } from "../src/agent-adapter.ts";
 import { createClaudeCodeAdapter } from "../src/claude-code-adapter.ts";
 import { createOpenCodeAdapter } from "../src/opencode-adapter.ts";
-import { PaneBackend } from "../src/pane-backend.ts";
+import { PaneBackend } from "../src/tmux-backend.ts";
 import { createPiAdapter } from "../src/pi-adapter.ts";
 import { FakeTmuxRunner } from "../src/testing.ts";
 

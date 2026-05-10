@@ -10,7 +10,7 @@ import {
 	buildOpenCodeTuiLaunchCommand,
 	createOpenCodeAdapter,
 } from "../src/opencode-adapter.ts";
-import { PaneBackend } from "../src/pane-backend.ts";
+import { PaneBackend } from "../src/tmux-backend.ts";
 import { buildPiLaunchCommand, createPiAdapter } from "../src/pi-adapter.ts";
 import { FakeTmuxRunner } from "../src/testing.ts";
 
@@ -192,7 +192,7 @@ describe("createPiAdapter (truthful stub)", () => {
 				.prepare("select transcript_ref from tasks where id = ?")
 				.get(result.value.task_id) as { transcript_ref: string };
 			writeFileSync(join(dirname(transcript.transcript_ref), "exit-code"), "cuekit_exit=0\n");
-			await panes.killTask(result.value.task_id);
+			await panes.killPane(result.value.task_id);
 			await Bun.sleep(5);
 			const view = await adapter.status(result.value.task_id);
 			expect(view.status).toBe("completed");

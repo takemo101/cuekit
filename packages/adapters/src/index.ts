@@ -7,7 +7,7 @@ export * from "./jcode-adapter.ts";
 export * from "./opencode-adapter.ts";
 export * from "./multiplexer-backend.ts";
 export * from "./pane-adapter.ts";
-export * from "./pane-backend.ts";
+export * from "./tmux-backend.ts";
 export * from "./pi-adapter.ts";
 export * from "./result-normalizer.ts";
 export * from "./shell-quote.ts";

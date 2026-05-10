@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "bun:test";
-import { PaneBackend } from "../src/pane-backend.ts";
+import { PaneBackend } from "../src/tmux-backend.ts";
 import { FakeTmuxRunner } from "../src/testing.ts";
 
 let runner: FakeTmuxRunner;
@@ -9,27 +9,29 @@ beforeEach(() => {
 	panes = new PaneBackend({ runner, sendKeysDelayMs: 0 });
 });
 
-describe("sessionNameFor / computeAttachHint", () => {
+describe("sessionNameFor / attachCommand", () => {
 	it("builds the flat 'cuekit-task-{id}' name", () => {
 		expect(panes.sessionNameFor("t_abc")).toBe("cuekit-task-t_abc");
 	});
 
-	it("returns a one-line tmux attach-session command", () => {
-		expect(panes.computeAttachHint("t_abc")).toBe("tmux attach-session -t cuekit-task-t_abc");
+	it("returns a structured tmux attach-session argv", () => {
+		expect(panes.attachCommand("t_abc")).toEqual({
+			argv: ["tmux", "attach-session", "-t", "cuekit-task-t_abc"],
+		});
 	});
 });
 
-describe("spawnTask", () => {
+describe("spawnPane", () => {
 	it("calls tmux new-session with -d / -s / -c / -P / -F and the launch command", async () => {
-		const handle = await panes.spawnTask({
+		const handle = await panes.spawnPane({
 			task_id: "t_abc",
-			launchCommand: "sleep 60",
+			command: "sleep 60",
 			cwd: "/tmp",
 		});
 		expect(handle.task_id).toBe("t_abc");
-		expect(handle.tmux_session_name).toBe("cuekit-task-t_abc");
-		expect(handle.pane_id).toBe("%1");
-		expect(handle.attach_hint).toBe("tmux attach-session -t cuekit-task-t_abc");
+		expect(handle.backend_kind).toBe("tmux");
+		expect(handle.backend_session).toBe("cuekit-task-t_abc");
+		expect(handle.backend_pane_id).toBe("%1");
 
 		const call = runner.calls[0] ?? [];
 		expect(call[0]).toBe("new-session");
@@ -45,9 +47,9 @@ describe("spawnTask", () => {
 	});
 
 	it("passes child reporting environment to tmux without embedding it in the launch command", async () => {
-		await panes.spawnTask({
+		await panes.spawnPane({
 			task_id: "t_abc",
-			launchCommand: "sleep 60",
+			command: "sleep 60",
 			cwd: "/tmp",
 			env: {
 				CUEKIT_TASK_ID: "t_abc",
@@ -67,9 +69,9 @@ describe("spawnTask", () => {
 
 	it("rejects invalid environment variable names", async () => {
 		await expect(
-			panes.spawnTask({
+			panes.spawnPane({
 				task_id: "t_abc",
-				launchCommand: "sleep 60",
+				command: "sleep 60",
 				cwd: "/tmp",
 				env: { "BAD-NAME": "x" },
 			}),
@@ -77,9 +79,9 @@ describe("spawnTask", () => {
 	});
 
 	it("sets up pipe-pane with a shell-quoted transcript path", async () => {
-		await panes.spawnTask({
+		await panes.spawnPane({
 			task_id: "t_abc",
-			launchCommand: "sleep 60",
+			command: "sleep 60",
 			cwd: "/tmp",
 			transcriptPath: "/tmp/spaces in it.txt",
 		});
@@ -103,9 +105,9 @@ describe("spawnTask", () => {
 		});
 
 		await expect(
-			failingPipePanes.spawnTask({
+			failingPipePanes.spawnPane({
 				task_id: "t_abc",
-				launchCommand: "sleep 60",
+				command: "sleep 60",
 				cwd: "/tmp",
 				transcriptPath: "/tmp/transcript.txt",
 			}),
@@ -117,23 +119,23 @@ describe("spawnTask", () => {
 	it("throws when tmux reports a non-zero exit code", async () => {
 		runner.queueResponse({ stdout: "", stderr: "tmux: boom", exitCode: 1 });
 		await expect(
-			panes.spawnTask({ task_id: "t_abc", launchCommand: "x", cwd: "/tmp" }),
+			panes.spawnPane({ task_id: "t_abc", command: "x", cwd: "/tmp" }),
 		).rejects.toThrow(/tmux new-session.*failed/);
 	});
 
 	it("throws when pane id is missing from stdout", async () => {
 		runner.queueResponse({ stdout: "   \n", stderr: "", exitCode: 0 });
 		await expect(
-			panes.spawnTask({ task_id: "t_abc", launchCommand: "x", cwd: "/tmp" }),
+			panes.spawnPane({ task_id: "t_abc", command: "x", cwd: "/tmp" }),
 		).rejects.toThrow(/did not report a pane id/);
 	});
 });
 
 describe("isAlive", () => {
 	it("returns true when tmux has-session succeeds", async () => {
-		await panes.spawnTask({
+		await panes.spawnPane({
 			task_id: "t_abc",
-			launchCommand: "sleep",
+			command: "sleep",
 			cwd: "/tmp",
 		});
 		expect(await panes.isAlive("t_abc")).toBe(true);
@@ -146,9 +148,9 @@ describe("isAlive", () => {
 
 describe("sendKeys", () => {
 	it("issues two send-keys calls: literal text then Enter", async () => {
-		await panes.spawnTask({
+		await panes.spawnPane({
 			task_id: "t_abc",
-			launchCommand: "sleep",
+			command: "sleep",
 			cwd: "/tmp",
 		});
 		await panes.sendKeys("t_abc", "hello world");
@@ -160,15 +162,15 @@ describe("sendKeys", () => {
 	});
 });
 
-describe("killTask", () => {
+describe("killPane", () => {
 	it("issues tmux kill-session and removes the session from the simulator", async () => {
-		await panes.spawnTask({
+		await panes.spawnPane({
 			task_id: "t_abc",
-			launchCommand: "sleep",
+			command: "sleep",
 			cwd: "/tmp",
 		});
 		expect(runner.knownSessions()).toContain("cuekit-task-t_abc");
-		await panes.killTask("t_abc");
+		await panes.killPane("t_abc");
 		expect(runner.knownSessions()).not.toContain("cuekit-task-t_abc");
 	});
 
@@ -178,6 +180,6 @@ describe("killTask", () => {
 			stderr: "can't find session: session not found",
 			exitCode: 1,
 		});
-		await expect(panes.killTask("t_missing")).resolves.toBeUndefined();
+		await expect(panes.killPane("t_missing")).resolves.toBeUndefined();
 	});
 });

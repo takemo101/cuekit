@@ -39,7 +39,7 @@ import {
 	supportsSteeringForMode,
 } from "./adapter-options.ts";
 import { type AdapterSubmitInput, type AgentAdapter, generateTaskId } from "./agent-adapter.ts";
-import type { PaneBackend } from "./pane-backend.ts";
+import type { PaneBackend } from "./tmux-backend.ts";
 import { normalizeTaskResult } from "./result-normalizer.ts";
 import {
 	globalTaskArtifactPaths,
@@ -344,9 +344,9 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 				: rawLaunchCommand;
 
 			try {
-				const handle = await panes.spawnTask({
+				const handle = await panes.spawnPane({
 					task_id,
-					launchCommand,
+					command: launchCommand,
 					cwd,
 					transcriptPath,
 					env: {
@@ -355,7 +355,9 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 						CUEKIT_DB_PATH: db.filename,
 					},
 				});
-				updateTaskNativeRef(db, task_id, handle.pane_id);
+				if (handle.backend_pane_id) {
+					updateTaskNativeRef(db, task_id, handle.backend_pane_id);
+				}
 				if (transcriptPath) {
 					updateTaskRefs(db, task_id, { transcript_ref: transcriptPath });
 				}
@@ -453,7 +455,7 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 					const timeout = hasTimedOut(live);
 					if (timeout) {
 						const timeoutMessage = `timed out after ${timeout.timeoutMs}ms`;
-						await panes.killTask(task_id);
+						await panes.killPane(task_id);
 						const completed = completeTask(db, {
 							id: task_id,
 							status: "timed_out",
@@ -498,7 +500,7 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 				attach_hint: isTerminalTaskStatus(live.status)
 					? undefined
 					: supportsAttach
-						? panes.computeAttachHint(task_id)
+						? panes.attachCommand(task_id)?.argv.join(" ")
 						: undefined,
 				metadata: {
 					adapter_mode: mode,
@@ -578,7 +580,7 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 			const cancelCheck = canCancelTask(owned.task.status);
 			if (!cancelCheck.ok) return { ok: false, error: cancelCheck.error };
 			try {
-				await panes.killTask(task_id);
+				await panes.killPane(task_id);
 			} catch (err) {
 				return {
 					ok: false,
@@ -602,7 +604,7 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 		},
 
 		async cleanup(task_id: string) {
-			await panes.killTask(task_id);
+			await panes.killPane(task_id);
 		},
 
 		async list(filter?: TaskListFilter): Promise<TaskSummary[]> {

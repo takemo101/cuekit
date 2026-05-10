@@ -10,7 +10,7 @@ import {
 	buildJcodeRunLaunchCommand,
 	createJcodeAdapter,
 } from "../src/jcode-adapter.ts";
-import { PaneBackend } from "../src/pane-backend.ts";
+import { PaneBackend } from "../src/tmux-backend.ts";
 import { FakeTmuxRunner, hasTmux } from "../src/testing.ts";
 
 let db: Database;
@@ -264,7 +264,7 @@ realTmuxSuite("JcodeAdapter (real tmux integration)", () => {
 		}>;
 		for (const row of rows) {
 			try {
-				await realPanes.killTask(row.id);
+				await realPanes.killPane(row.id);
 			} catch {
 				// ignore — may already be gone
 			}
