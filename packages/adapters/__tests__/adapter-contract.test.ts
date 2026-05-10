@@ -33,6 +33,14 @@ interface AdapterCase {
 	objective: string;
 }
 
+class MarkingTmuxBackend extends TmuxBackend {
+	readonly terminalMarks: Array<{ task_id: string; status: string }> = [];
+
+	async markPaneTerminal(task_id: string, status: string): Promise<void> {
+		this.terminalMarks.push({ task_id, status });
+	}
+}
+
 const CASES: AdapterCase[] = [
 	{
 		kind: "claude-code",
@@ -63,7 +71,7 @@ const CASES: AdapterCase[] = [
 describe.each(CASES)("AgentAdapter contract — $kind", (testCase) => {
 	let db: Database;
 	let runner: FakeTmuxRunner;
-	let panes: TmuxBackend;
+	let panes: MarkingTmuxBackend;
 	let adapter: AgentAdapter;
 
 	beforeEach(() => {
@@ -77,7 +85,7 @@ describe.each(CASES)("AgentAdapter contract — $kind", (testCase) => {
 			parent_agent_kind: testCase.kind,
 		});
 		runner = new FakeTmuxRunner();
-		panes = new TmuxBackend({ runner, sendKeysDelayMs: 0 });
+		panes = new MarkingTmuxBackend({ runner, sendKeysDelayMs: 0 });
 		adapter = testCase.make(db, panes);
 	});
 
@@ -185,6 +193,7 @@ describe.each(CASES)("AgentAdapter contract — $kind", (testCase) => {
 
 		expect(view.status).toBe("completed");
 		expect(getTaskById(db, task_id)?.status).toBe("completed");
+		expect(panes.terminalMarks).toContainEqual({ task_id, status: "completed" });
 	});
 
 	it("status preserves attach for stored backend when the current backend differs", async () => {

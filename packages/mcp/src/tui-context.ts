@@ -77,9 +77,7 @@ export function createTuiContext(ctx: CommandContext, scope: TuiScopeOptions = {
 			return { ok: true as const, message: `Deleted team ${result.team_id}.` };
 		},
 		getTranscriptPath: (taskId: string) => getTaskById(ctx.db, taskId)?.transcript_ref ?? undefined,
-		capturePane: ctx.panes
-			? (taskId: string) => ctx.panes!.capturePane(taskId)
-			: undefined,
+		capturePane: ctx.panes ? (taskId: string) => ctx.panes?.capturePane(taskId) : undefined,
 	};
 }
 

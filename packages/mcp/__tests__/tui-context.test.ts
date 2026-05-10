@@ -1,6 +1,6 @@
 import { Database } from "bun:sqlite";
 import { describe, expect, it } from "bun:test";
-import { AdapterRegistry } from "@cuekit/adapters";
+import { AdapterRegistry, type MultiplexerBackend } from "@cuekit/adapters";
 import {
 	createSession,
 	createTask,
@@ -11,12 +11,28 @@ import {
 } from "@cuekit/store";
 import { createTuiContext } from "../src/tui-context.ts";
 
-function makeHarness() {
+function makeHarness(panes?: MultiplexerBackend) {
 	const db = new Database(":memory:");
 	db.exec("pragma foreign_keys = ON;");
 	runMigrations(db);
 	const registry = new AdapterRegistry();
-	return { db, tui: createTuiContext({ db, registry }, { projectRoot: "/repo" }) };
+	return { db, tui: createTuiContext({ db, registry, panes }, { projectRoot: "/repo" }) };
+}
+
+function fakePanes(overrides: Partial<MultiplexerBackend>): MultiplexerBackend {
+	return {
+		kind: "fake",
+		sessionNameFor: (taskId: string) => `fake-${taskId}`,
+		spawnPane: async () => {
+			throw new Error("not implemented");
+		},
+		isAlive: async () => true,
+		sendKeys: async () => {},
+		capturePane: async () => null,
+		killPane: async () => {},
+		attachCommand: () => null,
+		...overrides,
+	};
 }
 
 describe("createTuiContext", () => {
@@ -234,6 +250,38 @@ describe("createTuiContext", () => {
 		const notEmptyDelete = await tui.deleteTeam("tm_cleanup");
 		expect(notEmptyDelete.ok).toBe(false);
 		if (!notEmptyDelete.ok) expect(notEmptyDelete.error.code).toBe("invalid_state");
+	});
+
+	it("kills the backend team session when cleanup removes the last member", async () => {
+		const killedTeams: string[] = [];
+		const { db, tui } = makeHarness(
+			fakePanes({
+				killTeamSession: async (teamId: string) => {
+					killedTeams.push(teamId);
+				},
+			}),
+		);
+		createSession(db, {
+			id: "s_cleanup_last",
+			project_root: "/repo",
+			worktree_path: "/repo",
+			parent_agent_kind: "pi",
+		});
+		createTaskTeam(db, { id: "tm_cleanup_last", session_id: "s_cleanup_last", title: "Cleanup" });
+		createTask(db, {
+			id: "t_cleanup_last",
+			session_id: "s_cleanup_last",
+			agent_kind: "claude-code",
+			team_id: "tm_cleanup_last",
+			objective: "done",
+			status: "completed",
+		});
+
+		const cleanup = await tui.cleanupTeam("tm_cleanup_last");
+
+		expect(cleanup.ok).toBe(true);
+		expect(getTaskById(db, "t_cleanup_last")).toBeNull();
+		expect(killedTeams).toEqual(["tm_cleanup_last"]);
 	});
 
 	it("returns TUI ack errors for unknown team actions", async () => {

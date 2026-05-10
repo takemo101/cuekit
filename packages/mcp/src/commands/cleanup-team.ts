@@ -57,6 +57,24 @@ export async function runCleanupTeam(
 			if (!cleanup.ok) return { error: cleanup.error };
 			deleteTask(ctx.db, task.id);
 		}
+		const remainingAfterDelete = listTasksByTeam(ctx.db, team.id);
+		if (remainingAfterDelete.length === 0 && ctx.panes?.killTeamSession) {
+			try {
+				await ctx.panes.killTeamSession(team.id);
+			} catch (error) {
+				return {
+					error: {
+						code: "runtime_crash",
+						message: `team session cleanup failed for team '${team.id}'`,
+						retryable: true,
+						details: {
+							team_id: team.id,
+							cause: error instanceof Error ? error.message : String(error),
+						},
+					},
+				};
+			}
+		}
 	}
 	return {
 		team_id: team.id,

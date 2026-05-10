@@ -72,7 +72,7 @@ beforeEach(() => {
 			launchCommandOverride: () => "sleep 60",
 		}),
 	);
-	ctx = { db, registry };
+	ctx = { db, registry, panes };
 });
 
 describe("team commands", () => {
@@ -1005,6 +1005,34 @@ describe("wait-team and cleanup-team", () => {
 		expect(getTaskById(db, "t_done")).toBeNull();
 		expect(getTaskById(db, "t_run")?.status).toBe("running");
 		expect(runGetTeamStatus(ctx, { team_id: "tm_1" })).toMatchObject({ team_id: "tm_1" });
+	});
+
+	it("cleanup-team kills the backend team session when all members are deleted", async () => {
+		const killedTeams: string[] = [];
+		const basePanes = ctx.panes as TmuxBackend & { killTeamSession?: (teamId: string) => Promise<void> };
+		basePanes.killTeamSession = async (teamId: string) => {
+			killedTeams.push(teamId);
+		};
+		createSession(db, {
+			id: "s_cleanup_all",
+			project_root: "/p",
+			worktree_path: "/w",
+			parent_agent_kind: "pi",
+		});
+		createTaskTeam(db, { id: "tm_cleanup_all", session_id: "s_cleanup_all", title: "Team" });
+		createTask(db, {
+			id: "t_done_all",
+			session_id: "s_cleanup_all",
+			agent_kind: "claude-code",
+			team_id: "tm_cleanup_all",
+			objective: "done",
+			status: "completed",
+		});
+
+		const result = await runCleanupTeam(ctx, { team_id: "tm_cleanup_all" });
+
+		expect("deleted" in result).toBe(true);
+		expect(killedTeams).toEqual(["tm_cleanup_all"]);
 	});
 
 	it("cleanup-team returns team_not_found for unknown teams", async () => {

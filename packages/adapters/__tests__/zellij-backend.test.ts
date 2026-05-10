@@ -40,6 +40,7 @@ describe("sessionNameFor / attachCommand", () => {
 			backend_kind: "zellij",
 			backend_session: "ctm-restored",
 			backend_pane_id: "ctm-restored/terminal_3",
+			backend_label: "worker:t_restored",
 		});
 
 		expect(panes.sessionNameFor("t_restored")).toBe("ctm-restored");
@@ -56,6 +57,17 @@ describe("sessionNameFor / attachCommand", () => {
 			"-p",
 			"terminal_3",
 			"hello restored",
+		]);
+
+		await panes.markPaneTerminal("t_restored", "completed");
+		expect(runner.calls.at(-1)).toEqual([
+			"--session",
+			"ctm-restored",
+			"action",
+			"rename-pane",
+			"-p",
+			"terminal_3",
+			"worker:t_restored [completed]",
 		]);
 	});
 });
@@ -347,5 +359,43 @@ describe("killPane", () => {
 		await panes.killPane("t_done");
 
 		expect(runner.calls.at(-1)).toEqual(["delete-session", "ct-t_done"]);
+	});
+});
+
+describe("team terminal and cleanup hooks", () => {
+	it("renames a team pane with the terminal status", async () => {
+		await panes.spawnPane({
+			task_id: "t_done",
+			team_id: "tm_done",
+			team_position: "worker",
+			command: "x",
+			cwd: "/tmp",
+		});
+
+		await panes.markPaneTerminal("t_done", "completed");
+
+		expect(runner.calls.at(-1)).toEqual([
+			"--session",
+			"ctm-done",
+			"action",
+			"rename-pane",
+			"-p",
+			"terminal_0",
+			"worker:t_done [completed]",
+		]);
+	});
+
+	it("kills compact team sessions by team id", async () => {
+		await panes.spawnPane({
+			task_id: "t_cleanup",
+			team_id: "tm_cleanup",
+			command: "x",
+			cwd: "/tmp",
+		});
+
+		await panes.killTeamSession("tm_cleanup");
+
+		expect(runner.knownSessions()).not.toContain("ctm-cleanup");
+		expect(runner.calls.at(-1)).toEqual(["kill-session", "ctm-cleanup"]);
 	});
 });
