@@ -60,6 +60,8 @@ zellij can leave exited sessions in `list-sessions` as `(EXITED - attach to resu
 
 When a pane disappears before the exit-code sentinel is visible, cuekit waits briefly and defers failure if there was a recent child event. During this deferral, attach/steering are suppressed because the pane is already gone even though the task row remains temporarily `running`.
 
+Task rows store the backend kind in `native_task_ref` (`tmux:%1`, `zellij:ct-<task_id>/pane`). If a long-lived process was started with one backend and the project config later switches to another, status polling must not infer pane death through the wrong backend. In that mismatch case, cuekit leaves the task non-terminal and suppresses steering/liveness actions from the stale adapter view rather than fabricating a failed result. Attach remains available for known backends because the command can be reconstructed from the stored backend kind and deterministic session name (`tmux attach-session -t cuekit-task-<task_id>` or `zellij attach ct-<task_id>`).
+
 ## Validation notes
 
 Verified manually/dogfooded on zellij 0.43.1:

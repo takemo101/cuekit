@@ -4,12 +4,13 @@ import { createHash } from "node:crypto";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createSession, getTaskById, runMigrations } from "@cuekit/store";
+import { createSession, getTaskById, runMigrations, updateTaskNativeRef } from "@cuekit/store";
 import { createClaudeCodeAdapter } from "../src/claude-code-adapter.ts";
-import { TmuxBackend } from "../src/tmux-backend.ts";
 import { createPiAdapter } from "../src/pi-adapter.ts";
 import { taskArtifactPaths } from "../src/task-artifacts.ts";
-import { FakeTmuxRunner } from "../src/testing.ts";
+import { FakeTmuxRunner, FakeZellijRunner } from "../src/testing.ts";
+import { TmuxBackend } from "../src/tmux-backend.ts";
+import { ZellijBackend } from "../src/zellij-backend.ts";
 
 let db: Database;
 let runner: FakeTmuxRunner;
@@ -71,7 +72,7 @@ describe("submit", () => {
 		expect(task?.status).toBe("running");
 		expect(task?.agent_kind).toBe("claude-code");
 		expect(task?.model).toBe("sonnet");
-		expect(task?.native_task_ref).toMatch(/^%\d+$/);
+		expect(task?.native_task_ref).toMatch(/^tmux:%\d+$/);
 		expect(runner.calls[0]?.[0]).toBe("new-session");
 	});
 
@@ -247,6 +248,37 @@ describe("status", () => {
 		const view = await adapter.status(result.value.task_id);
 		expect(view.status).toBe("failed");
 		expect(view.attach_hint).toBeUndefined();
+	});
+
+	it.each([
+		"tmux:%42",
+		"%42",
+	])("preserves tmux attach command after config switches to zellij (native ref %s)", async (nativeRef) => {
+		const result = await adapter.submit({
+			spec: { agent_kind: "claude-code", objective: "x" },
+			session_id: "s1",
+		});
+		if (!result.ok) throw new Error("setup failed");
+		const task_id = result.value.task_id;
+		updateTaskNativeRef(db, task_id, nativeRef);
+
+		const zellijAdapter = createClaudeCodeAdapter(
+			db,
+			new ZellijBackend({ runner: new FakeZellijRunner(), sendKeysDelayMs: 0 }),
+			{ launchCommandOverride: () => "sleep 60" },
+		);
+		const view = await zellijAdapter.status(task_id);
+
+		expect(view.status).toBe("running");
+		expect(view.supports_attach).toBe(true);
+		expect(view.attach_command).toEqual({
+			argv: ["tmux", "attach-session", "-t", `cuekit-task-${task_id}`],
+		});
+		expect(view.attach_hint).toBe(`tmux attach-session -t cuekit-task-${task_id}`);
+		expect(view.metadata?.pane_session_name).toBe(`cuekit-task-${task_id}`);
+		expect(view.metadata?.pane_backend_kind).toBe("tmux");
+		expect(view.metadata?.pane_backend_mismatch).toBe(true);
+		expect(getTaskById(db, task_id)?.status).toBe("running");
 	});
 
 	it("returns task_not_found for unknown task", async () => {
@@ -566,6 +598,7 @@ describe("status — pane-death terminal inference (the completed path)", () => 
 		const view = await paneDeathAdapter.status(result.value.task_id);
 		expect(view.started_at).toBeDefined();
 		expect(view.metadata?.tmux_session_name).toBe(`cuekit-task-${result.value.task_id}`);
-		expect(view.metadata?.tmux_pane_id).toBeDefined();
+		expect(view.metadata?.tmux_pane_id).toMatch(/^%\d+$/);
+		expect(view.metadata?.pane_backend_kind).toBe("tmux");
 	});
 });

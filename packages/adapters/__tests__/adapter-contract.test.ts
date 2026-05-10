@@ -1,6 +1,12 @@
 import { Database } from "bun:sqlite";
 import { beforeEach, describe, expect, it } from "bun:test";
-import { appendTaskEvent, createSession, getTaskById, runMigrations } from "@cuekit/store";
+import {
+	appendTaskEvent,
+	createSession,
+	getTaskById,
+	runMigrations,
+	updateTaskNativeRef,
+} from "@cuekit/store";
 import type { AgentAdapter } from "../src/agent-adapter.ts";
 import { createClaudeCodeAdapter } from "../src/claude-code-adapter.ts";
 import { createOpenCodeAdapter } from "../src/opencode-adapter.ts";
@@ -157,6 +163,53 @@ describe.each(CASES)("AgentAdapter contract — $kind", (testCase) => {
 
 		const view = await adapter.status(task_id);
 		expect(view.status).toBe("running");
+		expect(getTaskById(db, task_id)?.status).toBe("running");
+	});
+
+	it("status preserves attach for stored backend when the current backend differs", async () => {
+		const result = await adapter.submit({
+			spec: { agent_kind: testCase.kind, objective: "backend mismatch" },
+			session_id: "s1",
+		});
+		if (!result.ok) throw new Error(`submit failed: ${result.error.message}`);
+		const task_id = result.value.task_id;
+		updateTaskNativeRef(db, task_id, `zellij:ct-${task_id}/pane`);
+		await panes.killPane(task_id);
+
+		const view = await adapter.status(task_id);
+		expect(view.status).toBe("running");
+		expect(view.supports_attach).toBe(true);
+		expect(view.attach_command).toEqual({ argv: ["zellij", "attach", `ct-${task_id}`] });
+		expect(view.metadata?.pane_backend_kind).toBe("zellij");
+		expect(view.metadata?.pane_backend_mismatch).toBe(true);
+		expect(getTaskById(db, task_id)?.status).toBe("running");
+	});
+
+	it("steer, cancel, and cleanup do not operate through the wrong backend", async () => {
+		const result = await adapter.submit({
+			spec: { agent_kind: testCase.kind, objective: "backend mismatch operations" },
+			session_id: "s1",
+		});
+		if (!result.ok) throw new Error(`submit failed: ${result.error.message}`);
+		const task_id = result.value.task_id;
+		updateTaskNativeRef(db, task_id, `zellij:ct-${task_id}/pane`);
+		const beforeCalls = runner.calls.length;
+
+		const steer = await adapter.steer({ task_id, message: "hello" });
+		const cancel = await adapter.cancel(task_id);
+		await adapter.cleanup?.(task_id);
+
+		expect(steer.ok).toBe(false);
+		if (!steer.ok) {
+			expect(steer.error.code).toBe("invalid_state");
+			expect(steer.error.details).toMatchObject({ pane_backend_kind: "zellij" });
+		}
+		expect(cancel.ok).toBe(false);
+		if (!cancel.ok) {
+			expect(cancel.error.code).toBe("invalid_state");
+			expect(cancel.error.details).toMatchObject({ pane_backend_kind: "zellij" });
+		}
+		expect(runner.calls.slice(beforeCalls)).toEqual([]);
 		expect(getTaskById(db, task_id)?.status).toBe("running");
 	});
 
