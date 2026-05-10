@@ -72,9 +72,33 @@ function attachArgsForTui(command: { argv: string[] }): string[] {
 	return command.argv;
 }
 
-export function buildTuiTaskAttachExit(command: { argv: string[] }, taskId: string): TuiExit {
+function zellijTeamPaneFocusArgs(view?: TaskStatusView): string[] | undefined {
+	if (!view?.team_id || view.metadata?.pane_backend_kind !== "zellij") return undefined;
+	const sessionName = view.metadata?.pane_session_name;
+	if (typeof sessionName !== "string" || sessionName.length === 0) return undefined;
+	const paneRef =
+		(typeof view.native_task_id === "string" && view.native_task_id) ||
+		(typeof view.metadata?.tmux_pane_id === "string" && view.metadata.tmux_pane_id) ||
+		"";
+	const paneId = paneRef.split("/").at(-1);
+	if (!paneId || !/^terminal_\d+$/.test(paneId)) return undefined;
+	return ["zellij", "--session", sessionName, "action", "focus-pane-id", paneId];
+}
+
+function preAttachArgsForTask(view?: TaskStatusView): string[][] | undefined {
+	const focusArgs = zellijTeamPaneFocusArgs(view);
+	return focusArgs ? [focusArgs] : undefined;
+}
+
+export function buildTuiTaskAttachExit(
+	command: { argv: string[] },
+	taskId: string,
+	view?: TaskStatusView,
+): TuiExit {
+	const preAttachArgs = preAttachArgsForTask(view);
 	return {
 		kind: "attach",
+		...(preAttachArgs ? { preAttachArgs } : {}),
 		args: attachArgsForTui(command),
 		returnState: { mode: "tasks", selected_task_id: taskId },
 	};
@@ -84,9 +108,12 @@ export function buildTuiTeamMemberAttachExit(
 	command: { argv: string[] },
 	teamId: string,
 	taskId: string,
+	view?: TaskStatusView,
 ): TuiExit {
+	const preAttachArgs = preAttachArgsForTask(view);
 	return {
 		kind: "attach",
+		...(preAttachArgs ? { preAttachArgs } : {}),
 		args: attachArgsForTui(command),
 		returnState: {
 			mode: "teams",

@@ -292,7 +292,7 @@ export function App(props: {
 				setError("Selected team member does not expose an attach command.");
 				return;
 			}
-			exit(buildTuiTeamMemberAttachExit(command, selectedTeam.team_id, selectedMember.task_id));
+			exit(buildTuiTeamMemberAttachExit(command, selectedTeam.team_id, selectedMember.task_id, memberStatus));
 		} catch (err) {
 			setError(err instanceof Error ? err.message : String(err));
 		}
@@ -420,7 +420,7 @@ export function App(props: {
 				setError("Selected task does not expose an attach command.");
 				return;
 			}
-			exit(buildTuiTaskAttachExit(command, detail.status.task_id));
+			exit(buildTuiTaskAttachExit(command, detail.status.task_id, detail.status));
 			return;
 		}
 		if (key.name === "c") {

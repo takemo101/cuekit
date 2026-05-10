@@ -52,6 +52,9 @@ export async function runTuiLoop(ctx: TuiContext): Promise<void> {
 		const exit = await runTui(ctx, state);
 		if (exit.kind === "quit") return;
 		state = exit.returnState;
+		for (const args of exit.preAttachArgs ?? []) {
+			await runAttachArgs(args);
+		}
 		const exitCode = await runAttachArgs(exit.args);
 		if (exitCode !== 0) process.exitCode = exitCode;
 	}

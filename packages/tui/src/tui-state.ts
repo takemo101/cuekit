@@ -11,4 +11,4 @@ export type TuiReturnState = {
 
 export type TuiExit =
 	| { kind: "quit" }
-	| { kind: "attach"; args: string[]; returnState?: TuiReturnState };
+	| { kind: "attach"; args: string[]; preAttachArgs?: string[][]; returnState?: TuiReturnState };
