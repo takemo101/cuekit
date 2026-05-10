@@ -74,3 +74,99 @@ export function hasTmux(): boolean {
 		return false;
 	}
 }
+
+export function hasZellij(): boolean {
+	try {
+		const proc = Bun.spawnSync(["zellij", "--version"], { stdout: "pipe", stderr: "pipe" });
+		return proc.exitCode === 0;
+	} catch {
+		return false;
+	}
+}
+
+import type { ZellijRunner, ZellijRunResult } from "./zellij-runner.ts";
+
+/**
+ * In-memory zellij simulator for unit tests. Tracks sessions, fabricates pane
+ * ids in the `terminal_<n>` shape zellij uses, and records every invocation
+ * so tests can assert on argv shape.
+ */
+export class FakeZellijRunner implements ZellijRunner {
+	readonly calls: string[][] = [];
+	private readonly sessions = new Set<string>();
+	private paneCounter = 0;
+	private readonly queuedResponses: ZellijRunResult[] = [];
+
+	queueResponse(result: ZellijRunResult): void {
+		this.queuedResponses.push(result);
+	}
+
+	knownSessions(): string[] {
+		return [...this.sessions];
+	}
+
+	async run(args: string[]): Promise<ZellijRunResult> {
+		this.calls.push([...args]);
+		if (this.queuedResponses.length > 0) {
+			return this.queuedResponses.shift() as ZellijRunResult;
+		}
+
+		// Top-level commands first.
+		const cmd = args[0];
+		if (cmd === "attach") {
+			// `zellij attach --create-background <name>`
+			const idx = args.indexOf("--create-background");
+			if (idx >= 0 && args[idx + 1]) {
+				this.sessions.add(args[idx + 1]!);
+				return { stdout: "", stderr: "", exitCode: 0 };
+			}
+			return { stdout: "", stderr: "", exitCode: 0 };
+		}
+		if (cmd === "list-sessions") {
+			return { stdout: [...this.sessions].join("\n"), stderr: "", exitCode: 0 };
+		}
+		if (cmd === "kill-session") {
+			// args: ["kill-session", "<session-name>"]
+			const sessionName = args[1];
+			if (sessionName) this.sessions.delete(sessionName);
+			return { stdout: "", stderr: "", exitCode: 0 };
+		}
+
+		// Action subcommands: `--session <name> action <verb> ...`
+		if (cmd === "--session") {
+			const sessionName = args[1] ?? "";
+			const verb = args[3] ?? "";
+			if (verb === "new-pane") {
+				if (!this.sessions.has(sessionName)) {
+					return { stdout: "", stderr: "session not found", exitCode: 1 };
+				}
+				this.paneCounter += 1;
+				// Real zellij 0.43 doesn't print a pane id; backend
+				// fabricates a synthetic one. Mirror that by returning
+				// empty stdout.
+				return { stdout: "", stderr: "", exitCode: 0 };
+			}
+			if (verb === "close-pane" || verb === "write-chars" || verb === "write") {
+				return { stdout: "", stderr: "", exitCode: 0 };
+			}
+			if (verb === "dump-screen") {
+				// Path is the last non-flag positional. Walk forward until
+				// we find a non-flag argument.
+				let pathArg: string | undefined;
+				for (let i = 4; i < args.length; i++) {
+					const arg = args[i]!;
+					if (!arg.startsWith("--") && arg !== "-f") {
+						pathArg = arg;
+						break;
+					}
+				}
+				if (pathArg) {
+					await Bun.write(pathArg, "fake screen output\n");
+				}
+				return { stdout: "", stderr: "", exitCode: 0 };
+			}
+		}
+
+		return { stdout: "", stderr: "", exitCode: 0 };
+	}
+}
