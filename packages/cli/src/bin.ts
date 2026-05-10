@@ -1,7 +1,12 @@
 #!/usr/bin/env bun
 import type { Database } from "bun:sqlite";
 import { existsSync, statSync } from "node:fs";
-import { type AdapterRegistry, buildAdapterRegistry, TmuxBackend } from "@cuekit/adapters";
+import {
+	type AdapterRegistry,
+	buildAdapterRegistry,
+	buildMultiplexerBackend,
+	type MultiplexerBackend,
+} from "@cuekit/adapters";
 import { findProjectRoot } from "@cuekit/agent-profiles";
 import { createStderrLogger, parseLogLevel } from "@cuekit/core";
 import { createTuiContext, runCuekitMcpBin } from "@cuekit/mcp";
@@ -37,7 +42,7 @@ function closeQuietly(db: Database): void {
 // `cuekit tui` (this binary). See #382 for the unification rationale.
 export const buildTuiAdapterRegistry: (
 	db: Database,
-	panes: TmuxBackend,
+	panes: MultiplexerBackend,
 	options?: { logger?: import("@cuekit/core").Logger },
 ) => AdapterRegistry = buildAdapterRegistry;
 
@@ -51,9 +56,6 @@ async function runTuiCommand(): Promise<void> {
 		db = openDatabase(useCustomPath ? { path: dbPath } : {});
 		runMigrations(db);
 
-		const panes = new TmuxBackend();
-		const registry = buildTuiAdapterRegistry(db, panes, { logger });
-
 		const { runTuiLoop } = await import("@cuekit/tui");
 		const all = process.argv.includes("--all");
 		const pathScope = process.argv.includes("--path");
@@ -62,6 +64,12 @@ async function runTuiCommand(): Promise<void> {
 		if (loadedConfig && !loadedConfig.ok) {
 			throw new Error(loadedConfig.error);
 		}
+		const built = await buildMultiplexerBackend(
+			loadedConfig?.ok ? loadedConfig.config : undefined,
+			{ logger },
+		);
+		const panes = built.backend;
+		const registry = buildTuiAdapterRegistry(db, panes, { logger });
 		await runTuiLoop(
 			createTuiContext(
 				{ db, registry, panes },
