@@ -12,6 +12,10 @@
 
 export interface SpawnPaneParams {
 	task_id: string;
+	/** Optional team id. Backends may use this to group related tasks in one session. */
+	team_id?: string;
+	/** Optional team role/position used for pane naming in team-aware backends. */
+	team_position?: string;
 	cwd: string;
 	/** Shell command line to run inside the pane. */
 	command: string;
@@ -98,4 +102,11 @@ export interface MultiplexerBackend {
 	 * no attach concept (e.g. a hypothetical headless backend).
 	 */
 	attachCommand(task_id: string): { argv: string[] } | null;
+
+	/**
+	 * Optional hook for backends that need the persisted pane handle to address
+	 * non-derivable sessions (for example zellij team sessions after a process
+	 * restart). Stateless backends can omit this.
+	 */
+	restorePaneHandle?(handle: PaneHandle): void;
 }

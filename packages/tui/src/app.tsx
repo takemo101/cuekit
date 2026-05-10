@@ -3,6 +3,7 @@ import type { TaskSummary, TeamSummary } from "@cuekit/core";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { TuiContext } from "./context.ts";
 import {
+	buildTuiTeamAttachExit,
 	buildTuiTaskAttachExit,
 	buildTuiTeamMemberAttachExit,
 	getPaneAttachCommand,
@@ -297,6 +298,27 @@ export function App(props: {
 		}
 	}, [exit, props.ctx, selectedMember, selectedTeam]);
 
+	const attachSelectedTeam = useCallback(async () => {
+		if (!selectedTeam || !teamDetail?.members.length) {
+			setError("Selected team has no attachable member session yet.");
+			return;
+		}
+		try {
+			for (const member of teamDetail.members) {
+				const memberStatus = await props.ctx.getTaskStatus(member.task_id);
+				if (!canAttach(memberStatus)) continue;
+				const command = getPaneAttachCommand(memberStatus);
+				if (command) {
+					exit(buildTuiTeamAttachExit(command, selectedTeam.team_id));
+					return;
+				}
+			}
+			setError("Selected team has no attachable member session yet.");
+		} catch (err) {
+			setError(err instanceof Error ? err.message : String(err));
+		}
+	}, [exit, props.ctx, selectedTeam, teamDetail]);
+
 	useKeyboard((key) => {
 		if (steerInput !== null) {
 			if (key.name === "escape") {
@@ -374,6 +396,10 @@ export function App(props: {
 		}
 		if (key.name === "r") {
 			void refresh();
+			return;
+		}
+		if (key.sequence === "A" && mode === "teams") {
+			void attachSelectedTeam();
 			return;
 		}
 		if (key.name === "a") {

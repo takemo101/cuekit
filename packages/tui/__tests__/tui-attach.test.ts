@@ -3,6 +3,7 @@ import type { TaskStatusView } from "@cuekit/core";
 import {
 	buildTmuxAttachArgs,
 	buildTuiTaskAttachExit,
+	buildTuiTeamAttachExit,
 	getPaneAttachCommand,
 	getTmuxSessionName,
 } from "../src/attach.ts";
@@ -67,6 +68,14 @@ describe("tui tmux attach helpers", () => {
 			kind: "attach",
 			args: buildTmuxAttachArgs("cuekit-task-t_abc"),
 			returnState: { mode: "tasks", selected_task_id: "t_abc" },
+		});
+	});
+
+	it("builds team attach exits with return state for attach-and-return", () => {
+		expect(buildTuiTeamAttachExit({ argv: ["zellij", "attach", "ctm-abcd"] }, "tm_abcd")).toEqual({
+			kind: "attach",
+			args: ["zellij", "attach", "ctm-abcd"],
+			returnState: { mode: "teams", selected_team_id: "tm_abcd", team_focus: "list" },
 		});
 	});
 
