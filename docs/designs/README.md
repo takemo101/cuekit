@@ -20,6 +20,7 @@ Use these notes when working on an existing cuekit feature area. For current ope
 - [`cuekit-gemini-adapter-design.md`](cuekit-gemini-adapter-design.md) — Gemini CLI adapter design covering interactive + batch run modes, `-y` permission bypass, and steering via `tmux send-keys`.
 - [`cuekit-tui-task-cockpit-design.md`](cuekit-tui-task-cockpit-design.md) — OpenTUI-based human task cockpit for browsing tasks and managing operations.
 - [`cuekit-tui-live-pane-transcript-design.md`](cuekit-tui-live-pane-transcript-design.md) — TUI transcript pane sources from `tmux capture-pane` for running tasks (current rendered screen) with file-tail fallback for terminal tasks.
+- [`cuekit-multiplexer-backend-design.md`](cuekit-multiplexer-backend-design.md) — phased plan for abstracting tmux behind a `MultiplexerBackend` interface to enable Zellij (or other multiplexer) backends. Phase 0 design only; implementation gated on a separate decision.
 - [`cuekit-tui-package-separation-design.md`](cuekit-tui-package-separation-design.md) — package-boundary design for moving TUI code into `@cuekit/tui`.
 - [`cuekit-human-cli-distribution-design.md`](cuekit-human-cli-distribution-design.md) — human CLI package split and GitHub/Bun distribution helpers such as `doctor` and `update`.
 
