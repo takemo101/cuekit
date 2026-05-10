@@ -508,7 +508,12 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 						: (panes.attachCommand(task_id) ?? null),
 				metadata: {
 					adapter_mode: mode,
+					// `tmux_session_name` is the legacy field — kept during the
+					// deprecation window. New consumers should read
+					// `pane_session_name` instead. Both are populated from the
+					// same source. Removal is filed as P5.2 (#423).
 					tmux_session_name: panes.sessionNameFor(task_id),
+					pane_session_name: panes.sessionNameFor(task_id),
 					...(live.native_task_ref ? { tmux_pane_id: live.native_task_ref } : {}),
 				},
 			};

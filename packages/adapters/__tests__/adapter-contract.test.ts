@@ -134,6 +134,9 @@ describe.each(CASES)("AgentAdapter contract — $kind", (testCase) => {
 		expect(view.started_at).toBeDefined();
 		expect(view.metadata?.adapter_mode).toBe("interactive");
 		expect(view.metadata?.tmux_session_name).toBe(`cuekit-task-${result.value.task_id}`);
+		// Multiplexer-agnostic alias ships alongside the tmux-named legacy
+		// field; both must agree during the deprecation window.
+		expect(view.metadata?.pane_session_name).toBe(`cuekit-task-${result.value.task_id}`);
 	});
 
 	it("status reflects batch mode and disables steering", async () => {
