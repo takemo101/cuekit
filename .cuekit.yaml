@@ -2,6 +2,10 @@ project:
   id: cuekit
   name: cuekit
 
+multiplexer:
+  backend: zellij
+  strict: true
+
 # Scope TUI views to this project by default.
 tui:
   scope: project

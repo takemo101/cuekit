@@ -5,6 +5,15 @@ export const TuiScopeSchema = z.enum(["project", "path"]);
 export const TeamCleanupSchema = z.enum(["keep-team", "delete-empty-team"]);
 export const AdapterPermissionSchema = z.enum(["prompt", "bypass"]);
 export const MultiplexerSchema = z.enum(["tmux", "zellij"]);
+export const MultiplexerConfigSchema = z.union([
+	MultiplexerSchema,
+	z
+		.object({
+			backend: MultiplexerSchema,
+			strict: z.boolean().optional(),
+		})
+		.strict(),
+]);
 export const StrategyPositionSchema = z.enum([
 	"coordinator",
 	"worker",
@@ -103,11 +112,10 @@ export const CuekitProjectConfigSchema = z
 			)
 			.optional(),
 		strategies: z.record(z.string().min(1), TeamStrategySchema).optional(),
-		multiplexer: MultiplexerSchema.optional(),
-		// When true and `multiplexer` resolves to a backend whose probe
-		// fails, cuekit hard-fails at startup instead of silently falling
-		// back to tmux. Useful for CI configs that want a missing
-		// zellij to surface as an error.
+		multiplexer: MultiplexerConfigSchema.optional(),
+		// Legacy alias for `multiplexer.strict`. When true and the requested
+		// backend probe fails, cuekit hard-fails at startup instead of
+		// silently falling back to tmux.
 		multiplexer_strict: z.boolean().optional(),
 	})
 	.strict();
@@ -117,6 +125,7 @@ export type TuiScope = z.infer<typeof TuiScopeSchema>;
 export type TeamCleanup = z.infer<typeof TeamCleanupSchema>;
 export type AdapterPermission = z.infer<typeof AdapterPermissionSchema>;
 export type Multiplexer = z.infer<typeof MultiplexerSchema>;
+export type MultiplexerConfig = z.infer<typeof MultiplexerConfigSchema>;
 export type TeamStrategy = z.infer<typeof TeamStrategySchema>;
 export type TeamStrategySlot = z.infer<typeof TeamStrategySlotSchema>;
 export type SubmitDefaults = NonNullable<CuekitProjectConfig["submit"]>;

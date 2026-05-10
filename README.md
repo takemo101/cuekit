@@ -15,7 +15,7 @@ cuekit is **not a workflow engine**. The parent agent stays the decision-maker; 
 ## Requirements
 
 - [Bun](https://bun.sh) ≥ 1.2
-- A terminal multiplexer on `PATH`. By default cuekit uses **tmux** (with `new-session -e` support); children run in tmux sessions you can `tmux attach` into. Alternatively, cuekit can use **[zellij](https://github.com/zellij-org/zellij)** ≥ 0.43 by setting `multiplexer: zellij` in `.cuekit.yaml` — see [Multiplexer](#multiplexer) below.
+- A terminal multiplexer on `PATH`. By default cuekit uses **tmux** (with `new-session -e` support); children run in tmux sessions you can `tmux attach` into. Alternatively, cuekit can use **[zellij](https://github.com/zellij-org/zellij)** ≥ 0.43 by setting `multiplexer.backend: zellij` in `.cuekit.yaml` — see [Multiplexer](#multiplexer) below.
 
 ## Install
 
@@ -188,16 +188,17 @@ See [`docs/specs/2026-04-23-cuekit-adapter-spec.md`](docs/specs/2026-04-23-cueki
 cuekit defaults to **tmux** as the terminal multiplexer. Projects can opt into **zellij** ≥ 0.43 via `.cuekit.yaml`:
 
 ```yaml
-multiplexer: zellij        # default is "tmux"
-multiplexer_strict: false  # optional. true → hard-fail when zellij is missing instead of soft-falling-back to tmux
+multiplexer:
+  backend: zellij # default is "tmux"
+  strict: false   # optional. true → hard-fail when zellij is missing instead of soft-falling-back to tmux
 ```
 
-Behavioural differences when `multiplexer: zellij` is active:
+Behavioural differences when `multiplexer.backend: zellij` is active:
 
 - Solo tasks live in `cuekit-task-<id>` zellij sessions (mirrors the tmux model).
 - Attach uses `zellij attach <session-name>` instead of `tmux attach-session`.
 - The TUI's transcript pane sources from `zellij action dump-screen` instead of `tmux capture-pane`. Output formatting differs subtly (escape-sequence canonicalisation).
-- When zellij is configured but its binary is missing, cuekit logs a warning and silently falls back to tmux. To turn this into a hard failure (e.g. CI configs that want to surface the missing dependency), set `multiplexer_strict: true`.
+- When zellij is configured but its binary is missing, cuekit logs a warning and silently falls back to tmux. To turn this into a hard failure (e.g. CI configs that want to surface the missing dependency), set `multiplexer.strict: true`.
 - Per-task multiplexer dispatch: a task spawned under one backend stays attachable via that backend even if `.cuekit.yaml` is later switched. The active backend is per-task, recorded at spawn time.
 
 See [`docs/designs/cuekit-multiplexer-backend-design.md`](docs/designs/cuekit-multiplexer-backend-design.md) for the full design and the zellij team-dashboard work tracked under Phase 4.

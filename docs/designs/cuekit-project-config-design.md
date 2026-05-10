@@ -68,6 +68,11 @@ submit:
   timeout_ms: 300000
   priority: normal
 
+# Terminal multiplexer backend for child panes.
+multiplexer:
+  backend: tmux # tmux | zellij
+  strict: false # true = hard-fail if requested backend is unavailable
+
 # Defaults applied by Task Teams helpers.
 teams:
   roles:
@@ -127,6 +132,18 @@ cuekit tui          # use tui.scope, defaulting to project
 cuekit tui --path   # force path scope
 cuekit tui --all    # force global scope for this invocation
 ```
+
+### `multiplexer`
+
+```yaml
+multiplexer:
+  backend: zellij
+  strict: false
+```
+
+- `multiplexer.backend` selects the terminal multiplexer used for child panes. Allowed values: `tmux`, `zellij`. Default: `tmux`.
+- `multiplexer.strict` controls fallback. When `false` or omitted, a failed `zellij` probe warns and falls back to `tmux`; when `true`, the same probe failure is a startup error.
+- Legacy flat values (`multiplexer: zellij` and `multiplexer_strict: true`) are accepted as compatibility aliases, but examples and docs should prefer the structured object.
 
 ### `submit`
 

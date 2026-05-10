@@ -165,16 +165,19 @@ and reproducible across every shell that touches the project.
 
 ```yaml
 # .cuekit.yaml
-multiplexer: zellij    # default is "tmux"; explicit value pins the backend
+multiplexer:
+  backend: zellij # default is "tmux"; explicit value pins the backend
+  strict: false   # optional; true → no fallback to tmux
 ```
 
-The `multiplexer:` key joins the existing project-config schema next to
+The `multiplexer:` object joins the existing project-config schema next to
 `adapters:` and `submit:` (see
 [`cuekit-project-config-design.md`](cuekit-project-config-design.md)).
 Loading flow:
 
-1. `loadProjectConfig(cwd)` returns the config; the `multiplexer` field is
-   parsed (default `"tmux"`).
+1. `loadProjectConfig(cwd)` returns the config; `multiplexer.backend` is
+   parsed (default `"tmux"`). Legacy `multiplexer: zellij` remains accepted
+   as a compatibility alias.
 2. `buildMultiplexerBackend(config)` constructs the requested backend.
 3. The backend's `probe()` runs at startup to confirm the multiplexer
    binary is present and the subcommands cuekit needs are recognised
@@ -184,7 +187,7 @@ Loading flow:
 
 ### Fallback behaviour
 
-The motivating use case: a project has `multiplexer: zellij` in
+The motivating use case: a project has `multiplexer.backend: zellij` in
 `.cuekit.yaml`, but the operator is running cuekit on a host that does
 not have zellij installed (CI, fresh laptop, container without the binary,
 etc.). cuekit should not refuse to start — it should fall back to tmux
@@ -193,7 +196,7 @@ and surface a one-time warning so the operator knows what happened.
 ```
 project config requests multiplexer "zellij" but its probe failed
 (zellij: command not found). falling back to tmux. Install zellij
-or set `multiplexer: tmux` in .cuekit.yaml to silence this warning.
+or set `multiplexer.backend: tmux` in .cuekit.yaml to silence this warning.
 ```
 
 Fallback rules:
@@ -210,16 +213,17 @@ Fallback rules:
   backend or fell back.
 - **If tmux itself probes false**, cuekit hard-fails at startup with the
   current error path. No further fallback.
-- **Operators can opt out of fallback** by setting `multiplexer: zellij`
-  *and* `multiplexer_strict: true` in `.cuekit.yaml` — strict mode hard-
+- **Operators can opt out of fallback** by setting `multiplexer.backend: zellij`
+  *and* `multiplexer.strict: true` in `.cuekit.yaml` — strict mode hard-
   fails instead of falling back. Useful for CI configs that want to
   catch a missing zellij rather than silently use tmux. Strict mode
   defaults to false.
 
 ```yaml
 # .cuekit.yaml
-multiplexer: zellij
-multiplexer_strict: true   # optional; default false. true → no fallback to tmux.
+multiplexer:
+  backend: zellij
+  strict: true   # optional; default false. true → no fallback to tmux.
 ```
 
 ### Why no env var
@@ -269,7 +273,7 @@ object, which subsumes today's `metadata.tmux_session_name`.
 This means an operator who manually attaches via the
 `attach_command` printed in `cuekit task status` always lands on the
 right multiplexer, regardless of how many times they have toggled the
-project's `multiplexer:` setting between invocations. The TUI's `a`
+project's `multiplexer.backend` setting between invocations. The TUI's `a`
 shortcut behaves the same way — it reads the per-task handle, not the
 active backend, so a TUI launched after a config change can still
 attach to in-flight tasks created under the previous setting.
@@ -301,7 +305,7 @@ previous cuekit process spawned it under a different config)?
     the config.
 
   **Recommendation: (b) for v0** — the cross-backend case is rare in
-  practice (operators don't usually toggle `multiplexer:` mid-project),
+  practice (operators don't usually toggle `multiplexer.backend` mid-project),
   the failure mode is obvious, and the right escape hatch (the printed
   attach_command) already works. Lazy multi-backend (option a) can be
   added later if a real workflow demands it.
@@ -372,8 +376,8 @@ team-dashboard UX on top once the basics are proven.
     canonicalisation) — accept the difference.
   - `killPane`: `zellij --session <name> action close-pane --pane-id <id>`.
   - `attachCommand`: `["zellij", "attach", "<name>"]`.
-- Backend selection wiring (`.cuekit.yaml` `multiplexer:` field +
-  `multiplexer_strict`, with fallback to tmux on probe failure).
+- Backend selection wiring (`.cuekit.yaml` `multiplexer.backend` +
+  `multiplexer.strict`, with fallback to tmux on probe failure).
 - `cuekit doctor` zellij probe (binary present, version ≥ 0.44).
 - Documentation: README install section, AGENTS.md pitfall row,
   per-adapter smoke guides note that zellij is supported (without
@@ -385,15 +389,15 @@ zellij as a tmux replacement.
 
 ### Phase 4 — Zellij team dashboard (zellij-only feature)
 
-When `multiplexer: zellij` and a task has `team_id`, all team members
+When `multiplexer.backend: zellij` and a task has `team_id`, all team members
 share one zellij session so the operator can see the whole team in
 one attach. tmux operators see no behavioural change.
 
 | Project config | Task has `team_id`? | Resulting session |
 |---|---|---|
-| `multiplexer: tmux` | yes or no | per-task tmux session (no change) |
-| `multiplexer: zellij` | no | per-task zellij session (Phase 3 baseline) |
-| `multiplexer: zellij` | yes | shared `cuekit-team-<team_id>` session |
+| `multiplexer.backend: tmux` | yes or no | per-task tmux session (no change) |
+| `multiplexer.backend: zellij` | no | per-task zellij session (Phase 3 baseline) |
+| `multiplexer.backend: zellij` | yes | shared `cuekit-team-<team_id>` session |
 
 Why zellij-only: tmux's session-grouping primitives don't give a
 clean "all members tiled, auto-reflow on add/remove". Forcing tmux
@@ -564,7 +568,7 @@ not to commit to any of them.
 |---|---|
 | 1 | `packages/adapters/src/multiplexer-backend.ts` (new), `packages/adapters/src/tmux-backend.ts` (new, moved from `pane-backend.ts`), `packages/adapters/src/index.ts` (export), per-adapter wiring kept unchanged via type alias. |
 | 2 | `packages/core/src/task-status-view.ts` (add `attach_command`, `metadata.pane_session_name`), `packages/tui/src/attach.ts` (`getTmuxSessionName` → `getPaneHandle`), `packages/tui/src/data.ts` (`captureLivePaneTail` → backend call), `packages/cli/src/doctor.ts` (backend-aware probe), CHANGELOG `### Deprecated` entries. |
-| 3 | `packages/adapters/src/zellij-backend.ts` (new), `packages/adapters/src/build-multiplexer.ts` (new — reads `multiplexer` / `multiplexer_strict` from project config, runs the backend's `probe()`, falls back to tmux on failure with a one-time `logger.warn`), `packages/project-config/src/schema.ts` (`multiplexer` and `multiplexer_strict` fields), `cuekit doctor` zellij probe + "active backend" row, AGENTS.md / README updates. |
+| 3 | `packages/adapters/src/zellij-backend.ts` (new), `packages/adapters/src/build-multiplexer.ts` (new — reads `multiplexer.backend` / `multiplexer.strict` from project config, runs the backend's `probe()`, falls back to tmux on failure with a one-time `logger.warn`), `packages/project-config/src/schema.ts` (structured `multiplexer` config), `cuekit doctor` zellij probe + "active backend" row, AGENTS.md / README updates. |
 | 4 | Extend `zellij-backend.ts` to read `team_id` / `team_position` and share a `cuekit-team-<id>` session per team with rename-on-completion. Add `team_id` / `team_position` to `SpawnPaneParams` and optional `killTeamSession` to `MultiplexerBackend`. Thread `team_id` from the pane adapter. TUI gets a capital-`A` "attach team session" shortcut on the team list. |
 | 5 | Removal of legacy aliases; CHANGELOG `### Removed` entry. |
 
