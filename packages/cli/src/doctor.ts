@@ -170,6 +170,14 @@ export async function runDoctor(options: RunDoctorOptions = {}): Promise<DoctorR
 			: { level: "fail", label: "bun", detail: bunVersion.stderr || "not found" },
 	);
 
+	// Active multiplexer backend. Today this is always tmux; the
+	// `multiplexer:` project-config field (Phase 3, #411) makes it
+	// configurable, and #414 adds the per-backend probes (zellij version,
+	// fallback-detected status, etc.). The header row exists now so users
+	// can see at a glance which backend is active and so the doctor output
+	// shape stays stable across the abstraction landing.
+	checks.push({ level: "ok", label: "active backend", detail: "tmux" });
+
 	const tmuxVersion = await exec("tmux", ["-V"]);
 	checks.push(
 		tmuxVersion.ok
