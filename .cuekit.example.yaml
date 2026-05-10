@@ -7,6 +7,12 @@ project:
   id: cuekit
   name: Cuekit
 
+# cuekit defaults to tmux. Uncomment to opt into zellij for task panes.
+# `multiplexer_strict: true` makes missing/broken zellij a hard failure
+# instead of warning and falling back to tmux.
+# multiplexer: zellij
+# multiplexer_strict: false
+
 tui:
   # project = default: use .cuekit.yaml project identity, including legacy
   # sessions whose project_root matches this config root.
