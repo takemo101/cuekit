@@ -198,6 +198,15 @@ export function metadataEntries(
 			color: detail?.status.attention_hint ? theme.yellow : theme.muted,
 		});
 	}
+	const paneBackendKind = detail?.status.metadata?.pane_backend_kind;
+	if (typeof paneBackendKind === "string") {
+		const mismatch = detail?.status.metadata?.pane_backend_mismatch === true;
+		entries.push({
+			label: "backend",
+			value: mismatch ? `${paneBackendKind} (config mismatch; attach only)` : paneBackendKind,
+			color: mismatch ? theme.yellow : theme.muted,
+		});
+	}
 	if (detail?.status.supports_attach === true && detail.status.attach_hint) {
 		entries.push({
 			label: "attach",
@@ -381,7 +390,7 @@ export function TaskDetail(props: { task?: TaskSummary; detail?: TuiTaskDetail }
 					<box backgroundColor={theme.panelAlt} height={1} flexShrink={0}>
 						<text fg={theme.cyan}>
 							{`LIVE OUTPUT (${lines.length} line${lines.length === 1 ? "" : "s"}, ${
-								detail?.transcriptSource === "live" ? "tmux pane" : "transcript file"
+								detail?.transcriptSource === "live" ? "live pane" : "transcript file"
 							})`}
 						</text>
 					</box>

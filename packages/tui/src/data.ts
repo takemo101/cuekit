@@ -177,7 +177,7 @@ export async function resolveTranscriptTail(
 	maxLines: number,
 	ctx?: TuiContext,
 ): Promise<{ lines: string[]; source: TranscriptSource }> {
-	if (!isTerminalTaskStatus(status.status)) {
+	if (!isTerminalTaskStatus(status.status) && status.metadata?.pane_backend_mismatch !== true) {
 		// Prefer the multiplexer-agnostic backend route when wired (the
 		// configured MultiplexerBackend handles per-backend capture
 		// quirks — tmux capture-pane, zellij dump-screen, etc.).

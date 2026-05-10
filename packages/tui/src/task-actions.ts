@@ -48,18 +48,21 @@ export function resolveEscapeTeamFocus(focus: TeamFocus): TeamFocus {
 	return focus === "members" ? "list" : "list";
 }
 
-function hasTmuxSessionMetadata(view: TaskStatusView): boolean {
-	return (
-		typeof view.metadata?.tmux_session_name === "string" &&
-		view.metadata.tmux_session_name.length > 0
-	);
+function hasPaneSessionMetadata(view: TaskStatusView): boolean {
+	const sessionName = view.metadata?.pane_session_name ?? view.metadata?.tmux_session_name;
+	return typeof sessionName === "string" && sessionName.length > 0;
+}
+
+function hasAttachCommand(view: TaskStatusView): boolean {
+	return Array.isArray(view.attach_command?.argv) && view.attach_command.argv.length > 0;
 }
 
 export function canAttach(view: TaskStatusView): boolean {
 	if (view.supports_attach !== true) return false;
 	if (view.status === "cancelled" || view.status === "timed_out") return false;
-	if (isTerminalTaskStatus(view.status)) return hasTmuxSessionMetadata(view);
-	return Boolean(view.attach_hint) || hasTmuxSessionMetadata(view);
+	if (isTerminalTaskStatus(view.status))
+		return hasAttachCommand(view) || hasPaneSessionMetadata(view);
+	return hasAttachCommand(view) || Boolean(view.attach_hint) || hasPaneSessionMetadata(view);
 }
 
 export function canCancel(status: TaskStatus): boolean {

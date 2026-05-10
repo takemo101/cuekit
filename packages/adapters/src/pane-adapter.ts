@@ -680,7 +680,7 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 					ok: false,
 					error: {
 						code: "transport_error",
-						message: `tmux send-keys failed: ${errorMessage(err)}`,
+						message: `pane backend send-keys failed: ${errorMessage(err)}`,
 						retryable: true,
 					},
 				};
@@ -713,7 +713,7 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 					ok: false,
 					error: {
 						code: "transport_error",
-						message: `tmux kill-session failed: ${errorMessage(err)}`,
+						message: `pane backend kill failed: ${errorMessage(err)}`,
 						retryable: true,
 					},
 				};

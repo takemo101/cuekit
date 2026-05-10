@@ -35,7 +35,12 @@ describe("tui task action helpers", () => {
 		const withMetadata: TaskStatusView = {
 			...withHint,
 			attach_hint: undefined,
-			metadata: { tmux_session_name: "cuekit-task-t_1" },
+			metadata: { pane_session_name: "ct-t_1" },
+		};
+		const withCommandOnly: TaskStatusView = {
+			...withHint,
+			attach_hint: undefined,
+			attach_command: { argv: ["zellij", "attach", "ct-t_1"] },
 		};
 		const batchWithMetadata: TaskStatusView = {
 			...withMetadata,
@@ -46,9 +51,10 @@ describe("tui task action helpers", () => {
 		expect(canAttach(batchWithMetadata)).toBe(false);
 		expect(canAttach(withHint)).toBe(true);
 		expect(canAttach(withMetadata)).toBe(true);
+		expect(canAttach(withCommandOnly)).toBe(true);
 	});
 
-	it("allows attach for terminal tasks when tmux metadata remains", () => {
+	it("allows attach for terminal tasks when pane metadata remains", () => {
 		const view: TaskStatusView = {
 			task_id: "t_1",
 			agent_kind: "opencode",

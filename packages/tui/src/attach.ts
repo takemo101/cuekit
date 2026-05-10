@@ -1,7 +1,8 @@
 import type { TaskStatusView } from "@cuekit/core";
 import type { TuiExit } from "./tui-state.ts";
 
-const ATTACH_HINT_RE = /^tmux\s+attach(?:-session)?\s+-t\s+([^\s]+)$/;
+const TMUX_ATTACH_HINT_RE = /^tmux\s+attach(?:-session)?\s+-t\s+([^\s]+)$/;
+const ZELLIJ_ATTACH_HINT_RE = /^zellij\s+attach\s+([^\s]+)$/;
 
 /**
  * Resolve the structured attach instruction for a task. Prefers the new
@@ -11,15 +12,19 @@ const ATTACH_HINT_RE = /^tmux\s+attach(?:-session)?\s+-t\s+([^\s]+)$/;
  */
 export function getPaneAttachCommand(view: TaskStatusView): { argv: string[] } | null {
 	if (view.attach_command) return view.attach_command;
-	// Legacy fallback paths — both eventually become tmux attach-session argv.
 	const metadataSession = view.metadata?.pane_session_name ?? view.metadata?.tmux_session_name;
 	if (typeof metadataSession === "string" && metadataSession.length > 0) {
+		const backendKind = view.metadata?.pane_backend_kind;
+		if (backendKind === "zellij") return { argv: ["zellij", "attach", metadataSession] };
 		return { argv: ["tmux", "attach-session", "-t", metadataSession] };
 	}
 	if (!view.attach_hint) return null;
-	const match = ATTACH_HINT_RE.exec(view.attach_hint.trim());
-	if (!match?.[1]) return null;
-	return { argv: ["tmux", "attach-session", "-t", match[1]] };
+	const hint = view.attach_hint.trim();
+	const tmuxMatch = TMUX_ATTACH_HINT_RE.exec(hint);
+	if (tmuxMatch?.[1]) return { argv: ["tmux", "attach-session", "-t", tmuxMatch[1]] };
+	const zellijMatch = ZELLIJ_ATTACH_HINT_RE.exec(hint);
+	if (zellijMatch?.[1]) return { argv: ["zellij", "attach", zellijMatch[1]] };
+	return null;
 }
 
 /**
