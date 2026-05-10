@@ -64,7 +64,7 @@ async function runTuiCommand(): Promise<void> {
 		}
 		await runTuiLoop(
 			createTuiContext(
-				{ db, registry },
+				{ db, registry, panes },
 				{
 					all,
 					...(loadedConfig?.ok && loadedConfig.discovery.source === "config"

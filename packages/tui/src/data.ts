@@ -133,6 +133,7 @@ export async function loadTaskDetail(
 		status,
 		transcriptPath,
 		maxLines,
+		ctx,
 	);
 	return {
 		status,
@@ -174,12 +175,28 @@ export async function resolveTranscriptTail(
 	status: TaskStatusView,
 	transcriptPath: string | undefined,
 	maxLines: number,
+	ctx?: TuiContext,
 ): Promise<{ lines: string[]; source: TranscriptSource }> {
 	if (!isTerminalTaskStatus(status.status)) {
-		const sessionName = getTmuxSessionName(status);
-		if (sessionName) {
-			const live = await captureLivePaneTail(sessionName, maxLines);
-			if (live !== null) return { lines: live, source: "live" };
+		// Prefer the multiplexer-agnostic backend route when wired (the
+		// configured MultiplexerBackend handles per-backend capture
+		// quirks — tmux capture-pane, zellij dump-screen, etc.).
+		if (ctx?.capturePane) {
+			const raw = await ctx.capturePane(status.task_id);
+			if (raw !== null) {
+				const lines = raw.split(/\r?\n/).map(sanitizeTerminalText);
+				while (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
+				if (lines.length > 0) return { lines: lines.slice(-maxLines), source: "live" };
+			}
+		} else {
+			// Backward-compatible path for callers that have not wired a
+			// backend through TuiContext. Removed once all entrypoints
+			// pass the backend (P3.x).
+			const sessionName = getTmuxSessionName(status);
+			if (sessionName) {
+				const live = await captureLivePaneTail(sessionName, maxLines);
+				if (live !== null) return { lines: live, source: "live" };
+			}
 		}
 	}
 	return { lines: readTranscriptTail(transcriptPath, maxLines), source: "file" };
