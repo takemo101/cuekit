@@ -1009,7 +1009,9 @@ describe("wait-team and cleanup-team", () => {
 
 	it("cleanup-team kills the backend team session when all members are deleted", async () => {
 		const killedTeams: string[] = [];
-		const basePanes = ctx.panes as TmuxBackend & { killTeamSession?: (teamId: string) => Promise<void> };
+		const basePanes = ctx.panes as TmuxBackend & {
+			killTeamSession?: (teamId: string) => Promise<void>;
+		};
 		basePanes.killTeamSession = async (teamId: string) => {
 			killedTeams.push(teamId);
 		};
@@ -3241,6 +3243,22 @@ describe("list-tasks", () => {
 		const result = await runListTasks(ctx, { status: "running" });
 		if ("error" in result) throw new Error(result.error.message);
 		expect(result.tasks).toHaveLength(0);
+	});
+
+	it("can skip live status refresh for high-frequency UI task lists", async () => {
+		await runSubmitTask(ctx, {
+			objective: "a",
+			agent_kind: "claude-code",
+			cwd: "/tmp/one",
+			timeout_ms: 1,
+		});
+		await Bun.sleep(5);
+
+		const result = await runListTasks(ctx, { status: "running", refresh_status: false });
+
+		if ("error" in result) throw new Error(result.error.message);
+		expect(result.tasks).toHaveLength(1);
+		expect(result.tasks[0]?.status).toBe("running");
 	});
 
 	it("does not return probe rows before the cursor anchor after refresh filtering", async () => {

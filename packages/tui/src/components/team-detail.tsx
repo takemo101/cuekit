@@ -35,8 +35,10 @@ export function TeamDetail(props: {
 	detail?: TuiTeamDetail;
 	selectedMemberIndex: number;
 	focus: TeamFocus;
+	loadingDetail?: boolean;
+	loadingFrame?: string;
 }): ReactNode {
-	const { team, detail, selectedMemberIndex, focus } = props;
+	const { team, detail, selectedMemberIndex, focus, loadingDetail, loadingFrame } = props;
 	if (!team) {
 		return (
 			<box title="Detail" borderStyle="single" borderColor={theme.border} backgroundColor={theme.panel} flexGrow={1} padding={1}>
@@ -56,6 +58,7 @@ export function TeamDetail(props: {
 			flexGrow={1}
 			padding={1}
 		>
+			{loadingDetail ? <text fg={theme.yellow}>{`${loadingFrame ?? "⠋"} Loading detail…`}</text> : null}
 			<box height={1}>
 				<text fg={statusAccent(status)}>{`${statusGlyph(status)} ${status}`}</text>
 				<text fg={theme.strong}>{`  ${team.team_id}  ${truncateEnd(team.title, 56)}`}</text>

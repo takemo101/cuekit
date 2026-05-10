@@ -5,10 +5,25 @@ import {
 	contextHeight,
 	metadataEntries,
 	padLinesForLiveOutput,
+	TaskDetail,
 } from "../src/components/task-detail.tsx";
 import type { TuiTaskDetail } from "../src/data.ts";
 
 describe("TaskDetail contextHeight", () => {
+	it("shows a loading marker while delayed detail data is pending", () => {
+		const source = TaskDetail({
+			task: {
+				task_id: "t_loading",
+				agent_kind: "pi",
+				status: "running",
+				updated_at: "2026-05-10T00:00:00.000Z",
+			},
+			loadingDetail: true,
+		});
+
+		expect(JSON.stringify(source)).toContain("Loading detail");
+	});
+
 	it("gives metadata and recent events enough room before transcript output", () => {
 		const metadata = [
 			{ label: "updated", value: "12:00:00" },

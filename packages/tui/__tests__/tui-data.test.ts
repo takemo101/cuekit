@@ -138,6 +138,35 @@ describe("tui data helpers", () => {
 		}
 	});
 
+	it("loads the cockpit task list without live status refresh", async () => {
+		const seenInputs: unknown[] = [];
+		const tui: TuiContext = {
+			async listTasks(input) {
+				seenInputs.push(input);
+				return { tasks: [], has_more: false };
+			},
+			async getTaskStatus(taskId) {
+				return { task_id: taskId, status: "failed" };
+			},
+			async listTaskEvents() {
+				return { events: [] };
+			},
+			async cancelTask() {
+				return { ok: true };
+			},
+			async deleteTask() {
+				return { ok: true };
+			},
+			async steerTask() {
+				return { ok: true };
+			},
+		};
+
+		await loadTaskList(tui);
+
+		expect(seenInputs).toEqual([{ limit: 100, refresh_status: false }]);
+	});
+
 	it("loads selected task status and events", async () => {
 		const { db, tui } = makeCtx();
 		const task = createTestTask(db);

@@ -334,8 +334,13 @@ function ContextPanel(props: {
 	);
 }
 
-export function TaskDetail(props: { task?: TaskSummary; detail?: TuiTaskDetail }): ReactNode {
-	const { task, detail } = props;
+export function TaskDetail(props: {
+	task?: TaskSummary;
+	detail?: TuiTaskDetail;
+	loadingDetail?: boolean;
+	loadingFrame?: string;
+}): ReactNode {
+	const { task, detail, loadingDetail, loadingFrame } = props;
 	if (!task) {
 		return (
 			<box title="Detail" borderStyle="single" borderColor={theme.border} backgroundColor={theme.panel} flexGrow={2} padding={1}>
@@ -361,6 +366,7 @@ export function TaskDetail(props: { task?: TaskSummary; detail?: TuiTaskDetail }
 			padding={1}
 			flexDirection="column"
 		>
+			{loadingDetail ? <text fg={theme.yellow}>{`${loadingFrame ?? "⠋"} Loading detail…`}</text> : null}
 			<ContextPanel
 				metadata={metadata}
 				attention={attention}
