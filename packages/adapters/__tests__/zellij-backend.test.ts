@@ -6,7 +6,7 @@ let runner: FakeZellijRunner;
 let panes: ZellijBackend;
 beforeEach(() => {
 	runner = new FakeZellijRunner();
-	panes = new ZellijBackend({ runner, sendKeysDelayMs: 0 });
+	panes = new ZellijBackend({ runner, sendKeysDelayMs: 0, paneMissingGraceMs: 0 });
 });
 
 describe("sessionNameFor / attachCommand", () => {

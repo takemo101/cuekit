@@ -14,6 +14,10 @@ export interface ZellijBackendOptions {
 	// Delay between `write-chars` and the synthetic Enter (zellij `write 13`).
 	// Mirrors TmuxBackend's send-keys cadence so steering behaves consistently.
 	sendKeysDelayMs?: number;
+	// zellij 0.44 can return from `attach --create-background` before the
+	// layout-created pane appears in `list-panes`. Treat a missing pane as
+	// alive during this short startup window to avoid false failure inference.
+	paneMissingGraceMs?: number;
 }
 
 /**
@@ -42,6 +46,7 @@ export class ZellijBackend implements MultiplexerBackend {
 
 	private readonly runner: ZellijRunner;
 	private readonly sendKeysDelayMs: number;
+	private readonly paneMissingGraceMs: number;
 	private readonly taskHandles = new Map<
 		string,
 		{ session: string; paneId?: string; teamId?: string }
@@ -52,6 +57,7 @@ export class ZellijBackend implements MultiplexerBackend {
 	constructor(options: ZellijBackendOptions = {}) {
 		this.runner = options.runner ?? defaultZellijRunner();
 		this.sendKeysDelayMs = options.sendKeysDelayMs ?? 200;
+		this.paneMissingGraceMs = options.paneMissingGraceMs ?? 15_000;
 	}
 
 	sessionNameFor(task_id: string): string {
@@ -316,6 +322,23 @@ export class ZellijBackend implements MultiplexerBackend {
 
 		const paneId = this.taskHandles.get(task_id)?.paneId;
 		if (!paneId || !/^terminal_\d+$/.test(paneId)) return true;
+		const pane = await this.findPane(sessionName, paneId);
+		if (pane) return pane.exited !== true;
+		if (this.paneMissingGraceMs <= 0) return false;
+
+		const deadline = Date.now() + this.paneMissingGraceMs;
+		while (Date.now() < deadline) {
+			await Bun.sleep(250);
+			const retryPane = await this.findPane(sessionName, paneId);
+			if (retryPane) return retryPane.exited !== true;
+		}
+		return false;
+	}
+
+	private async findPane(
+		sessionName: string,
+		paneId: string,
+	): Promise<{ id?: number; exited?: boolean } | null> {
 		const panes = await this.runner.run([
 			"--session",
 			sessionName,
@@ -325,14 +348,13 @@ export class ZellijBackend implements MultiplexerBackend {
 			"--all",
 			"--state",
 		]);
-		if (panes.exitCode !== 0) return false;
+		if (panes.exitCode !== 0) return null;
 		const targetId = Number.parseInt(paneId.replace(/^terminal_/, ""), 10);
 		try {
 			const parsed = JSON.parse(panes.stdout) as Array<{ id?: number; exited?: boolean }>;
-			const pane = parsed.find((entry) => entry.id === targetId);
-			return pane ? pane.exited !== true : false;
+			return parsed.find((entry) => entry.id === targetId) ?? null;
 		} catch {
-			return true;
+			return { id: targetId, exited: false };
 		}
 	}
 
