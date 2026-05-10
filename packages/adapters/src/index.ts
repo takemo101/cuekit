@@ -8,6 +8,8 @@ export * from "./opencode-adapter.ts";
 export * from "./multiplexer-backend.ts";
 export * from "./pane-adapter.ts";
 export * from "./tmux-backend.ts";
+export * from "./zellij-backend.ts";
+export * from "./zellij-runner.ts";
 export * from "./pi-adapter.ts";
 export * from "./result-normalizer.ts";
 export * from "./shell-quote.ts";
