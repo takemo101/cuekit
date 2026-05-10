@@ -347,28 +347,125 @@ parsing `attach_hint`) keep working because both old and new fields
 appear during the window. Removal of `attach_hint` / `tmux_session_name`
 should wait at least one minor release after the new fields ship.
 
-### Phase 3 — `ZellijBackend implements MultiplexerBackend`
+### Phase 3 — `ZellijBackend implements MultiplexerBackend` (basic equivalence)
+
+This phase brings zellij to **functional parity with tmux**: 1 task = 1
+zellij session, no team awareness, no dashboard. Phase 4 layers
+team-dashboard UX on top once the basics are proven.
 
 - New `zellij-backend.ts` implementing the interface against the
-  `zellij` CLI:
-  - `spawnPane`: `zellij --session <name> action new-pane --close-on-exit -- <cmd>`
-    (exact form determined by spike — zellij's pane creation API has
-    several variants).
+  `zellij` CLI (target: 0.44+, which is when `--tab-id` non-destructive
+  targeting and `subscribe` landed):
+  - `spawnPane`: creates a per-task session named
+    `cuekit-task-<task_id>` via
+    `zellij attach --create-background <name> options --default-layout <inline-kdl>`,
+    then immediately runs `zellij --session <name> action new-pane
+    --close-on-exit -- <cmd>` in the empty layout (or runs the command
+    as the session's first pane via the layout itself — exact form
+    settled in the spike). Capture the returned pane id from
+    `new-pane`'s stdout.
   - `sendKeys`: `zellij --session <name> action write-chars <text>`
     plus a synthetic Enter via `action write 13`.
-  - `capturePane`: `zellij --session <name> action dump-screen`
-    (writes to a temp file; backend reads + cleans up).
-  - `killPane`: `zellij --session <name> action close-pane`.
+  - `capturePane`: `zellij --session <name> action dump-screen
+    --pane-id <id> --full --ansi --path <tmp>` (backend reads + cleans
+    up). Output formatting differs subtly from tmux (escape sequence
+    canonicalisation) — accept the difference.
+  - `killPane`: `zellij --session <name> action close-pane --pane-id <id>`.
   - `attachCommand`: `["zellij", "attach", "<name>"]`.
-- Backend selection wiring (env var + project config).
-- `cuekit doctor` zellij probe.
+- Backend selection wiring (`.cuekit.yaml` `multiplexer:` field +
+  `multiplexer_strict`, with fallback to tmux on probe failure).
+- `cuekit doctor` zellij probe (binary present, version ≥ 0.44).
 - Documentation: README install section, AGENTS.md pitfall row,
-  per-adapter smoke guides note that zellij is supported.
+  per-adapter smoke guides note that zellij is supported (without
+  team-dashboard semantics).
 
-**This is where actual user value lands.** Phases 1 + 2 are pure
-refactor.
+**This is where one-task-per-session zellij value lands.** Phases 1 + 2
+are pure refactor; Phase 3 alone is enough for users who just want
+zellij as a tmux replacement.
 
-### Phase 4 — deprecation + cleanup
+### Phase 4 — Zellij team dashboard (zellij-only feature)
+
+When `multiplexer: zellij` and a task has `team_id`, all team members
+share one zellij session so the operator can see the whole team in
+one attach. tmux operators see no behavioural change.
+
+| Project config | Task has `team_id`? | Resulting session |
+|---|---|---|
+| `multiplexer: tmux` | yes or no | per-task tmux session (no change) |
+| `multiplexer: zellij` | no | per-task zellij session (Phase 3 baseline) |
+| `multiplexer: zellij` | yes | shared `cuekit-team-<team_id>` session |
+
+Why zellij-only: tmux's session-grouping primitives don't give a
+clean "all members tiled, auto-reflow on add/remove". Forcing tmux
+to do this would diverge far enough from current behaviour to be a
+separate effort.
+
+**Session model.** One zellij session per team named
+`cuekit-team-<team_id>`, one tab, one pane per member named
+`<position>:<task_id_suffix>` (e.g., `worker:t_a1b2c3d4`). Created
+lazily on first member spawn via `zellij attach --create-background`.
+Use `swap_tiled_layout` so panes auto-reflow as members come and go.
+**Layout details (split direction, swap blocks per pane count) are
+an implementation call** — start with whatever zellij does by default
+and only add custom layout if the default looks visibly bad.
+
+**Completion behaviour.** When a member reaches a terminal status,
+its pane stays open in zellij's "held" state and is renamed to
+`<position>:<task_id_suffix> [<status>]`. Matches cuekit's existing
+transcript-retention model (transcripts live until cleanup).
+`cleanup_team` tears down the whole session via
+`zellij kill-sessions`. No `--close-on-exit`.
+
+**Attach UX.** `attachCommand(handle)` for any team-member task
+returns `["zellij", "attach", "cuekit-team-<team_id>"]`, so the
+TUI's `a` shortcut lands the operator inside the shared dashboard.
+Add a capital-`A` shortcut on the team list to do the same thing
+at the team level.
+
+**Interface additions** (additive over Phase 3):
+
+```ts
+SpawnPaneParams {
+  // ... existing fields
+  team_id?: string;
+  team_position?: TeamPosition;   // from @cuekit/core
+}
+MultiplexerBackend {
+  // ... existing methods
+  killTeamSession?(team_id: string): Promise<void>;
+}
+```
+
+`team_id` is the only new piece of state flowing from cuekit core
+into the backend. Zellij reads it to pick session sharing; tmux
+ignores it. Concurrency, fallback for missing/old zellij, operator
+manually killing a pane, and similar edge cases are intentionally
+left to the implementer to handle as they come up — the goal of v0
+is the simplest thing that works.
+
+**v0 = simplest. Stay minimal at implementation time.** These are
+intentionally deferred — file separate issues if any becomes needed,
+do not expand v0 scope:
+
+- Floating coordinator pane, custom layouts via `.cuekit.yaml`,
+  WASM status-bar plugin, multi-tab teams, `zellij subscribe`
+  event-driven completion (polling stays for v0), read-only attach,
+  per-pane focus-on-attach.
+
+**Open questions for the implementation spike** (verify before
+committing to full Phase 4):
+
+1. Does `zellij action write-chars` accept `--pane-id` in 0.44.x,
+   or does steering need focus-then-write?
+2. Exact form of `zellij attach --create-background` with an inline
+   layout in the target version.
+3. Does the held-pane state stay readable after `rename-pane`?
+4. Is `new-pane` stdout reliably parseable for the pane id?
+
+Spike answers these in a throwaway branch first; only then commit
+to full Phase 4 implementation.
+
+### Phase 5 — deprecation + cleanup
 
 - Remove `attach_hint` (string) and `metadata.tmux_session_name`
   fields once the deprecation window has passed.
@@ -384,9 +481,12 @@ refactor.
   drop the multiplexer-specific verbiage.
 - **Pane-vs-session topology**: tmux puts each cuekit task in its own
   session (`cuekit-task-<id>`); zellij's session model is not 1:1.
-  Phase 3 will need to choose: one zellij session per task (matches
-  tmux) vs one zellij session with one pane per task (matches the
-  cockpit metaphor better but requires layout management).
+  Resolved across Phase 3 + 4: Phase 3 mirrors tmux (one zellij
+  session per task) for solo tasks; Phase 4 introduces a shared
+  per-team session (`cuekit-team-<team_id>`) for tasks that have a
+  `team_id`. The `backend_session` field on `PaneHandle` carries
+  whichever was used at spawn time, so attach / steer / capture
+  always route correctly.
 - **Capture API**: tmux's `capture-pane -p -e -J` writes to stdout in
   one shot. zellij's `dump-screen` writes to a file path; the
   backend reads + deletes. Capture output formatting will differ
@@ -444,8 +544,16 @@ to whether zellij actually ships.
    - Is the schema-rename window cost (Phase 2 deprecation) worth
      paying for the cleaner abstraction?
 3. **If Phase 1 lands**, file Phase 2 separately. Do not bundle.
-4. **Phase 3 (zellij backend) is a separate decision** after Phase 2.
-   It can also be punted indefinitely if no real demand emerges.
+4. **Phase 3 (basic zellij backend) is a separate decision** after
+   Phase 2. It can also be punted indefinitely if no real demand
+   emerges.
+5. **Phase 4 (team dashboard) is gated on Phase 3 shipping.** Even if
+   the user is excited about the dashboard UX, do not skip Phase 3 —
+   debugging "is this a basic-zellij issue or a dashboard-layout
+   issue" gets much harder when both land at once. After Phase 3
+   stabilises, run the implementation spike for the four open
+   questions in [Phase 4](#phase-4--zellij-team-dashboard-zellij-only-feature)
+   before committing the full Phase 4 work.
 
 The goal of this doc is to make those decisions cheap and informed,
 not to commit to any of them.
@@ -457,7 +565,8 @@ not to commit to any of them.
 | 1 | `packages/adapters/src/multiplexer-backend.ts` (new), `packages/adapters/src/tmux-backend.ts` (new, moved from `pane-backend.ts`), `packages/adapters/src/index.ts` (export), per-adapter wiring kept unchanged via type alias. |
 | 2 | `packages/core/src/task-status-view.ts` (add `attach_command`, `metadata.pane_session_name`), `packages/tui/src/attach.ts` (`getTmuxSessionName` → `getPaneHandle`), `packages/tui/src/data.ts` (`captureLivePaneTail` → backend call), `packages/cli/src/doctor.ts` (backend-aware probe), CHANGELOG `### Deprecated` entries. |
 | 3 | `packages/adapters/src/zellij-backend.ts` (new), `packages/adapters/src/build-multiplexer.ts` (new — reads `multiplexer` / `multiplexer_strict` from project config, runs the backend's `probe()`, falls back to tmux on failure with a one-time `logger.warn`), `packages/project-config/src/schema.ts` (`multiplexer` and `multiplexer_strict` fields), `cuekit doctor` zellij probe + "active backend" row, AGENTS.md / README updates. |
-| 4 | Removal of legacy aliases; CHANGELOG `### Removed` entry. |
+| 4 | Extend `zellij-backend.ts` to read `team_id` / `team_position` and share a `cuekit-team-<id>` session per team with rename-on-completion. Add `team_id` / `team_position` to `SpawnPaneParams` and optional `killTeamSession` to `MultiplexerBackend`. Thread `team_id` from the pane adapter. TUI gets a capital-`A` "attach team session" shortcut on the team list. |
+| 5 | Removal of legacy aliases; CHANGELOG `### Removed` entry. |
 
 ## Test plan (when phases proceed)
 
@@ -469,6 +578,11 @@ not to commit to any of them.
 - Phase 3: a `hasZellij()` gate analogous to `hasTmux()`; the
   existing live-pane integration tests run twice — once per backend
   — when both are available.
+- Phase 4: integration test against a real zellij (gated on
+  `hasZellij()`) — submit a 3-member team and assert one
+  `cuekit-team-<id>` session contains three named panes; complete
+  one member and assert its pane is renamed (not closed); call
+  `cleanup_team` and assert the session is gone.
 
 ## When to revisit this design
 
