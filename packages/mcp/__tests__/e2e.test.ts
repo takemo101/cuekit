@@ -80,7 +80,7 @@ describe("e2e: submit → status → cancel → result", () => {
 		const row = getTaskById(db, task_id);
 		expect(row?.status).toBe("running");
 		expect(row?.model).toBe("sonnet");
-		expect(row?.native_task_ref).toMatch(/^%\d+$/);
+		expect(row?.native_task_ref).toMatch(/^tmux:%\d+$/);
 		expect(row?.transcript_ref).toBe(join(tmpRoot, ".cuekit", "tasks", task_id, "transcript.txt"));
 		// 3. verify the per-task output directory was created on disk
 		expect(existsSync(join(tmpRoot, ".cuekit", "tasks", task_id))).toBe(true);

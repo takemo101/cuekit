@@ -130,7 +130,7 @@ This layout is the flat one proven by isuner (1 issue = 1 tmux session). Claude 
   - created at `submit` time; v0 cleanup kills it when the runtime reaches an observed terminal state or the task is cancelled
   - holds exactly one pane running the child runtime
 - the cuekit orchestration session is **not** represented in tmux; it only lives as a `session_id` foreign key on the task row
-- the pane id is captured at submit time and stored as the task's `native_task_ref`
+- the pane id is captured at submit time and stored in the task's `native_task_ref` with a backend prefix (`tmux:%1`). Non-tmux backends use the same `<backend_kind>:<backend_ref>` shape (for zellij v0, `zellij:ct-<task_id>/pane`) so status/cancel/steer can detect backend mismatches after config switches.
 
 #### 3.7.2 Protocol → tmux mapping
 
@@ -219,7 +219,7 @@ interface PersistedTaskRecord {
   native: {
     // v0 pane backend (tmux), 1 task = 1 tmux session
     tmux_session_name?: string;   // e.g. "cuekit-task-{task_id}"
-    tmux_pane_id?: string;        // also surfaced as native_task_ref
+    tmux_pane_id?: string;        // display projection; persisted native_task_ref is backend-qualified (e.g. "tmux:%1")
     // runtime-native identifiers, if the child runtime exposes them
     runtime_session_id?: string;
     runtime_task_id?: string;
@@ -351,7 +351,7 @@ The pi runtime is expected to support child or delegated session execution with 
 `PiAdapter` should:
 
 - launch pi inside a cuekit task pane (see Section 3.7) using the runtime's interactive dispatch entrypoint, not a headless one-shot
-- capture the pane id (`native_task_ref`) and any runtime-native session id pi exposes
+- capture the pane id, persist it as a backend-qualified `native_task_ref`, and record any runtime-native session id pi exposes
 - map session lifecycle into cuekit task states
 - collect final session output into normalized result form by reading the piped transcript and/or a pi-native handoff file
 - expose transcript artifacts when available

@@ -81,7 +81,7 @@ suite("ClaudeCodeAdapter (real tmux integration)", () => {
 		// Row was updated by the adapter post-spawn
 		const row = getTaskById(db, task_id);
 		expect(row?.status).toBe("running");
-		expect(row?.native_task_ref).toMatch(/^%\d+$/);
+		expect(row?.native_task_ref).toMatch(/^tmux:%\d+$/);
 
 		// tmux actually sees the session
 		expect(await panes.isAlive(task_id)).toBe(true);

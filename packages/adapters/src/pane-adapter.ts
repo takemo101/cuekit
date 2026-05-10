@@ -148,6 +148,66 @@ function hasTimedOut(task: Task, nowMs = Date.now()): { timedOut: true; timeoutM
 	return nowMs - anchor >= timeoutMs ? { timedOut: true, timeoutMs } : null;
 }
 
+function nativeBackendKind(task: Task): string | null {
+	const nativeRef = task.native_task_ref;
+	if (!nativeRef) return null;
+	const separator = nativeRef.indexOf(":");
+	if (separator <= 0) return "tmux";
+	return nativeRef.slice(0, separator);
+}
+
+function displayNativeTaskRef(nativeRef: string | null): string | undefined {
+	if (!nativeRef) return undefined;
+	const separator = nativeRef.indexOf(":");
+	return separator > 0 ? nativeRef.slice(separator + 1) : nativeRef;
+}
+
+function sessionNameForBackend(
+	kind: string,
+	task_id: string,
+	nativeRef?: string | null,
+): string | null {
+	if (kind === "tmux") return `cuekit-task-${task_id}`;
+	if (kind === "zellij") {
+		const displayRef = displayNativeTaskRef(nativeRef ?? null);
+		const separator = displayRef?.indexOf("/") ?? -1;
+		return separator > 0 ? (displayRef?.slice(0, separator) ?? null) : `ct-${task_id}`;
+	}
+	return null;
+}
+
+function attachCommandForBackend(
+	kind: string,
+	task_id: string,
+	nativeRef?: string | null,
+): { argv: string[] } | null {
+	const sessionName = sessionNameForBackend(kind, task_id, nativeRef);
+	if (!sessionName) return null;
+	if (kind === "tmux") return { argv: ["tmux", "attach-session", "-t", sessionName] };
+	if (kind === "zellij") return { argv: ["zellij", "attach", sessionName] };
+	return null;
+}
+
+function backendMismatchError(
+	task: Task,
+	currentBackendKind: string,
+	operation: string,
+): JobError | null {
+	const ownerBackendKind = nativeBackendKind(task);
+	if (ownerBackendKind === null || ownerBackendKind === currentBackendKind) return null;
+	return {
+		code: "invalid_state",
+		message: `cannot ${operation} task '${task.id}' through ${currentBackendKind}; it was created with ${ownerBackendKind}`,
+		retryable: false,
+		details: {
+			task_id: task.id,
+			operation,
+			pane_backend_kind: ownerBackendKind,
+			current_backend_kind: currentBackendKind,
+		},
+	};
+}
+
 function hasTimeoutDiagnosticEvent(task: Task, db: Database): boolean {
 	return listTaskEvents(db, task.id).some(
 		(event) =>
@@ -157,9 +217,6 @@ function hasTimeoutDiagnosticEvent(task: Task, db: Database): boolean {
 }
 
 function shouldDeferMissingSentinel(task: Task, db: Database, nowMs = Date.now()): boolean {
-	const startedAtMs = Date.parse(task.started_at ?? task.updated_at);
-	if (Number.isFinite(startedAtMs) && nowMs - startedAtMs < 15_000) return true;
-
 	const latestEventMs = listTaskEvents(db, task.id).reduce((latest, event) => {
 		const eventMs = Date.parse(event.created_at);
 		return Number.isFinite(eventMs) ? Math.max(latest, eventMs) : latest;
@@ -368,8 +425,11 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 						CUEKIT_DB_PATH: db.filename,
 					},
 				});
-				if (handle.backend_pane_id) {
-					updateTaskNativeRef(db, task_id, handle.backend_pane_id);
+				const nativeRef = handle.backend_pane_id
+					? `${handle.backend_kind}:${handle.backend_pane_id}`
+					: undefined;
+				if (nativeRef) {
+					updateTaskNativeRef(db, task_id, nativeRef);
 				}
 				if (transcriptPath) {
 					updateTaskRefs(db, task_id, { transcript_ref: transcriptPath });
@@ -426,7 +486,9 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 			}
 			let live = owned.task;
 			let deferredDeadPane = false;
-			if (!isTerminalTaskStatus(live.status)) {
+			const ownerBackendKind = nativeBackendKind(live);
+			const backendMismatch = ownerBackendKind !== null && ownerBackendKind !== panes.kind;
+			if (!isTerminalTaskStatus(live.status) && !backendMismatch) {
 				const alive = await panes.isAlive(task_id);
 				if (!alive) {
 					// Pane is gone but the row isn't terminal — infer the
@@ -513,10 +575,26 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 			const mode = adapterRunModeFor(
 				taskSpecFor(live) ?? { agent_kind: config.kind, objective: live.objective },
 			);
+			const storedAttachCommand = ownerBackendKind
+				? attachCommandForBackend(ownerBackendKind, task_id, live.native_task_ref)
+				: null;
+			const attachCommand = backendMismatch
+				? storedAttachCommand
+				: (panes.attachCommand(task_id) ?? null);
+			const paneSessionName = backendMismatch
+				? (sessionNameForBackend(ownerBackendKind, task_id, live.native_task_ref) ??
+					panes.sessionNameFor(task_id))
+				: panes.sessionNameFor(task_id);
 			const supportsSteering =
-				!deferredDeadPane && caps.supports_steering && supportsSteeringForMode(mode);
+				!backendMismatch &&
+				!deferredDeadPane &&
+				caps.supports_steering &&
+				supportsSteeringForMode(mode);
 			const supportsAttach =
-				!deferredDeadPane && caps.supports_attach && supportsAttachForMode(mode);
+				!deferredDeadPane &&
+				caps.supports_attach &&
+				supportsAttachForMode(mode) &&
+				attachCommand !== null;
 			return {
 				task_id,
 				agent_kind: config.kind,
@@ -528,27 +606,28 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 				updated_at: live.updated_at,
 				started_at: live.started_at ?? undefined,
 				completed_at: live.completed_at ?? undefined,
-				native_task_id: live.native_task_ref ?? undefined,
+				native_task_id: displayNativeTaskRef(live.native_task_ref),
 				supports_steering: supportsSteering,
 				supports_attach: supportsAttach,
 				attach_hint: isTerminalTaskStatus(live.status)
 					? undefined
 					: supportsAttach
-						? panes.attachCommand(task_id)?.argv.join(" ")
+						? attachCommand.argv.join(" ")
 						: undefined,
-				attach_command:
-					isTerminalTaskStatus(live.status) || !supportsAttach
-						? null
-						: (panes.attachCommand(task_id) ?? null),
+				attach_command: isTerminalTaskStatus(live.status) || !supportsAttach ? null : attachCommand,
 				metadata: {
 					adapter_mode: mode,
 					// `tmux_session_name` is the legacy field — kept during the
 					// deprecation window. New consumers should read
 					// `pane_session_name` instead. Both are populated from the
 					// same source. Removal is filed as P5.2 (#423).
-					tmux_session_name: panes.sessionNameFor(task_id),
-					pane_session_name: panes.sessionNameFor(task_id),
-					...(live.native_task_ref ? { tmux_pane_id: live.native_task_ref } : {}),
+					tmux_session_name: paneSessionName,
+					pane_session_name: paneSessionName,
+					...(live.native_task_ref
+						? { tmux_pane_id: displayNativeTaskRef(live.native_task_ref) }
+						: {}),
+					...(ownerBackendKind ? { pane_backend_kind: ownerBackendKind } : {}),
+					...(backendMismatch ? { pane_backend_mismatch: true } : {}),
 				},
 			};
 		},
@@ -556,6 +635,9 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 		async steer(message: SteeringMessage) {
 			const owned = ownTask(message.task_id);
 			if (!owned.ok) return { ok: false, error: owned.error };
+
+			const backendMismatch = backendMismatchError(owned.task, panes.kind, "steer");
+			if (backendMismatch) return { ok: false, error: backendMismatch };
 
 			const mode = adapterRunModeFor(
 				taskSpecFor(owned.task) ?? { agent_kind: config.kind, objective: owned.task.objective },
@@ -622,6 +704,8 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 
 			const cancelCheck = canCancelTask(owned.task.status);
 			if (!cancelCheck.ok) return { ok: false, error: cancelCheck.error };
+			const backendMismatch = backendMismatchError(owned.task, panes.kind, "cancel");
+			if (backendMismatch) return { ok: false, error: backendMismatch };
 			try {
 				await panes.killPane(task_id);
 			} catch (err) {
@@ -647,6 +731,17 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 		},
 
 		async cleanup(task_id: string) {
+			const task = getTaskById(db, task_id);
+			if (!task) return;
+			const backendMismatch = backendMismatchError(task, panes.kind, "cleanup");
+			if (backendMismatch) {
+				logger.warn("skipping cleanup for task owned by a different pane backend", {
+					task_id,
+					pane_backend_kind: backendMismatch.details?.pane_backend_kind,
+					current_backend_kind: panes.kind,
+				});
+				return;
+			}
 			await panes.killPane(task_id);
 		},
 
