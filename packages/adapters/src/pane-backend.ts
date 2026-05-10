@@ -16,7 +16,7 @@ export interface SpawnTaskParams {
 	env?: Record<string, string>;
 }
 
-export interface PaneHandle {
+interface LegacyTmuxPaneHandle {
 	task_id: string;
 	tmux_session_name: string;
 	pane_id: string;
@@ -40,7 +40,7 @@ export class PaneBackend {
 		return `tmux attach-session -t ${this.sessionNameFor(task_id)}`;
 	}
 
-	async spawnTask(params: SpawnTaskParams): Promise<PaneHandle> {
+	async spawnTask(params: SpawnTaskParams): Promise<LegacyTmuxPaneHandle> {
 		const sessionName = this.sessionNameFor(params.task_id);
 		const envArgs = Object.entries(params.env ?? {}).flatMap(([key, value]) => {
 			if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) {
