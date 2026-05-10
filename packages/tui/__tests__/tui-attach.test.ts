@@ -70,6 +70,21 @@ describe("tui tmux attach helpers", () => {
 		});
 	});
 
+	it("reconstructs zellij attach from generic metadata fallback", () => {
+		expect(
+			getPaneAttachCommand({
+				...baseView,
+				metadata: { pane_session_name: "ct-t_abc", pane_backend_kind: "zellij" },
+			}),
+		).toEqual({ argv: ["zellij", "attach", "ct-t_abc"] });
+	});
+
+	it("parses zellij attach hints", () => {
+		expect(getPaneAttachCommand({ ...baseView, attach_hint: "zellij attach ct-t_abc" })).toEqual({
+			argv: ["zellij", "attach", "ct-t_abc"],
+		});
+	});
+
 	it("preserves structured zellij attach argv", () => {
 		const command = getPaneAttachCommand({
 			...baseView,

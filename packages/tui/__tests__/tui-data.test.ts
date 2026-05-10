@@ -642,6 +642,31 @@ describe("tui data helpers", () => {
 			}
 		});
 
+		it("skips live capture on backend mismatch and falls back to file tail", async () => {
+			const dir = mkdtempSync(`${tmpdir()}/cuekit-resolve-backend-mismatch-`);
+			try {
+				const transcriptPath = join(dir, "transcript.txt");
+				writeFileSync(transcriptPath, "mismatch-fallback\n");
+				const status = statusFor({
+					status: "running",
+					metadata: { pane_backend_kind: "zellij", pane_backend_mismatch: true },
+				});
+				let captureCalls = 0;
+
+				const result = await resolveTranscriptTail(status, transcriptPath, 10, {
+					capturePane: async () => {
+						captureCalls += 1;
+						return "wrong-backend-live";
+					},
+				} as never);
+
+				expect(captureCalls).toBe(0);
+				expect(result).toEqual({ lines: ["mismatch-fallback"], source: "file" });
+			} finally {
+				rmSync(dir, { recursive: true, force: true });
+			}
+		});
+
 		it("falls back to file tail when capture-pane fails", async () => {
 			// Running status + session name BUT tmux server has no such session.
 			// captureLivePaneTail returns null, so resolve must use file.

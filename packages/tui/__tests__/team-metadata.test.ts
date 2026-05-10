@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import type { TaskStatusView, TaskSummary } from "@cuekit/core";
 import { metadataEntries } from "../src/components/task-detail.tsx";
 import { taskRow } from "../src/components/task-list.tsx";
+import type { TuiTaskDetail } from "../src/data.ts";
 
 const updated_at = "2026-05-01T00:00:00.000Z";
 
@@ -32,7 +33,7 @@ describe("TUI task metadata", () => {
 			events: [],
 			transcriptTail: [],
 			transcriptSource: "file",
-		};
+		} satisfies TuiTaskDetail;
 
 		const entries = metadataEntries(task, detail);
 
@@ -57,7 +58,7 @@ describe("TUI task metadata", () => {
 			events: [],
 			transcriptTail: [],
 			transcriptSource: "file",
-		};
+		} satisfies TuiTaskDetail;
 
 		const entries = metadataEntries(task, detail);
 

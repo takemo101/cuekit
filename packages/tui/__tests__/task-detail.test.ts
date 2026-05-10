@@ -244,6 +244,32 @@ describe("TaskDetail contextHeight", () => {
 		);
 	});
 
+	it("shows backend mismatch metadata with attach-only guidance", () => {
+		const task: TaskSummary = {
+			task_id: "t_1",
+			agent_kind: "pi",
+			status: "running",
+			updated_at: "2026-05-01T00:00:00.000Z",
+		};
+		const detail: TuiTaskDetail = {
+			status: {
+				task_id: "t_1",
+				agent_kind: "pi",
+				status: "running",
+				created_at: "2026-05-01T00:00:00.000Z",
+				updated_at: "2026-05-01T00:00:00.000Z",
+				metadata: { pane_backend_kind: "zellij", pane_backend_mismatch: true },
+			},
+			events: [],
+			transcriptTail: [],
+			transcriptSource: "file",
+		};
+
+		expect(metadataEntries(task, detail)).toContainEqual(
+			expect.objectContaining({ label: "backend", value: "zellij (config mismatch; attach only)" }),
+		);
+	});
+
 	it("omits attach metadata when a batch status exposes no attach hint", () => {
 		const task: TaskSummary = {
 			task_id: "t_1",
