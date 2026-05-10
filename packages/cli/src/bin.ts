@@ -8,7 +8,7 @@ import {
 	type MultiplexerBackend,
 } from "@cuekit/adapters";
 import { findProjectRoot } from "@cuekit/agent-profiles";
-import { createStderrLogger, parseLogLevel } from "@cuekit/core";
+import { createStderrLogger, parseLogLevel, silentLogger } from "@cuekit/core";
 import { createTuiContext, runCuekitMcpBin } from "@cuekit/mcp";
 import { loadProjectConfig } from "@cuekit/project-config";
 import { openDatabase, runMigrations } from "@cuekit/store";
@@ -49,6 +49,7 @@ export const buildTuiAdapterRegistry: (
 async function runTuiCommand(): Promise<void> {
 	const logLevel = parseLogLevel(process.env.CUEKIT_LOG_LEVEL);
 	const logger = createStderrLogger({ minLevel: logLevel });
+	const tuiLogger = silentLogger;
 	let db: Database | undefined;
 	try {
 		const dbPath = process.env.CUEKIT_DB_PATH;
@@ -66,10 +67,10 @@ async function runTuiCommand(): Promise<void> {
 		}
 		const built = await buildMultiplexerBackend(
 			loadedConfig?.ok ? loadedConfig.config : undefined,
-			{ logger },
+			{ logger: tuiLogger },
 		);
 		const panes = built.backend;
-		const registry = buildTuiAdapterRegistry(db, panes, { logger });
+		const registry = buildTuiAdapterRegistry(db, panes, { logger: tuiLogger });
 		await runTuiLoop(
 			createTuiContext(
 				{ db, registry, panes },
