@@ -19,15 +19,27 @@ cuekit is **not a workflow engine**. The parent agent stays the decision-maker; 
 
 ## Install
 
+Pinned to a specific release tag (recommended):
+
 ```sh
-bun install -g github:takemo101/cuekit#v0.0.3
+bun install -g github:takemo101/cuekit#v0.0.4
 cuekit doctor
 cuekit mcp config   # prints the snippet to register cuekit with your MCP client
 ```
 
-Use an immutable release tag (`#v0.0.3`, etc.). Avoid floating `#main` outside development — Bun's caching semantics for branches are less explicit. After installing a newer tag, restart MCP clients.
+Or resolve the most recent release tag at install time (no need to look up the version):
 
-`cuekit update` reads the latest GitHub Release tag and prints the exact `bun install` command to run. It is **advisory-only** and does not self-update.
+```sh
+# Option A — uses the GitHub CLI:
+bun install -g github:takemo101/cuekit#$(gh release view --repo takemo101/cuekit --json tagName -q .tagName)
+
+# Option B — curl-only:
+bun install -g github:takemo101/cuekit#$(curl -s https://api.github.com/repos/takemo101/cuekit/releases/latest | jq -r .tag_name)
+```
+
+Bun has no `#latest` shorthand for GitHub installs, so the one-liners above resolve the tag at command-execution time and pin the install to that exact version. After install, `cuekit update` is the advisory-only command that prints the next install command when a newer release exists.
+
+Use an immutable release tag for normal installs. Avoid floating `#main` outside development — Bun's caching semantics for branches are less explicit. After installing a newer tag, restart MCP clients.
 
 > **Naming gotcha**: the binary is named `cuekit` but the workspace `package.json#name` is `cuekit-workspace`. This matters when you uninstall (see below) and when you list installed packages (`bun pm ls -g | grep cuekit`).
 
