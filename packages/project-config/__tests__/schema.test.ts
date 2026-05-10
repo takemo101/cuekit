@@ -148,4 +148,30 @@ describe("CuekitProjectConfigSchema", () => {
 	it("rejects invalid project ids", () => {
 		expect(() => CuekitProjectConfigSchema.parse({ project: { id: "not ok" } })).toThrow();
 	});
+
+	describe("multiplexer", () => {
+		it("accepts tmux and zellij values", () => {
+			expect(CuekitProjectConfigSchema.parse({ multiplexer: "tmux" }).multiplexer).toBe("tmux");
+			expect(CuekitProjectConfigSchema.parse({ multiplexer: "zellij" }).multiplexer).toBe(
+				"zellij",
+			);
+		});
+
+		it("treats multiplexer as optional (default applied by buildMultiplexerBackend, not the schema)", () => {
+			expect(CuekitProjectConfigSchema.parse({}).multiplexer).toBeUndefined();
+		});
+
+		it("rejects unknown multiplexer values", () => {
+			expect(() => CuekitProjectConfigSchema.parse({ multiplexer: "screen" })).toThrow();
+		});
+
+		it("accepts multiplexer_strict as a boolean", () => {
+			expect(
+				CuekitProjectConfigSchema.parse({
+					multiplexer: "zellij",
+					multiplexer_strict: true,
+				}).multiplexer_strict,
+			).toBe(true);
+		});
+	});
 });
