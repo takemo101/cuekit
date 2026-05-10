@@ -29,6 +29,18 @@ describe("tui argv lifecycle", () => {
 		expect(source).not.toContain("await import(TUI_PACKAGE_NAME)");
 	});
 
+	it("keeps runtime warnings out of the alternate-screen TUI", async () => {
+		const source = await Bun.file(BIN_SOURCE).text();
+		const tuiLoggerIndex = source.indexOf("const tuiLogger = silentLogger;");
+		const buildBackendIndex = source.indexOf("buildMultiplexerBackend", tuiLoggerIndex);
+		const buildRegistryIndex = source.indexOf("buildTuiAdapterRegistry", tuiLoggerIndex);
+
+		expect(tuiLoggerIndex).toBeGreaterThan(-1);
+		expect(buildBackendIndex).toBeGreaterThan(tuiLoggerIndex);
+		expect(buildRegistryIndex).toBeGreaterThan(tuiLoggerIndex);
+		expect(source).toContain("{ logger: tuiLogger }");
+	});
+
 	it("debounces detail loading so selection movement stays responsive", async () => {
 		const source = await Bun.file(APP_SOURCE).text();
 
