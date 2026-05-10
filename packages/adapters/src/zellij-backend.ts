@@ -49,7 +49,7 @@ export class ZellijBackend implements MultiplexerBackend {
 	private readonly paneMissingGraceMs: number;
 	private readonly taskHandles = new Map<
 		string,
-		{ session: string; paneId?: string; teamId?: string }
+		{ session: string; paneId?: string; teamId?: string; label?: string }
 	>();
 	private readonly teamLocks = new Map<string, Promise<PaneHandle>>();
 	private versionCheckedForTeam = false;
@@ -80,6 +80,7 @@ export class ZellijBackend implements MultiplexerBackend {
 		this.taskHandles.set(handle.task_id, {
 			session,
 			...(paneId ? { paneId } : {}),
+			...(handle.backend_label ? { label: handle.backend_label } : {}),
 		});
 	}
 
@@ -252,12 +253,13 @@ export class ZellijBackend implements MultiplexerBackend {
 			}
 		}
 
-		this.taskHandles.set(params.task_id, { session: sessionName, paneId, teamId });
+		this.taskHandles.set(params.task_id, { session: sessionName, paneId, teamId, label: paneName });
 		return {
 			task_id: params.task_id,
 			backend_kind: this.kind,
 			backend_session: sessionName,
 			backend_pane_id: `${sessionName}/${paneId}`,
+			backend_label: paneName,
 		};
 	}
 
@@ -478,6 +480,55 @@ export class ZellijBackend implements MultiplexerBackend {
 			return;
 		}
 		throw new Error(`zellij kill-session for task ${task_id} failed: ${result.stderr.trim()}`);
+	}
+
+	async markPaneTerminal(task_id: string, status: string): Promise<void> {
+		const handle = this.taskHandles.get(task_id);
+		const paneId = handle?.paneId;
+		if (!handle || !paneId || !/^terminal_\d+$/.test(paneId)) return;
+		const label = handle.label ?? task_id;
+		const result = await this.runner.run([
+			"--session",
+			handle.session,
+			"action",
+			"rename-pane",
+			"-p",
+			paneId,
+			`${label} [${status}]`,
+		]);
+		if (
+			result.exitCode !== 0 &&
+			!/no such pane|pane not found|no such session|not found/i.test(result.stderr)
+		) {
+			throw new Error(`zellij rename-pane for task ${task_id} failed: ${result.stderr.trim()}`);
+		}
+	}
+
+	async killTeamSession(team_id: string): Promise<void> {
+		const sessionName = this.teamSessionNameFor(team_id);
+		const result = await this.runner.run(["kill-session", sessionName]);
+		const errText = `${result.stderr} ${result.stdout}`.toLowerCase();
+		if (result.exitCode === 0) return;
+		const missing =
+			/no session named|no such session|session.*not found|does not exist|not running/.test(
+				errText,
+			);
+		if (missing) {
+			const deleted = await this.runner.run(["delete-session", sessionName]);
+			const deleteText = `${deleted.stderr} ${deleted.stdout}`.toLowerCase();
+			if (
+				deleted.exitCode !== 0 &&
+				!/no session named|no such session|session.*not found|does not exist|not running/.test(
+					deleteText,
+				)
+			) {
+				throw new Error(
+					`zellij delete-session for team ${team_id} failed: ${deleted.stderr.trim()}`,
+				);
+			}
+			return;
+		}
+		throw new Error(`zellij kill-session for team ${team_id} failed: ${result.stderr.trim()}`);
 	}
 
 	attachCommand(task_id: string): { argv: string[] } | null {

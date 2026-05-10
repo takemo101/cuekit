@@ -43,6 +43,8 @@ export interface PaneHandle {
 	backend_session?: string;
 	/** Backend-specific pane handle (tmux `%N`, zellij `terminal_N`, etc.). */
 	backend_pane_id?: string;
+	/** Optional human-readable pane label used by backend-specific dashboard views. */
+	backend_label?: string;
 }
 
 export interface CaptureOptions {
@@ -109,4 +111,10 @@ export interface MultiplexerBackend {
 	 * restart). Stateless backends can omit this.
 	 */
 	restorePaneHandle?(handle: PaneHandle): void;
+
+	/** Rename/mark a pane after its task reaches a terminal cuekit status. */
+	markPaneTerminal?(task_id: string, status: string): Promise<void>;
+
+	/** Tear down a shared backend session for a task team, when supported. */
+	killTeamSession?(team_id: string): Promise<void>;
 }

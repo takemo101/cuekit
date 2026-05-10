@@ -199,6 +199,9 @@ function paneHandleForTask(task: Task): {
 	return {
 		task_id: task.id,
 		backend_kind: backendKind,
+		...(task.team_id && task.team_position
+			? { backend_label: `${task.team_position}:${task.id}` }
+			: {}),
 		...(sessionNameForBackend(backendKind, task.id, task.native_task_ref)
 			? {
 					backend_session: sessionNameForBackend(
@@ -533,7 +536,19 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 					}
 					return exitCode;
 				};
-				const completeFromExitCode = (exitCode: number) => {
+				const markTerminalPane = async (completed: Task) => {
+					if (panes.markPaneTerminal) {
+						try {
+							await panes.markPaneTerminal(completed.id, completed.status);
+						} catch (err) {
+							logger.warn("pane terminal rename failed", {
+								task_id: completed.id,
+								reason: errorMessage(err),
+							});
+						}
+					}
+				};
+				const completeFromExitCode = async (exitCode: number) => {
 					const decision = onPaneDisappeared({
 						task: live,
 						exitCode,
@@ -546,13 +561,14 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 					});
 					if (completed) {
 						live = completed;
+						await markTerminalPane(completed);
 						if (config.onTerminal) config.onTerminal(completed, db);
 					}
 				};
 
 				const alreadyExited = readTaskExitCode();
 				if (alreadyExited !== null) {
-					completeFromExitCode(alreadyExited);
+					await completeFromExitCode(alreadyExited);
 				} else {
 					const alive = await panes.isAlive(task_id);
 					if (!alive) {
@@ -592,6 +608,7 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 							});
 							if (completed) {
 								live = completed;
+								await markTerminalPane(completed);
 								if (config.onTerminal) config.onTerminal(completed, db);
 							}
 						}
@@ -616,6 +633,7 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 							}
 							if (completed) {
 								live = completed;
+								await markTerminalPane(completed);
 								if (config.onTerminal) config.onTerminal(completed, db);
 							}
 						}
@@ -773,11 +791,21 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 					},
 				};
 			}
-			completeTask(db, {
+			const completed = completeTask(db, {
 				id: task_id,
 				status: "cancelled",
 				summary: owned.task.summary ?? "cancelled by caller",
 			});
+			if (completed && panes.markPaneTerminal) {
+				try {
+					await panes.markPaneTerminal(completed.id, completed.status);
+				} catch (err) {
+					logger.warn("pane terminal rename failed", {
+						task_id: completed.id,
+						reason: errorMessage(err),
+					});
+				}
+			}
 			if (config.onTerminal) {
 				const finalRow = getTaskById(db, task_id);
 				if (finalRow) config.onTerminal(finalRow, db);

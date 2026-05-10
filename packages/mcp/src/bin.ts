@@ -115,11 +115,12 @@ export async function runCuekitMcpBin(): Promise<void> {
 
 		const isMcpServer = process.argv.includes("--mcp");
 		const isMcpConfig = process.argv[2] === "mcp" && process.argv[3] === "config";
+		const commandContext = { db, registry, panes };
 		const cli = isMcpServer
-			? createMcpCli({ db, registry })
+			? createMcpCli(commandContext)
 			: isMcpConfig
-				? createMcpConfigCli({ db, registry })
-				: createCli({ db, registry });
+				? createMcpConfigCli(commandContext)
+				: createCli(commandContext);
 		// Note: `cli.serve()` may return before the process should exit —
 		// in `--mcp` mode incur resolves this promise as soon as the stdio
 		// transport is wired, and the server keeps handling requests in
