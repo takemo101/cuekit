@@ -8,9 +8,10 @@ import type { MultiplexerBackend } from "./multiplexer-backend.ts";
  * already have.
  */
 export interface MultiplexerConfigSlice {
-	multiplexer?: "tmux" | "zellij";
+	multiplexer?: "tmux" | "zellij" | { backend?: "tmux" | "zellij"; strict?: boolean };
 	multiplexer_strict?: boolean;
 }
+
 import { TmuxBackend } from "./tmux-backend.ts";
 import { ZellijBackend } from "./zellij-backend.ts";
 
@@ -19,10 +20,10 @@ import { ZellijBackend } from "./zellij-backend.ts";
  *
  * Selection rules (see `docs/designs/cuekit-multiplexer-backend-design.md`):
  *
- *   1. Read `multiplexer:` from the project config (default: tmux).
+ *   1. Read `multiplexer.backend` from the project config (default: tmux).
  *   2. Probe the requested backend.
  *   3. If the probe fails:
- *        - When `multiplexer_strict: true` is set in the config → throw.
+ *        - When `multiplexer.strict: true` is set in the config → throw.
  *        - Otherwise → fall back to tmux and emit a one-time warning.
  *   4. If the requested backend is tmux and its probe fails, throw
  *      regardless of strict mode (tmux is the baseline; there's no
@@ -52,8 +53,8 @@ export async function buildMultiplexerBackend(
 	config: MultiplexerConfigSlice | undefined,
 	options: BuildMultiplexerOptions = {},
 ): Promise<BuiltMultiplexer> {
-	const requested = config?.multiplexer ?? "tmux";
-	const strict = config?.multiplexer_strict === true;
+	const requested = resolveRequestedMultiplexer(config);
+	const strict = resolveStrictMode(config);
 
 	if (requested === "tmux") {
 		// tmux is the baseline; either it works or cuekit can't function.
@@ -67,31 +68,45 @@ export async function buildMultiplexerBackend(
 	}
 
 	if (requested === "zellij") {
-		const zellijOk =
-			options.probe?.zellij ?? (await probeBinary("zellij", ["--version"]));
+		const zellijOk = options.probe?.zellij ?? (await probeBinary("zellij", ["--version"]));
 		if (zellijOk) {
 			return { backend: new ZellijBackend(), requested, fallbackApplied: false };
 		}
 		if (strict) {
 			throw new Error(
-				"multiplexer 'zellij' is configured with multiplexer_strict: true but `zellij --version` failed; install zellij or relax the strict flag",
+				"multiplexer 'zellij' is configured with strict mode enabled but `zellij --version` failed; install zellij or relax the strict flag",
 			);
 		}
 		// Soft fallback to tmux. tmux must still probe.
-		const tmuxOk =
-			options.probe?.tmux ?? (await probeBinary("tmux", ["-V"]));
+		const tmuxOk = options.probe?.tmux ?? (await probeBinary("tmux", ["-V"]));
 		if (!tmuxOk) {
 			throw new Error(
 				"multiplexer 'zellij' probe failed and the tmux fallback also failed; install one of them",
 			);
 		}
 		options.logger?.warn?.(
-			"project config requests multiplexer 'zellij' but its probe failed; falling back to tmux. Install zellij or set multiplexer: tmux to silence this warning.",
+			"project config requests multiplexer 'zellij' but its probe failed; falling back to tmux. Install zellij or set multiplexer.backend: tmux to silence this warning.",
 		);
 		return { backend: new TmuxBackend(), requested, fallbackApplied: true };
 	}
 
 	throw new Error(`unknown multiplexer '${String(requested)}'`);
+}
+
+function resolveRequestedMultiplexer(
+	config: MultiplexerConfigSlice | undefined,
+): "tmux" | "zellij" {
+	const configured = config?.multiplexer;
+	if (typeof configured === "string") return configured;
+	return configured?.backend ?? "tmux";
+}
+
+function resolveStrictMode(config: MultiplexerConfigSlice | undefined): boolean {
+	const configured = config?.multiplexer;
+	if (typeof configured === "object" && configured !== null && configured.strict !== undefined) {
+		return configured.strict;
+	}
+	return config?.multiplexer_strict === true;
 }
 
 async function probeBinary(command: string, args: string[]): Promise<boolean> {

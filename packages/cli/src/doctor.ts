@@ -98,16 +98,23 @@ async function defaultCheckWritableState(
 	}
 }
 
-function readRequestedMultiplexer(cwd: string): "tmux" | "zellij" {
+function readMultiplexerSettings(cwd: string): { requested: "tmux" | "zellij"; strict: boolean } {
 	try {
 		const loaded = loadProjectConfigFromDisk(cwd);
 		if (loaded.ok && loaded.discovery.source === "config") {
-			return loaded.config.multiplexer ?? "tmux";
+			const configured = loaded.config.multiplexer;
+			return {
+				requested: typeof configured === "string" ? configured : (configured?.backend ?? "tmux"),
+				strict:
+					typeof configured === "object" && configured?.strict !== undefined
+						? configured.strict
+						: loaded.config.multiplexer_strict === true,
+			};
 		}
 	} catch {
 		// fall through
 	}
-	return "tmux";
+	return { requested: "tmux", strict: false };
 }
 
 function defaultLoadProjectConfig(cwd: string): DoctorProjectConfigResult {
@@ -182,28 +189,47 @@ export async function runDoctor(options: RunDoctorOptions = {}): Promise<DoctorR
 			: { level: "fail", label: "bun", detail: bunVersion.stderr || "not found" },
 	);
 
-	// Active multiplexer backend. Reads `multiplexer:` from project config
+	// Active multiplexer backend. Reads `multiplexer.backend` from project config
 	// (default tmux). When zellij is configured but its probe fails, the
 	// runtime factory soft-falls-back to tmux; doctor reports this so the
 	// operator can see at a glance whether they got the backend they asked
 	// for.
 	const cwdForConfig = options.cwd ?? process.cwd();
-	const requestedMultiplexer = readRequestedMultiplexer(cwdForConfig);
+	const { requested: requestedMultiplexer, strict: multiplexerStrict } =
+		readMultiplexerSettings(cwdForConfig);
 	const zellijProbe =
 		requestedMultiplexer === "zellij" ? await exec("zellij", ["--version"]) : null;
 	const fallbackApplied =
-		requestedMultiplexer === "zellij" && zellijProbe !== null && !zellijProbe.ok;
-	const activeBackend = fallbackApplied ? "tmux (fallback from zellij)" : requestedMultiplexer;
-	checks.push({ level: "ok", label: "active backend", detail: activeBackend });
+		requestedMultiplexer === "zellij" &&
+		zellijProbe !== null &&
+		!zellijProbe.ok &&
+		!multiplexerStrict;
+	const strictFailure =
+		requestedMultiplexer === "zellij" &&
+		zellijProbe !== null &&
+		!zellijProbe.ok &&
+		multiplexerStrict;
+	const activeBackend = strictFailure
+		? "zellij unavailable (strict mode)"
+		: fallbackApplied
+			? "tmux (fallback from zellij)"
+			: requestedMultiplexer;
+	checks.push({
+		level: strictFailure ? "fail" : "ok",
+		label: "active backend",
+		detail: activeBackend,
+	});
 
 	if (zellijProbe !== null) {
 		checks.push(
 			zellijProbe.ok
 				? { level: "ok", label: "zellij", detail: trimVersionOutput(zellijProbe.stdout) }
 				: {
-						level: "warn",
+						level: multiplexerStrict ? "fail" : "warn",
 						label: "zellij",
-						detail: zellijProbe.stderr || "not found (falling back to tmux)",
+						detail:
+							zellijProbe.stderr ||
+							(multiplexerStrict ? "not found (strict mode)" : "not found (falling back to tmux)"),
 					},
 		);
 	}

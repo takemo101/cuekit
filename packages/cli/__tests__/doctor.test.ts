@@ -1,4 +1,7 @@
 import { describe, expect, it } from "bun:test";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { createDoctorExec, type DoctorExec, runDoctor } from "../src/doctor.ts";
 
 const okExec: DoctorExec = async (command, args) => {
@@ -156,5 +159,33 @@ describe("cuekit doctor", () => {
 		});
 
 		expect(result.stdout).toContain("  cuekit update");
+	});
+
+	it("reports structured zellij strict probe failure without fallback", async () => {
+		const cwd = mkdtempSync(join(tmpdir(), "cuekit-doctor-"));
+		writeFileSync(
+			join(cwd, ".cuekit.yaml"),
+			"project:\n  id: doctor-test\nmultiplexer:\n  backend: zellij\n  strict: true\n",
+		);
+
+		const result = await runDoctor({
+			cwd,
+			env: {},
+			exec: async (command) => {
+				if (command === "bun") return { ok: true, stdout: "1.3.11\n" };
+				if (command === "zellij") return { ok: false, stderr: "not found" };
+				if (command === "tmux") return { ok: true, stdout: "tmux 3.5a\n" };
+				return { ok: false, stderr: "not found" };
+			},
+			checkWritableState: async () => ({ ok: true, path: "~/.cuekit/state.db" }),
+			loadProjectConfig: () => ({ ok: true, source: "config", path: join(cwd, ".cuekit.yaml") }),
+			getCurrentVersion: () => "v0.1.0",
+			getLatestRelease: async () => ({ ok: false, reason: "offline" }),
+		});
+
+		expect(result.exitCode).toBe(1);
+		expect(result.stdout).toContain("✗ active backend: zellij unavailable (strict mode)");
+		expect(result.stdout).toContain("✗ zellij: not found");
+		expect(result.stdout).not.toContain("fallback from zellij");
 	});
 });

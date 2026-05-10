@@ -22,7 +22,7 @@ describe("buildMultiplexerBackend", () => {
 
 	it("returns zellij when configured and zellij probes ok", async () => {
 		const result = await buildMultiplexerBackend(
-			{ multiplexer: "zellij" },
+			{ multiplexer: { backend: "zellij", strict: false } },
 			{ probe: { zellij: true } },
 		);
 		expect(result.requested).toBe("zellij");
@@ -50,21 +50,36 @@ describe("buildMultiplexerBackend", () => {
 		expect(warnings.some((w) => w.includes("falling back to tmux"))).toBe(true);
 	});
 
-	it("hard-fails when zellij probe fails and multiplexer_strict is true", async () => {
+	it("hard-fails when zellij probe fails and structured strict is true", async () => {
+		await expect(
+			buildMultiplexerBackend(
+				{ multiplexer: { backend: "zellij", strict: true } },
+				{ probe: { zellij: false } },
+			),
+		).rejects.toThrow(/strict.*zellij.*failed/i);
+	});
+
+	it("keeps accepting legacy multiplexer string and multiplexer_strict", async () => {
 		await expect(
 			buildMultiplexerBackend(
 				{ multiplexer: "zellij", multiplexer_strict: true },
 				{ probe: { zellij: false } },
 			),
-		).rejects.toThrow(/multiplexer_strict.*zellij.*failed/i);
+		).rejects.toThrow(/strict.*zellij.*failed/i);
+	});
+
+	it("uses legacy multiplexer_strict when structured multiplexer omits strict", async () => {
+		await expect(
+			buildMultiplexerBackend(
+				{ multiplexer: { backend: "zellij" }, multiplexer_strict: true },
+				{ probe: { zellij: false } },
+			),
+		).rejects.toThrow(/strict.*zellij.*failed/i);
 	});
 
 	it("hard-fails when both zellij and tmux probes fail", async () => {
 		await expect(
-			buildMultiplexerBackend(
-				{ multiplexer: "zellij" },
-				{ probe: { zellij: false, tmux: false } },
-			),
+			buildMultiplexerBackend({ multiplexer: "zellij" }, { probe: { zellij: false, tmux: false } }),
 		).rejects.toThrow(/probe failed.*tmux fallback also failed/i);
 	});
 

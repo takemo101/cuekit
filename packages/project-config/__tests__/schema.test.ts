@@ -150,11 +150,17 @@ describe("CuekitProjectConfigSchema", () => {
 	});
 
 	describe("multiplexer", () => {
-		it("accepts tmux and zellij values", () => {
+		it("accepts structured backend and strict settings", () => {
+			expect(
+				CuekitProjectConfigSchema.parse({
+					multiplexer: { backend: "zellij", strict: true },
+				}).multiplexer,
+			).toEqual({ backend: "zellij", strict: true });
+		});
+
+		it("keeps accepting legacy tmux and zellij string values", () => {
 			expect(CuekitProjectConfigSchema.parse({ multiplexer: "tmux" }).multiplexer).toBe("tmux");
-			expect(CuekitProjectConfigSchema.parse({ multiplexer: "zellij" }).multiplexer).toBe(
-				"zellij",
-			);
+			expect(CuekitProjectConfigSchema.parse({ multiplexer: "zellij" }).multiplexer).toBe("zellij");
 		});
 
 		it("treats multiplexer as optional (default applied by buildMultiplexerBackend, not the schema)", () => {
@@ -163,9 +169,16 @@ describe("CuekitProjectConfigSchema", () => {
 
 		it("rejects unknown multiplexer values", () => {
 			expect(() => CuekitProjectConfigSchema.parse({ multiplexer: "screen" })).toThrow();
+			expect(() =>
+				CuekitProjectConfigSchema.parse({ multiplexer: { backend: "screen" } }),
+			).toThrow();
 		});
 
-		it("accepts multiplexer_strict as a boolean", () => {
+		it("requires backend for structured multiplexer config", () => {
+			expect(() => CuekitProjectConfigSchema.parse({ multiplexer: { strict: true } })).toThrow();
+		});
+
+		it("keeps accepting legacy multiplexer_strict as a boolean", () => {
 			expect(
 				CuekitProjectConfigSchema.parse({
 					multiplexer: "zellij",
