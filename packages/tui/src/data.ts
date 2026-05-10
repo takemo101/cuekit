@@ -1,7 +1,6 @@
 import { closeSync, existsSync, openSync, readSync, statSync } from "node:fs";
 import {
 	isTerminalTaskStatus,
-	type TaskListFilter,
 	type TaskStatusView,
 	type TaskSummary,
 	type TeamSummary,
@@ -25,7 +24,7 @@ import type {
 export const DEFAULT_TRANSCRIPT_LINES = 80;
 
 type LoadTaskListOptions = Pick<
-	TaskListFilter,
+	import("./context.ts").TuiTaskListInput,
 	"cwd" | "project_root" | "limit" | "status" | "agent_kind" | "session_id" | "cursor"
 >;
 
@@ -52,7 +51,7 @@ export async function loadTaskList(
 	ctx: TuiContext,
 	options: LoadTaskListOptions = {},
 ): Promise<TuiTaskListOutput> {
-	return ctx.listTasks({ ...options, limit: options.limit ?? 100 });
+	return ctx.listTasks({ ...options, limit: options.limit ?? 100, refresh_status: false });
 }
 
 export async function loadTeamList(

@@ -38,6 +38,9 @@ import { theme } from "./theme.ts";
 import type { TeamFocus, TuiExit, TuiMode, TuiReturnState } from "./tui-state.ts";
 
 const AUTO_REFRESH_MS = 3000;
+const DEFAULT_DETAIL_LOAD_DEBOUNCE_MS = 30;
+const LOADING_SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+const LOADING_SPINNER_MS = 120;
 
 type PendingConfirmAction =
 	| { kind: "cancel"; taskId: string }
@@ -76,21 +79,40 @@ export function App(props: {
 	const [teamFocus, setTeamFocus] = useState<TeamFocus>(props.initialState?.team_focus ?? "list");
 	const [detail, setDetail] = useState<TuiTaskDetail | undefined>();
 	const [teamDetail, setTeamDetail] = useState<TuiTeamDetail | undefined>();
+	const [debouncedTaskDetailId, setDebouncedTaskDetailId] = useState<string | undefined>();
+	const [debouncedTeamDetailId, setDebouncedTeamDetailId] = useState<string | undefined>();
 	const [loading, setLoading] = useState(false);
 	const [message, setMessage] = useState<string | undefined>();
 	const [error, setError] = useState<string | undefined>();
 	const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
 	const [steerInput, setSteerInput] = useState<SteerInputState>(null);
+	const [loadingFrameIndex, setLoadingFrameIndex] = useState(0);
+	const [detailRefreshTick, setDetailRefreshTick] = useState(0);
 	const refreshInFlight = useRef(false);
 
 	const selectedTask = useMemo(() => tasks[selectedIndex], [tasks, selectedIndex]);
 	const selectedTeam = useMemo(() => teams[selectedTeamIndex], [teams, selectedTeamIndex]);
+	const selectedTaskId = selectedTask?.task_id;
+	const selectedTeamId = selectedTeam?.team_id;
+	const debouncedTeam = useMemo(
+		() => teams.find((team) => team.team_id === debouncedTeamDetailId),
+		[debouncedTeamDetailId, teams],
+	);
 	const selectedMember = useMemo(
 		() => teamDetail?.members[selectedMemberIndex],
 		[teamDetail, selectedMemberIndex],
 	);
 	const selectedTeamCounts = selectedTeam?.task_counts ?? teamDetail?.status?.task_counts;
 	const listRows = Math.max(1, terminal.height - 7);
+	const detailLoadDebounceMs = props.ctx.detailLoadDebounceMs ?? DEFAULT_DETAIL_LOAD_DEBOUNCE_MS;
+	const taskDetailLoading = Boolean(
+		mode === "tasks" && selectedTaskId && detail?.status.task_id !== selectedTaskId,
+	);
+	const teamDetailLoading = Boolean(
+		mode === "teams" && selectedTeamId && teamDetail?.team.team_id !== selectedTeamId,
+	);
+	const detailLoading = taskDetailLoading || teamDetailLoading;
+	const loadingFrame = LOADING_SPINNER_FRAMES[loadingFrameIndex % LOADING_SPINNER_FRAMES.length];
 
 	const exit = useCallback(
 		(next: TuiExit) => {
@@ -145,6 +167,7 @@ export function App(props: {
 		try {
 			if (mode === "teams") await refreshTeams();
 			else await refreshTasks();
+			setDetailRefreshTick((current) => current + 1);
 		} catch (err) {
 			setError(err instanceof Error ? err.message : String(err));
 		} finally {
@@ -166,12 +189,33 @@ export function App(props: {
 	}, [pendingConfirm, refresh, steerInput]);
 
 	useEffect(() => {
-		setDetail(undefined);
-		if (mode !== "tasks" || !selectedTask) return;
+		if (!detailLoading) {
+			setLoadingFrameIndex(0);
+			return;
+		}
+		const timer = setInterval(() => {
+			setLoadingFrameIndex((current) => current + 1);
+		}, LOADING_SPINNER_MS);
+		return () => clearInterval(timer);
+	}, [detailLoading]);
+
+	useEffect(() => {
+		setDebouncedTaskDetailId(undefined);
+		if (mode !== "tasks" || !selectedTaskId) return;
+		setDetail((current) => (current?.status.task_id === selectedTaskId ? current : undefined));
+		const timer = setTimeout(() => {
+			setDebouncedTaskDetailId(selectedTaskId);
+		}, detailLoadDebounceMs);
+		return () => clearTimeout(timer);
+	}, [detailLoadDebounceMs, mode, selectedTaskId]);
+
+	useEffect(() => {
+		if (mode !== "tasks" || !debouncedTaskDetailId || debouncedTaskDetailId !== selectedTaskId)
+			return;
 		let cancelled = false;
 		void (async () => {
 			try {
-				const loaded = await loadTaskDetail(props.ctx, selectedTask.task_id);
+				const loaded = await loadTaskDetail(props.ctx, debouncedTaskDetailId);
 				if (!cancelled) setDetail(loaded);
 			} catch (err) {
 				if (!cancelled) setError(err instanceof Error ? err.message : String(err));
@@ -180,15 +224,26 @@ export function App(props: {
 		return () => {
 			cancelled = true;
 		};
-	}, [mode, props.ctx, selectedTask]);
+	}, [debouncedTaskDetailId, detailRefreshTick, mode, props.ctx, selectedTaskId]);
 
 	useEffect(() => {
-		setTeamDetail(undefined);
-		if (mode !== "teams" || !selectedTeam) return;
+		setDebouncedTeamDetailId(undefined);
+		if (mode !== "teams" || !selectedTeamId) return;
+		setTeamDetail((current) =>
+			current?.team.team_id === selectedTeamId ? current : undefined,
+		);
+		const timer = setTimeout(() => {
+			setDebouncedTeamDetailId(selectedTeamId);
+		}, detailLoadDebounceMs);
+		return () => clearTimeout(timer);
+	}, [detailLoadDebounceMs, mode, selectedTeamId]);
+
+	useEffect(() => {
+		if (mode !== "teams" || !debouncedTeam || debouncedTeam.team_id !== selectedTeamId) return;
 		let cancelled = false;
 		void (async () => {
 			try {
-				const loaded = await loadTeamDetail(props.ctx, selectedTeam);
+				const loaded = await loadTeamDetail(props.ctx, debouncedTeam);
 				if (cancelled) return;
 				setTeamDetail(loaded);
 				setSelectedMemberIndex((current) => {
@@ -213,7 +268,7 @@ export function App(props: {
 		return () => {
 			cancelled = true;
 		};
-	}, [mode, props.ctx, selectedTeam]);
+	}, [debouncedTeam, detailRefreshTick, mode, props.ctx, selectedTeamId]);
 
 	const executeConfirm = useCallback(async () => {
 		if (!pendingConfirm) return;
@@ -488,12 +543,24 @@ export function App(props: {
 				{mode === "teams" ? (
 					<>
 						<TeamList teams={teams} selectedIndex={selectedTeamIndex} maxVisibleRows={listRows} />
-						<TeamDetail team={selectedTeam} detail={teamDetail} selectedMemberIndex={selectedMemberIndex} focus={teamFocus} />
+						<TeamDetail
+							team={selectedTeam}
+							detail={teamDetail}
+							selectedMemberIndex={selectedMemberIndex}
+							focus={teamFocus}
+							loadingDetail={teamDetailLoading}
+							loadingFrame={loadingFrame}
+						/>
 					</>
 				) : (
 					<>
 						<TaskList tasks={tasks} selectedIndex={selectedIndex} maxVisibleRows={listRows} />
-						<TaskDetail task={selectedTask} detail={detail} />
+						<TaskDetail
+							task={selectedTask}
+							detail={detail}
+							loadingDetail={taskDetailLoading}
+							loadingFrame={loadingFrame}
+						/>
 					</>
 				)}
 			</box>

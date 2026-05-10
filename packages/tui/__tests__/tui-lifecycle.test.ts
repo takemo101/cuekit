@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 
 const BIN_SOURCE = new URL("../../cli/src/bin.ts", import.meta.url);
+const APP_SOURCE = new URL("../src/app.tsx", import.meta.url);
 
 describe("tui argv lifecycle", () => {
 	it("runs TUI from the CLI-owned human command path without global process-exit signal handlers", async () => {
@@ -26,5 +27,16 @@ describe("tui argv lifecycle", () => {
 		const source = await Bun.file(BIN_SOURCE).text();
 		expect(source).toContain('await import("@cuekit/tui")');
 		expect(source).not.toContain("await import(TUI_PACKAGE_NAME)");
+	});
+
+	it("debounces detail loading so selection movement stays responsive", async () => {
+		const source = await Bun.file(APP_SOURCE).text();
+
+		expect(source).toContain("DEFAULT_DETAIL_LOAD_DEBOUNCE_MS");
+		expect(source).toContain("detailLoadDebounceMs");
+		expect(source).toContain("setDebouncedTaskDetailId");
+		expect(source).toContain("setDebouncedTeamDetailId");
+		expect(source).toContain("setTimeout(() =>");
+		expect(source).toContain("detailRefreshTick");
 	});
 });

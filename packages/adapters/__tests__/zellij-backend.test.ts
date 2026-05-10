@@ -308,6 +308,55 @@ describe("isAlive", () => {
 		expect(await panes.isAlive("t_one")).toBe(true);
 		expect(await panes.isAlive("t_two")).toBe(false);
 	});
+
+	it("reuses a short-lived pane listing for multiple tasks in one team session", async () => {
+		await panes.spawnPane({ task_id: "t_one", team_id: "tm_cache", command: "one", cwd: "/tmp" });
+		await panes.spawnPane({ task_id: "t_two", team_id: "tm_cache", command: "two", cwd: "/tmp" });
+		runner.calls.length = 0;
+
+		expect(await panes.isAlive("t_one")).toBe(true);
+		expect(await panes.isAlive("t_two")).toBe(true);
+
+		expect(
+			runner.calls.filter((call) => call[0] === "--session" && call[3] === "list-panes"),
+		).toHaveLength(1);
+	});
+
+	it("invalidates cached pane listings after adding a team pane", async () => {
+		await panes.spawnPane({
+			task_id: "t_one",
+			team_id: "tm_cache_add",
+			command: "one",
+			cwd: "/tmp",
+		});
+		expect(await panes.isAlive("t_one")).toBe(true);
+		runner.calls.length = 0;
+
+		await panes.spawnPane({
+			task_id: "t_two",
+			team_id: "tm_cache_add",
+			command: "two",
+			cwd: "/tmp",
+		});
+
+		expect(await panes.isAlive("t_two")).toBe(true);
+		expect(
+			runner.calls.filter((call) => call[0] === "--session" && call[3] === "list-panes"),
+		).toHaveLength(1);
+	});
+
+	it("keeps a pane running when native pane listing output is unavailable", async () => {
+		panes.restorePaneHandle({
+			task_id: "t_high_pane",
+			backend_kind: "zellij",
+			backend_session: "ctm-high",
+			backend_pane_id: "ctm-high/terminal_300",
+		});
+		runner.queueResponse({ stdout: "ctm-high\n", stderr: "", exitCode: 0 });
+		runner.queueResponse({ stdout: "unexpected non-json output", stderr: "", exitCode: 0 });
+
+		expect(await panes.isAlive("t_high_pane")).toBe(true);
+	});
 });
 
 describe("sendKeys", () => {

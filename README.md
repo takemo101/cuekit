@@ -126,9 +126,10 @@ cuekit init   # writes a safe .cuekit.yaml and adds .cuekit/tasks/ to .gitignore
 `cuekit tui` opens an interactive task cockpit for humans. The flat CLI stays optimized for agents/scripts; the TUI is a separate surface for browsing and acting.
 
 ```text
-↑/↓ or j/k  select task        a  attach to tmux session (one-way; exits TUI)
+↑/↓ or j/k  select task        a  attach to task pane/session (one-way; exits TUI)
+t           switch tasks/teams A  attach selected team dashboard (teams mode)
 r           refresh            s  steer selected task
-c           cancel selected    d  delete terminal task
+c           cancel selected    d  delete terminal task / empty team
 q / Esc     quit
 ```
 
@@ -195,9 +196,11 @@ multiplexer:
 
 Behavioural differences when `multiplexer.backend: zellij` is active:
 
-- Solo tasks live in `cuekit-task-<id>` zellij sessions (mirrors the tmux model).
+- Solo tasks live in compact `ct-<task_id>` zellij sessions (mirrors the tmux model).
+- Team tasks share one compact `ctm-<team_id_suffix>` zellij session. In the TUI, `A` on the team list attaches to this multi-pane dashboard; `a` on a member/task focuses that member pane before attaching to the same dashboard session.
 - Attach uses `zellij attach <session-name>` instead of `tmux attach-session`.
 - The TUI's transcript pane sources from `zellij action dump-screen` instead of `tmux capture-pane`. Output formatting differs subtly (escape-sequence canonicalisation).
+- Zellij pane state queries are slower than tmux on some systems, especially for multi-pane team dashboards. The TUI keeps list navigation responsive by using cached/persisted list rows, debouncing zellij detail loads, and showing a `Loading detail…` spinner while the selected detail refreshes. A small detail-panel lag is expected when zellij is selected.
 - When zellij is configured but its binary is missing, cuekit logs a warning and silently falls back to tmux. To turn this into a hard failure (e.g. CI configs that want to surface the missing dependency), set `multiplexer.strict: true`.
 - Per-task multiplexer dispatch: a task spawned under one backend stays attachable via that backend even if `.cuekit.yaml` is later switched. The active backend is per-task, recorded at spawn time.
 

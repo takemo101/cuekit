@@ -1,6 +1,7 @@
 import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { z } from "zod";
 import type {
 	CaptureOptions,
 	MultiplexerBackend,
@@ -8,6 +9,21 @@ import type {
 	SpawnPaneParams,
 } from "./multiplexer-backend.ts";
 import { defaultZellijRunner, type ZellijRunner } from "./zellij-runner.ts";
+
+const ZellijPaneListSchema = z.array(
+	z.object({
+		id: z.number().optional(),
+		exited: z.boolean().optional(),
+	}),
+);
+
+type ZellijPaneEntry = z.infer<typeof ZellijPaneListSchema>[number];
+
+class ZellijPaneListUnavailableError extends Error {
+	constructor(sessionName: string, cause: unknown) {
+		super(`zellij list-panes for session ${sessionName} returned malformed JSON`, { cause });
+	}
+}
 
 export interface ZellijBackendOptions {
 	runner?: ZellijRunner;
@@ -47,9 +63,14 @@ export class ZellijBackend implements MultiplexerBackend {
 	private readonly runner: ZellijRunner;
 	private readonly sendKeysDelayMs: number;
 	private readonly paneMissingGraceMs: number;
+	private readonly paneListCacheTtlMs = 500;
 	private readonly taskHandles = new Map<
 		string,
 		{ session: string; paneId?: string; teamId?: string; label?: string }
+	>();
+	private readonly paneListCache = new Map<
+		string,
+		{ expiresAt: number; panes: ZellijPaneEntry[] | null }
 	>();
 	private readonly teamLocks = new Map<string, Promise<PaneHandle>>();
 	private versionCheckedForTeam = false;
@@ -224,6 +245,7 @@ export class ZellijBackend implements MultiplexerBackend {
 					`zellij attach --create-background for team ${teamId} failed (exit ${createResult.exitCode}): ${createResult.stderr.trim()}`,
 				);
 			}
+			this.paneListCache.delete(sessionName);
 		} else {
 			const createPane = await this.runner.run([
 				"--session",
@@ -251,6 +273,7 @@ export class ZellijBackend implements MultiplexerBackend {
 					`zellij new-pane for team task ${params.task_id} did not report a terminal pane id`,
 				);
 			}
+			this.paneListCache.delete(sessionName);
 		}
 
 		this.taskHandles.set(params.task_id, { session: sessionName, paneId, teamId, label: paneName });
@@ -324,23 +347,40 @@ export class ZellijBackend implements MultiplexerBackend {
 
 		const paneId = this.taskHandles.get(task_id)?.paneId;
 		if (!paneId || !/^terminal_\d+$/.test(paneId)) return true;
-		const pane = await this.findPane(sessionName, paneId);
-		if (pane) return pane.exited !== true;
-		if (this.paneMissingGraceMs <= 0) return false;
+		try {
+			const pane = await this.findPane(sessionName, paneId);
+			if (pane) return pane.exited !== true;
+			if (this.paneMissingGraceMs <= 0) return false;
 
-		const deadline = Date.now() + this.paneMissingGraceMs;
-		while (Date.now() < deadline) {
-			await Bun.sleep(250);
-			const retryPane = await this.findPane(sessionName, paneId);
-			if (retryPane) return retryPane.exited !== true;
+			const deadline = Date.now() + this.paneMissingGraceMs;
+			while (Date.now() < deadline) {
+				await Bun.sleep(250);
+				const retryPane = await this.findPane(sessionName, paneId);
+				if (retryPane) return retryPane.exited !== true;
+			}
+			return false;
+		} catch (error) {
+			if (error instanceof ZellijPaneListUnavailableError) {
+				// A malformed zellij response should not be converted into a dead pane:
+				// keep the previous running status for this probe rather than driving
+				// terminal-state inference from bad native output.
+				return true;
+			}
+			throw error;
 		}
-		return false;
 	}
 
-	private async findPane(
-		sessionName: string,
-		paneId: string,
-	): Promise<{ id?: number; exited?: boolean } | null> {
+	private async findPane(sessionName: string, paneId: string): Promise<ZellijPaneEntry | null> {
+		const targetId = Number.parseInt(paneId.replace(/^terminal_/, ""), 10);
+		const entries = await this.listPanes(sessionName);
+		if (!entries) return null;
+		return entries.find((entry) => entry.id === targetId) ?? null;
+	}
+
+	private async listPanes(sessionName: string): Promise<ZellijPaneEntry[] | null> {
+		const now = Date.now();
+		const cached = this.paneListCache.get(sessionName);
+		if (cached && cached.expiresAt > now) return cached.panes;
 		const panes = await this.runner.run([
 			"--session",
 			sessionName,
@@ -350,13 +390,22 @@ export class ZellijBackend implements MultiplexerBackend {
 			"--all",
 			"--state",
 		]);
-		if (panes.exitCode !== 0) return null;
-		const targetId = Number.parseInt(paneId.replace(/^terminal_/, ""), 10);
+		if (panes.exitCode !== 0) {
+			this.paneListCache.set(sessionName, {
+				expiresAt: Date.now() + this.paneListCacheTtlMs,
+				panes: null,
+			});
+			return null;
+		}
 		try {
-			const parsed = JSON.parse(panes.stdout) as Array<{ id?: number; exited?: boolean }>;
-			return parsed.find((entry) => entry.id === targetId) ?? null;
-		} catch {
-			return { id: targetId, exited: false };
+			const parsed = ZellijPaneListSchema.parse(JSON.parse(panes.stdout));
+			this.paneListCache.set(sessionName, {
+				expiresAt: Date.now() + this.paneListCacheTtlMs,
+				panes: parsed,
+			});
+			return parsed;
+		} catch (error) {
+			throw new ZellijPaneListUnavailableError(sessionName, error);
 		}
 	}
 
@@ -445,6 +494,7 @@ export class ZellijBackend implements MultiplexerBackend {
 				paneId,
 			]);
 			this.taskHandles.delete(task_id);
+			this.paneListCache.delete(target);
 			if (
 				result.exitCode !== 0 &&
 				!/no such pane|pane not found|no such session|not found/i.test(result.stderr)

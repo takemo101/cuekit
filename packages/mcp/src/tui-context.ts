@@ -26,6 +26,7 @@ export interface TuiScopeOptions {
 
 export function createTuiContext(ctx: CommandContext, scope: TuiScopeOptions = {}) {
 	return {
+		detailLoadDebounceMs: ctx.panes?.kind === "zellij" ? 180 : 30,
 		listTasks: (input: Parameters<typeof runListTasks>[1]) =>
 			runListTasks(ctx, {
 				...input,

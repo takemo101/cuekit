@@ -86,8 +86,14 @@ export type TuiTeamListInput = {
 	cursor?: string;
 };
 
+export type TuiTaskListInput = TaskListFilter & {
+	/** UI-only list policy: false keeps high-frequency list refreshes on persisted rows. */
+	refresh_status?: boolean;
+};
+
 export type TuiContext = {
-	listTasks(input: TaskListFilter): Promise<TuiTaskListOutput>;
+	detailLoadDebounceMs?: number;
+	listTasks(input: TuiTaskListInput): Promise<TuiTaskListOutput>;
 	listTeams?(input: TuiTeamListInput): Promise<TuiTeamListOutput>;
 	getTaskStatus(taskId: string): Promise<TaskStatusView>;
 	getTeamStatus?(teamId: string): Promise<TuiTeamStatusOutput>;

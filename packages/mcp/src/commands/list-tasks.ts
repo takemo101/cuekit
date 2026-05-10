@@ -10,10 +10,18 @@ import { DEFAULT_LIST_TASKS_LIMIT, getTaskById, listTasks, type Task } from "@cu
 import { z } from "incur";
 import type { CommandContext } from "../command-context.ts";
 
-// Reuse core's canonical TaskListFilterSchema as the command input so the
-// control surface and the persistence layer share one shape definition.
-export const ListTasksInputSchema = TaskListFilterSchema;
+// Reuse core's canonical TaskListFilterSchema for persistence filters and add
+// control-surface-only refresh policy here so core/store stay pure.
+export const ListTasksInputSchema = TaskListFilterSchema.extend({
+	refresh_status: z.boolean().optional(),
+});
 export type ListTasksInput = z.infer<typeof ListTasksInputSchema>;
+type StoreTaskListFilter = z.infer<typeof TaskListFilterSchema>;
+
+function storeFilter(input: ListTasksInput): StoreTaskListFilter {
+	const { refresh_status: _refresh_status, ...filter } = input;
+	return filter;
+}
 
 export const ListTasksOutputSchema = z.union([
 	z.object({
@@ -52,7 +60,7 @@ function uniqueRows(rows: Task[]): Task[] {
 	return out;
 }
 
-function rowStillMatchesFilter(row: Task, filter: ListTasksInput): boolean {
+function rowStillMatchesFilter(row: Task, filter: StoreTaskListFilter): boolean {
 	if (filter.status !== undefined && row.status !== filter.status) return false;
 	if (filter.agent_kind !== undefined && row.agent_kind !== filter.agent_kind) return false;
 	if (filter.session_id !== undefined && row.session_id !== filter.session_id) return false;
@@ -60,15 +68,15 @@ function rowStillMatchesFilter(row: Task, filter: ListTasksInput): boolean {
 	return true;
 }
 
-function hydrateRows(ctx: CommandContext, rows: Task[], filter: ListTasksInput): Task[] {
+function hydrateRows(ctx: CommandContext, rows: Task[], filter: StoreTaskListFilter): Task[] {
 	return rows
 		.map((row) => getTaskById(ctx.db, row.id) ?? row)
 		.filter((row) => rowStillMatchesFilter(row, filter));
 }
 
-function listWithLegacyCwd(ctx: CommandContext, input: ListTasksInput): Task[] {
+function listWithLegacyCwd(ctx: CommandContext, input: StoreTaskListFilter): Task[] {
 	const limit = input.limit ?? DEFAULT_LIST_TASKS_LIMIT;
-	const normalizedInput: ListTasksInput = {
+	const normalizedInput: StoreTaskListFilter = {
 		...input,
 		...(input.cwd !== undefined ? { cwd: resolve(input.cwd) } : {}),
 	};
@@ -89,10 +97,11 @@ export async function runListTasks(
 	const limit = input.limit ?? DEFAULT_LIST_TASKS_LIMIT;
 	let rows: ReturnType<typeof listTasks>;
 	try {
-		rows = listWithLegacyCwd(ctx, { ...input, limit: limit + 1 });
+		const filter = storeFilter(input);
+		rows = listWithLegacyCwd(ctx, { ...filter, limit: limit + 1 });
 		const cursorRows = rows;
-		await refreshNonTerminalRows(ctx, rows);
-		rows = hydrateRows(ctx, cursorRows.slice(0, limit), input);
+		if (input.refresh_status !== false) await refreshNonTerminalRows(ctx, rows);
+		rows = hydrateRows(ctx, cursorRows.slice(0, limit), filter);
 		const has_more = cursorRows.length > limit;
 		const page = rows;
 		const cursorAnchor = has_more ? cursorRows[Math.min(limit, cursorRows.length) - 1] : undefined;
