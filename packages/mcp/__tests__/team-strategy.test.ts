@@ -91,6 +91,21 @@ describe("team strategy helpers", () => {
 		expect(prompt).not.toContain("Validation:");
 	});
 
+	it("requires coordinator final reports to wait for submitted non-coordinator tasks", () => {
+		const result = resolveTeamStrategy(config, "docs-polish");
+		if (!result.ok) throw new Error("setup failed");
+
+		const prompt = renderTeamStrategyPrompt({
+			strategy_name: result.strategy_name,
+			strategy: result.strategy,
+			objective: "Polish README wait guidance.",
+		});
+
+		expect(prompt).toContain("Do not emit your final completed report while submitted worker, reviewer, or finisher tasks are still non-terminal");
+		expect(prompt).toContain("steer idle tasks once before deciding they are unusable");
+		expect(prompt).toContain("If you intentionally skip, cancel, or cannot wait for any submitted non-coordinator task");
+	});
+
 	it("includes finisher post-completion guidance in coordinator prompt", () => {
 		const result = resolveTeamStrategy(config, "docs-polish");
 		if (!result.ok) throw new Error("setup failed");
@@ -101,7 +116,7 @@ describe("team strategy helpers", () => {
 			objective: "Polish README wait guidance.",
 		});
 
-		expect(prompt).toContain("After a `position: finisher` task completes");
+		expect(prompt).toContain("After a `position: finisher` task completes and all submitted non-coordinator tasks are terminal or explicitly accounted for");
 		expect(prompt).toContain("get_team_result");
 		expect(prompt).toContain("do not wait for parent steering");
 	});

@@ -259,7 +259,7 @@ strategies:
     autonomy:
       allow_additional_workers: true
       allow_parallel_reviewers: true
-      require_reviewer: false
+      require_reviewer: true
       allow_skip_checks: true
 
   dogfood:
