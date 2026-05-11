@@ -1,9 +1,11 @@
+import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { AckSchema, type JobError } from "@cuekit/core";
-import { getTaskById } from "@cuekit/store";
+import { appendTaskEvent, getTaskById } from "@cuekit/store";
 import { z } from "incur";
 import type { CommandContext } from "../command-context.ts";
+import { removeHandoffArtifact, writeHandoffArtifact } from "../handoff-artifacts.ts";
 
 export const SteerTaskInputSchema = z
 	.object({
@@ -67,9 +69,31 @@ export async function runSteerTask(
 	}
 	const message = await resolveSteeringMessage(input);
 	if (typeof message !== "string") return message;
-	return adapterRes.value.steer({
+	if (input.event_type !== "handoff") {
+		return adapterRes.value.steer({
+			task_id: input.task_id,
+			message,
+			reason: input.reason,
+		});
+	}
+
+	const event_id = `e_${randomUUID()}`;
+	const artifact = await writeHandoffArtifact({ task, event_id, message });
+	const steer = await adapterRes.value.steer({
 		task_id: input.task_id,
 		message,
 		reason: input.reason,
 	});
+	if (!steer.ok) {
+		await removeHandoffArtifact(artifact).catch(() => undefined);
+		return steer;
+	}
+	appendTaskEvent(ctx.db, {
+		id: event_id,
+		task_id: input.task_id,
+		type: "handoff",
+		message: message.slice(0, 500),
+		payload: { artifact_path: artifact.relativePath },
+	});
+	return steer;
 }
