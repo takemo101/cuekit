@@ -3128,6 +3128,12 @@ describe("steer-task", () => {
 		const sendCalls = runner.calls.slice(before).filter((c) => c[0] === "send-keys");
 		expect(sendCalls[0]?.join(" ")).toContain("[HANDOFF]");
 		expect(sendCalls[0]?.join(" ")).toContain("Continue from here.");
+		const events = listTaskEvents(db, submit.task_id);
+		expect(events).toHaveLength(1);
+		expect(events[0]).toMatchObject({ type: "handoff", task_id: submit.task_id });
+		expect(events[0]?.payload).toEqual({
+			artifact_path: expect.stringContaining(`.cuekit/tasks/${submit.task_id}/handoffs/`),
+		});
 	});
 
 	it("delivers a handoff message from message_file", async () => {
@@ -3154,6 +3160,24 @@ describe("steer-task", () => {
 		} finally {
 			rmSync(dir, { recursive: true, force: true });
 		}
+	});
+
+	it("does not record handoff events when injection fails", async () => {
+		const submit = await runSubmitTask(ctx, {
+			objective: "x",
+			agent_kind: "claude-code",
+			cwd: "/tmp",
+			adapter_options: { mode: "batch" },
+		});
+		if (!submit.accepted) throw new Error("setup failed");
+		const ack = await runSteerTask(ctx, {
+			task_id: submit.task_id,
+			event_type: "handoff",
+			message: "# HANDOFF\nWill not inject.",
+		});
+		expect(ack.ok).toBe(false);
+		if (!ack.ok) expect(ack.error.code).toBe("steering_unsupported");
+		expect(listTaskEvents(db, submit.task_id)).toEqual([]);
 	});
 
 	it("rejects empty message_file content", async () => {
