@@ -122,13 +122,15 @@ cuekit task submit \
   --role parent \
   --agent_kind pi \
   --objective "You are a long-lived parent development agent for this project." \
-  --metadata '{"run_kind":"parent_session","long_lived":true}'
+  --metadata '{"run_kind":"parent_session","long_lived":true}' \
+  --timeout_ms null
 ```
 
 Attach to it:
 
 ```sh
-cuekit task attach --task-id t_parent
+# Read attach_command from status, then run its argv.
+cuekit task status --task_id t_parent --format json
 ```
 
 Steer it:
@@ -136,14 +138,14 @@ Steer it:
 ```sh
 cuekit steer target \
   --kind task \
-  --task-id t_parent \
+  --task_id t_parent \
   --message "Inspect the current team status and decide the next action."
 ```
 
 Stop it explicitly:
 
 ```sh
-cuekit task cancel --task-id t_parent
+cuekit task cancel --task_id t_parent
 ```
 
 MCP should use the existing grouped task/steer operations. If a future human-friendly `session` command is added, it should be a thin alias over `run_kind: parent_session` tasks, not a separate control plane.
@@ -208,9 +210,9 @@ Use steering with a typed event and file input:
 ```sh
 cuekit steer target \
   --kind task \
-  --task-id t_target \
-  --event-type handoff \
-  --message-file HANDOFF.md
+  --task_id t_target \
+  --event_type handoff \
+  --message_file HANDOFF.md
 ```
 
 Normal steering remains unchanged:
@@ -218,7 +220,7 @@ Normal steering remains unchanged:
 ```sh
 cuekit steer target \
   --kind task \
-  --task-id t_target \
+  --task_id t_target \
   --message "Please continue with the reviewer feedback."
 ```
 
@@ -250,7 +252,7 @@ type HandoffTaskEvent = {
 Processing order:
 
 1. Verify that the target task is steerable before accepting a handoff as delivered.
-2. Read `--message-file` or message body.
+2. Read `--message_file` or message body.
 3. Write the handoff artifact.
 4. Inject a clearly marked HANDOFF block into the target task's pane.
 5. Append `task_events.type = "handoff"` with preview and artifact reference only after injection succeeds.
@@ -271,13 +273,13 @@ The following is context transfer for this running task. Read it, summarize your
 An agent cannot safely intervene if it cannot understand the current situation. The MVP should provide a task-level context snapshot rather than a new session API.
 
 ```sh
-cuekit task snapshot --task-id t_parent
+cuekit task snapshot --task_id t_parent
 ```
 
 or, if avoiding a new command name is preferred:
 
 ```sh
-cuekit task status --task-id t_parent --include-context
+cuekit task status --task_id t_parent --include-context
 ```
 
 The recommended surface is `task snapshot` because it is explicit and task-scoped.
@@ -402,7 +404,8 @@ Internally this calls task submit with:
   "metadata": {
     "run_kind": "parent_session",
     "long_lived": true
-  }
+  },
+  "timeout_ms": null
 }
 ```
 
@@ -421,7 +424,7 @@ To create a managed parent session, submit an interactive long-lived task with r
 For intervention:
 
 ```text
-Read task snapshot/status/events/transcript first. Then steer the task only if intervention is useful. Use event-type handoff when transferring substantial context.
+Read task snapshot/status/events/transcript first. Then steer the task only if intervention is useful. Use `event_type: "handoff"` when transferring substantial context.
 ```
 
 For handoff bodies, recommend a simple Markdown shape:
@@ -458,8 +461,8 @@ This design keeps cuekit as a delegation and result-normalization substrate:
 2. Add or document a `parent` agent profile.
 3. Ensure parent-session submissions default to interactive mode and no runtime timeout.
 4. Add `handoff` as a valid task event type.
-5. Add `--message-file` support to task steering.
-6. Add `--event-type handoff` support to task steering for steerable tasks.
+5. Add `--message_file` support to task steering.
+6. Add `--event_type handoff` support to task steering for steerable tasks.
 7. Store handoff bodies as task artifacts and event previews/references in `task_events`.
 8. Add deterministic `task snapshot` or `task status --include-context`.
 9. Add TUI Parent Sessions filter/view.
@@ -471,7 +474,7 @@ Only add a real `session` API if usage proves that task terminology harms human 
 
 ```text
 session start      -> task submit + parent metadata
-session attach     -> task attach
+session attach     -> status-provided attach_command / TUI attach
 session steer      -> steer task
 session status     -> task status/snapshot
 session transcript -> task transcript

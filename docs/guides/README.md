@@ -9,6 +9,7 @@ Operator and developer guides for shipped cuekit features. These complement the 
 - [`jcode-adapter.md`](jcode-adapter.md) — manual smoke test for the `jcode repl` adapter (submit, attach, steer, transcript capture, cleanup). Pairs with [jcode adapter design](../designs/cuekit-jcode-repl-adapter-design.md).
 - [`gemini-adapter.md`](gemini-adapter.md) — manual smoke test for the Gemini CLI adapter covering interactive + batch modes, `--skip-trust` always-on, `-y` default, and steering via `tmux send-keys`. Pairs with [gemini adapter design](../designs/cuekit-gemini-adapter-design.md).
 - [`multiplexer-backends.md`](multiplexer-backends.md) — tmux/zellij backend configuration, backend-qualified task handles, config-switch smoke tests, and cleanup tips. Pairs with [multiplexer backend design](../designs/cuekit-multiplexer-backend-design.md).
+- [`parent-session-tasks.md`](parent-session-tasks.md) — create, inspect, attach, steer, and hand off to long-lived parent session tasks without a separate session API. Pairs with [parent session task design](../designs/cuekit-parent-session-task-design.md).
 
 ## When to add a guide
 
