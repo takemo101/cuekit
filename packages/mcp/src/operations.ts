@@ -212,10 +212,28 @@ const SteerInputSchema = z
 		kind: z.enum(["task", "team"]).describe("Steering target type."),
 		task_id: z.string().min(1).optional().describe("Required when kind is task."),
 		team_id: z.string().min(1).optional().describe("Required when kind is team."),
-		message: z.string().min(1),
+		message: z.string().min(1).optional(),
+		message_file: z.string().min(1).optional(),
+		event_type: z.enum(["handoff"]).optional(),
 		reason: z.string().optional(),
+		actor: z.never().optional().describe("Unsupported: put provenance in HANDOFF body."),
+		source: z.never().optional().describe("Unsupported: put provenance in HANDOFF body."),
 	})
-	.passthrough();
+	.refine(
+		(input) =>
+			input.kind === "task" ||
+			(input.message_file === undefined && input.event_type === undefined),
+		{ message: "message_file and event_type are only supported for kind=task" },
+	)
+	.refine(
+		(input) =>
+			input.kind !== "task" ||
+			(input.message ? 1 : 0) + (input.message_file ? 1 : 0) === 1,
+		{ message: "exactly one of message or message_file is required for kind=task" },
+	)
+	.refine((input) => input.kind !== "team" || input.message !== undefined, {
+		message: "message is required for kind=team",
+	});
 const SteerOutputSchema = z.union([SteerTaskOutputSchema, SteerTeamOutputSchema]);
 
 async function runSteer(

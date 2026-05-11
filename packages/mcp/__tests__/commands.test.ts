@@ -43,13 +43,17 @@ import { runListTeams } from "../src/commands/list-teams.ts";
 import { runReportTaskEvent } from "../src/commands/report-task-event.ts";
 import { runShowMcpConfig } from "../src/commands/show-mcp-config.ts";
 import { runStartTeamStrategy } from "../src/commands/start-team-strategy.ts";
-import { runSteerTask } from "../src/commands/steer-task.ts";
+import { runSteerTask, SteerTaskInputSchema } from "../src/commands/steer-task.ts";
 import { runSteerTeam } from "../src/commands/steer-team.ts";
 import { runSubmitTask } from "../src/commands/submit-task.ts";
 import { runSubmitTeamTasks } from "../src/commands/submit-team-tasks.ts";
 import { runWaitTasks } from "../src/commands/wait-tasks.ts";
 import { runWaitTeam } from "../src/commands/wait-team.ts";
-import { applyMcpWaitSafetyBounds, MCP_SAFE_WAIT_TIMEOUT_MS } from "../src/operations.ts";
+import {
+	applyMcpWaitSafetyBounds,
+	MCP_SAFE_WAIT_TIMEOUT_MS,
+	CUEKIT_MCP_OPERATIONS,
+} from "../src/operations.ts";
 
 let db: Database;
 let runner: FakeTmuxRunner;
@@ -3105,6 +3109,118 @@ describe("steer-task", () => {
 		expect(ack.ok).toBe(true);
 		const sendCalls = runner.calls.slice(before).filter((c) => c[0] === "send-keys");
 		expect(sendCalls).toHaveLength(2);
+	});
+
+	it("delivers a handoff message from inline text", async () => {
+		const submit = await runSubmitTask(ctx, {
+			objective: "x",
+			agent_kind: "claude-code",
+			cwd: "/tmp",
+		});
+		if (!submit.accepted) throw new Error("setup failed");
+		const before = runner.calls.length;
+		const ack = await runSteerTask(ctx, {
+			task_id: submit.task_id,
+			event_type: "handoff",
+			message: "# HANDOFF\nContinue from here.",
+		});
+		expect(ack.ok).toBe(true);
+		const sendCalls = runner.calls.slice(before).filter((c) => c[0] === "send-keys");
+		expect(sendCalls[0]?.join(" ")).toContain("[HANDOFF]");
+		expect(sendCalls[0]?.join(" ")).toContain("Continue from here.");
+	});
+
+	it("delivers a handoff message from message_file", async () => {
+		const dir = mkdtempSync(join(tmpdir(), "cuekit-handoff-"));
+		try {
+			const file = join(dir, "HANDOFF.md");
+			writeFileSync(file, "# HANDOFF\nFrom file.");
+			const submit = await runSubmitTask(ctx, {
+				objective: "x",
+				agent_kind: "claude-code",
+				cwd: "/tmp",
+			});
+			if (!submit.accepted) throw new Error("setup failed");
+			const before = runner.calls.length;
+			const ack = await runSteerTask(ctx, {
+				task_id: submit.task_id,
+				event_type: "handoff",
+				message_file: file,
+			});
+			expect(ack.ok).toBe(true);
+			const sendCalls = runner.calls.slice(before).filter((c) => c[0] === "send-keys");
+			expect(sendCalls[0]?.join(" ")).toContain("[HANDOFF]");
+			expect(sendCalls[0]?.join(" ")).toContain("From file.");
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
+	it("rejects empty message_file content", async () => {
+		const dir = mkdtempSync(join(tmpdir(), "cuekit-handoff-empty-"));
+		try {
+			const file = join(dir, "HANDOFF.md");
+			writeFileSync(file, "   ");
+			const submit = await runSubmitTask(ctx, {
+				objective: "x",
+				agent_kind: "claude-code",
+				cwd: "/tmp",
+			});
+			if (!submit.accepted) throw new Error("setup failed");
+			const ack = await runSteerTask(ctx, {
+				task_id: submit.task_id,
+				event_type: "handoff",
+				message_file: file,
+			});
+			expect(ack.ok).toBe(false);
+			if (!ack.ok) expect(ack.error.code).toBe("invalid_input");
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
+	it("rejects actor/source fields for handoff provenance", () => {
+		expect(
+			SteerTaskInputSchema.safeParse({
+				task_id: "t1",
+				event_type: "handoff",
+				message: "# HANDOFF",
+				actor: "hermes",
+			}).success,
+		).toBe(false);
+		expect(
+			SteerTaskInputSchema.safeParse({
+				task_id: "t1",
+				event_type: "handoff",
+				message: "# HANDOFF",
+				source: "hermes",
+			}).success,
+		).toBe(false);
+	});
+
+	it("validates grouped steer task handoff message fields", () => {
+		const steer = CUEKIT_MCP_OPERATIONS.find((operation) => operation.mcpName === "steer");
+		if (!steer) throw new Error("missing steer operation");
+		expect(
+			steer.options.safeParse({ kind: "task", task_id: "t1", message: "a" }).success,
+		).toBe(true);
+		expect(
+			steer.options.safeParse({ kind: "task", task_id: "t1", message_file: "HANDOFF.md" })
+				.success,
+		).toBe(true);
+		expect(
+			steer.options.safeParse({ kind: "task", task_id: "t1", message: "a", message_file: "b" })
+				.success,
+		).toBe(false);
+		expect(steer.options.safeParse({ kind: "task", task_id: "t1" }).success).toBe(false);
+		expect(
+			steer.options.safeParse({ kind: "team", team_id: "tm_1", message: "a", message_file: "b" })
+				.success,
+		).toBe(false);
+		expect(
+			steer.options.safeParse({ kind: "team", team_id: "tm_1", message: "a", event_type: "handoff" })
+				.success,
+		).toBe(false);
 	});
 
 	it("returns task_not_found for unknown id", async () => {
