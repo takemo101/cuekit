@@ -664,7 +664,12 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 					}
 				}
 			}
-			if (isTerminalTaskStatus(live.status) && !backendMismatch && paneAliveForAttach === null) {
+			if (
+				isTerminalTaskStatus(live.status) &&
+				!backendMismatch &&
+				panes.kind === "herdr" &&
+				paneAliveForAttach === null
+			) {
 				paneAliveForAttach = await panes.isAlive(task_id);
 			}
 			const caps = defaultCapabilities;
@@ -686,12 +691,13 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 				!deferredDeadPane &&
 				caps.supports_steering &&
 				supportsSteeringForMode(mode);
+			const terminal = isTerminalTaskStatus(live.status);
 			const supportsAttach =
 				!deferredDeadPane &&
 				caps.supports_attach &&
 				supportsAttachForMode(mode) &&
 				attachCommand !== null &&
-				(backendMismatch || paneAliveForAttach !== false);
+				(terminal ? paneAliveForAttach === true : backendMismatch || paneAliveForAttach !== false);
 			return {
 				task_id,
 				agent_kind: config.kind,
