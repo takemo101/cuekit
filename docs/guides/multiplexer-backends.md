@@ -29,6 +29,7 @@ The task row's `native_task_ref` is the durable owner handle:
 |---|---|---|
 | tmux | `tmux:%1` | `tmux attach-session -t cuekit-task-<task_id>` |
 | zellij | `zellij:ct-<task_id>/pane` | `zellij attach ct-<task_id>` |
+| zellij team member | `zellij:ctm-<team_id_suffix>/terminal_N` | `zellij attach ctm-<team_id_suffix>` |
 | legacy tmux rows | `%1` | treated as tmux |
 
 Status views preserve legacy display fields by stripping the backend prefix:
@@ -56,6 +57,26 @@ Not performed through the wrong backend:
 - live liveness/capture operations
 
 Those operations require either switching `.cuekit.yaml` back to the owning backend and reloading the process, or manually attaching with the printed command and handling the pane yourself.
+
+## Zellij team dashboards
+
+When `multiplexer.backend: zellij` is active, task teams use a shared zellij dashboard session instead of one session per member:
+
+```text
+ctm-<team_id_suffix>
+```
+
+For example, team `tm_abcd1234` uses zellij session `ctm-abcd1234`. Each member task records a pane handle such as `zellij:ctm-abcd1234/terminal_0`.
+
+TUI attach behaviour:
+
+- `A` on a team row attaches to the whole dashboard session.
+- `Enter` on a team row focuses the member list.
+- `a` on a selected member focuses that member's pane first, then attaches to the same dashboard session.
+
+The zellij dashboard requires zellij `>= 0.44.2` because cuekit relies on pane ids returned by `zellij action new-pane` and pane-targeted actions (`write`, `dump-screen`, `rename-pane`, `close-pane`). Solo zellij tasks still use compact `ct-<task_id>` session names.
+
+The TUI keeps list navigation responsive by using persisted list rows for high-frequency refreshes and refreshing exact liveness/transcript data for the selected detail. Zellij pane queries can be slower than tmux, so a small detail-panel lag and the `Loading detail…` spinner are expected when browsing zellij tasks or team members.
 
 ## Manual smoke: tmux task, then zellij config
 
@@ -135,6 +156,20 @@ If the task is already terminal but the zellij session remains in `EXITED` state
 
 ```bash
 zellij delete-session ct-<task_id>
+```
+
+For zellij teams, `cuekit team cleanup` removes terminal member tasks. When cleanup deletes the last member task, cuekit also kills and deletes the shared dashboard session:
+
+```bash
+bun packages/cli/src/bin.ts team cleanup --team_id <team_id> --format json
+bun packages/cli/src/bin.ts team delete --team_id <team_id> --format json
+```
+
+If a stale zellij team dashboard remains after manual interruption, remove both the running session and any tombstone:
+
+```bash
+zellij kill-session ctm-<team_id_suffix> 2>/dev/null || true
+zellij delete-session ctm-<team_id_suffix> 2>/dev/null || true
 ```
 
 If a tmux smoke task is left running:
