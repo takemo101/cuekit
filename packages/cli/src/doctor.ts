@@ -246,10 +246,16 @@ export async function runDoctor(options: RunDoctorOptions = {}): Promise<DoctorR
 	}
 
 	const tmuxVersion = await exec("tmux", ["-V"]);
+	const tmuxRequired = requestedMultiplexer === "tmux" || fallbackApplied;
 	checks.push(
 		tmuxVersion.ok
 			? { level: "ok", label: "tmux", detail: trimVersionOutput(tmuxVersion.stdout) }
-			: { level: "fail", label: "tmux", detail: tmuxVersion.stderr || "not found" },
+			: {
+					level: tmuxRequired ? "fail" : "warn",
+					label: "tmux",
+					detail:
+						tmuxVersion.stderr || (tmuxRequired ? "not found" : "not found (not active backend)"),
+				},
 	);
 
 	// Confirm `capture-pane` is recognised as a subcommand. cuekit's TUI

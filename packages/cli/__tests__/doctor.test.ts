@@ -189,6 +189,34 @@ describe("cuekit doctor", () => {
 		expect(result.stdout).not.toContain("fallback from herdr");
 	});
 
+	it("does not fail doctor when herdr is active and tmux is missing", async () => {
+		const cwd = mkdtempSync(join(tmpdir(), "cuekit-doctor-"));
+		writeFileSync(
+			join(cwd, ".cuekit.yaml"),
+			"project:\n  id: doctor-test\nmultiplexer:\n  backend: herdr\n  strict: true\n",
+		);
+
+		const result = await runDoctor({
+			cwd,
+			env: {},
+			exec: async (command) => {
+				if (command === "bun") return { ok: true, stdout: "1.3.11\n" };
+				if (command === "herdr") return { ok: true, stdout: "herdr 0.1.0\n" };
+				if (command === "tmux") return { ok: false, stderr: "not found" };
+				return { ok: true, stdout: `${command} ok\n` };
+			},
+			checkWritableState: async () => ({ ok: true, path: "~/.cuekit/state.db" }),
+			loadProjectConfig: () => ({ ok: true, source: "config", path: join(cwd, ".cuekit.yaml") }),
+			getCurrentVersion: () => "v0.1.0",
+			getLatestRelease: async () => ({ ok: false, reason: "offline" }),
+		});
+
+		expect(result.exitCode).toBe(0);
+		expect(result.stdout).toContain("✓ active backend: herdr");
+		expect(result.stdout).toContain("✓ herdr: herdr 0.1.0");
+		expect(result.stdout).toContain("! tmux: not found");
+	});
+
 	it("reports structured zellij strict probe failure without fallback", async () => {
 		const cwd = mkdtempSync(join(tmpdir(), "cuekit-doctor-"));
 		writeFileSync(
