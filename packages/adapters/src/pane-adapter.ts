@@ -537,6 +537,7 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 			}
 			let live = owned.task;
 			let deferredDeadPane = false;
+			let paneAliveForAttach: boolean | null = null;
 			const ownerBackendKind = nativeBackendKind(live);
 			const backendMismatch = ownerBackendKind !== null && ownerBackendKind !== panes.kind;
 			const persistedHandle = paneHandleForTask(live);
@@ -588,9 +589,11 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 
 				const alreadyExited = readTaskExitCode();
 				if (alreadyExited !== null) {
+					paneAliveForAttach = await panes.isAlive(task_id);
 					await completeFromExitCode(alreadyExited);
 				} else {
 					const alive = await panes.isAlive(task_id);
+					paneAliveForAttach = alive;
 					if (!alive) {
 						// Pane is gone but the row isn't terminal — infer the
 						// terminal status from the exit-code sentinel (or the
@@ -637,6 +640,7 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 						if (timeout) {
 							const timeoutMessage = `timed out after ${timeout.timeoutMs}ms`;
 							await panes.killPane(task_id);
+							paneAliveForAttach = false;
 							const completed = completeTask(db, {
 								id: task_id,
 								status: "timed_out",
@@ -659,6 +663,9 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 						}
 					}
 				}
+			}
+			if (isTerminalTaskStatus(live.status) && !backendMismatch && paneAliveForAttach === null) {
+				paneAliveForAttach = await panes.isAlive(task_id);
 			}
 			const caps = defaultCapabilities;
 			const mode = adapterRunModeFor(
@@ -683,7 +690,8 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 				!deferredDeadPane &&
 				caps.supports_attach &&
 				supportsAttachForMode(mode) &&
-				attachCommand !== null;
+				attachCommand !== null &&
+				(backendMismatch || paneAliveForAttach !== false);
 			return {
 				task_id,
 				agent_kind: config.kind,
@@ -698,12 +706,8 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 				native_task_id: displayNativeTaskRef(live.native_task_ref),
 				supports_steering: supportsSteering,
 				supports_attach: supportsAttach,
-				attach_hint: isTerminalTaskStatus(live.status)
-					? undefined
-					: supportsAttach
-						? attachCommand.argv.join(" ")
-						: undefined,
-				attach_command: isTerminalTaskStatus(live.status) || !supportsAttach ? null : attachCommand,
+				attach_hint: supportsAttach ? attachCommand.argv.join(" ") : undefined,
+				attach_command: supportsAttach ? attachCommand : null,
 				metadata: {
 					adapter_mode: mode,
 					// `tmux_session_name` is the legacy field — kept during the

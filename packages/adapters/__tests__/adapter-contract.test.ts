@@ -192,6 +192,9 @@ describe.each(CASES)("AgentAdapter contract — $kind", (testCase) => {
 		const view = await adapter.status(task_id);
 
 		expect(view.status).toBe("completed");
+		expect(view.supports_attach).toBe(true);
+		expect(view.attach_command).not.toBeNull();
+		expect(view.attach_hint).toBe(view.attach_command?.argv.join(" "));
 		expect(getTaskById(db, task_id)?.status).toBe("completed");
 		expect(panes.terminalMarks).toContainEqual({ task_id, status: "completed" });
 	});
