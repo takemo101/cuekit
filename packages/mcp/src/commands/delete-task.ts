@@ -3,6 +3,7 @@ import {
 	clearTaskTeamMultiplexerMetadata,
 	deleteTask,
 	getTaskById,
+	getTaskTeamMultiplexerMetadata,
 	listTasksByTeam,
 } from "@cuekit/store";
 import { z } from "incur";
@@ -97,6 +98,12 @@ export async function runDeleteTasks(
 		}
 		if (task.team_id && isLastTeamTask) {
 			try {
+				if (ctx.panes?.restoreTeamWorkspaceHandle) {
+					const teamHandle = getTaskTeamMultiplexerMetadata(ctx.db, task.team_id, ctx.panes.kind);
+					if (teamHandle !== undefined) {
+						ctx.panes.restoreTeamWorkspaceHandle(task.team_id, teamHandle);
+					}
+				}
 				await ctx.panes?.killTeamSession?.(task.team_id);
 				if (ctx.panes) clearTaskTeamMultiplexerMetadata(ctx.db, task.team_id, ctx.panes.kind);
 			} catch (error) {

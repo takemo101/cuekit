@@ -1014,6 +1014,35 @@ describe("wait-team and cleanup-team", () => {
 		expect(runGetTeamStatus(ctx, { team_id: "tm_1" })).toMatchObject({ team_id: "tm_1" });
 	});
 
+	it("cleanup-team preserves rows when backend team session cleanup fails", async () => {
+		const basePanes = ctx.panes as TmuxBackend & {
+			killTeamSession?: (teamId: string) => Promise<void>;
+		};
+		basePanes.killTeamSession = async () => {
+			throw new Error("cleanup failed");
+		};
+		createSession(db, {
+			id: "s_cleanup_fail",
+			project_root: "/p",
+			worktree_path: "/w",
+			parent_agent_kind: "pi",
+		});
+		createTaskTeam(db, { id: "tm_cleanup_fail", session_id: "s_cleanup_fail", title: "Team" });
+		createTask(db, {
+			id: "t_done_fail",
+			session_id: "s_cleanup_fail",
+			agent_kind: "claude-code",
+			team_id: "tm_cleanup_fail",
+			objective: "done",
+			status: "completed",
+		});
+
+		const result = await runCleanupTeam(ctx, { team_id: "tm_cleanup_fail" });
+
+		expect("error" in result).toBe(true);
+		expect(getTaskById(db, "t_done_fail")).not.toBeNull();
+	});
+
 	it("cleanup-team kills the backend team session when all members are deleted", async () => {
 		const killedTeams: string[] = [];
 		const basePanes = ctx.panes as TmuxBackend & {

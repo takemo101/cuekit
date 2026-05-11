@@ -1,6 +1,6 @@
 import type { Database } from "bun:sqlite";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { mkdirSync, readFileSync, rmSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import {
@@ -240,6 +240,56 @@ function paneHandleForTask(task: Task): {
 	};
 }
 
+async function withTeamWorkspaceLock<T>(
+	cuekitHomeDir: string,
+	backendKind: string,
+	teamId: string,
+	operation: () => Promise<T>,
+): Promise<T> {
+	const lockRoot = join(cuekitHomeDir, "locks", "team-workspaces");
+	mkdirSync(lockRoot, { recursive: true });
+	const lockDir = join(
+		lockRoot,
+		`${sanitizeLockSegment(backendKind)}-${sanitizeLockSegment(teamId)}`,
+	);
+	for (let attempt = 0; attempt < 400; attempt += 1) {
+		try {
+			mkdirSync(lockDir);
+			try {
+				return await operation();
+			} finally {
+				rmSync(lockDir, { recursive: true, force: true });
+			}
+		} catch (error) {
+			if (!isAlreadyExistsError(error)) throw error;
+			if (isStaleLock(lockDir)) {
+				rmSync(lockDir, { recursive: true, force: true });
+				continue;
+			}
+			await Bun.sleep(50);
+		}
+	}
+	throw new Error(`timed out waiting for ${backendKind} team workspace lock for ${teamId}`);
+}
+
+function sanitizeLockSegment(value: string): string {
+	return value.replaceAll(/[^A-Za-z0-9_.-]/g, "_");
+}
+
+function isAlreadyExistsError(error: unknown): boolean {
+	return (
+		error instanceof Error && "code" in error && (error as NodeJS.ErrnoException).code === "EEXIST"
+	);
+}
+
+function isStaleLock(lockDir: string): boolean {
+	try {
+		return Date.now() - statSync(lockDir).mtimeMs > 5 * 60 * 1000;
+	} catch {
+		return false;
+	}
+}
+
 function backendMismatchError(
 	task: Task,
 	currentBackendKind: string,
@@ -464,7 +514,7 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 				: rawLaunchCommand;
 			const mode = adapterRunModeFor(input.spec);
 
-			try {
+			const spawnWithMetadata = async () => {
 				if (input.team_id) {
 					const teamHandle = getTaskTeamMultiplexerMetadata(db, input.team_id, panes.kind);
 					if (teamHandle !== undefined && panes.restoreTeamWorkspaceHandle) {
@@ -511,6 +561,12 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 				}
 				updateTaskStatus(db, task_id, "running");
 				return { ok: true as const, value: { task_id } };
+			};
+
+			try {
+				return input.team_id && panes.getTeamWorkspaceHandle
+					? await withTeamWorkspaceLock(cuekitHomeDir, panes.kind, input.team_id, spawnWithMetadata)
+					: await spawnWithMetadata();
 			} catch (err) {
 				if (
 					input.team_id &&
