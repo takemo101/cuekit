@@ -31,6 +31,7 @@ import { runDeleteSessions } from "../src/commands/delete-session.ts";
 import { runDeleteTasks } from "../src/commands/delete-task.ts";
 import { runDeleteTeam } from "../src/commands/delete-team.ts";
 import { runGetTaskResult } from "../src/commands/get-task-result.ts";
+import { runGetTaskSnapshot } from "../src/commands/get-task-snapshot.ts";
 import { runGetTaskStatus } from "../src/commands/get-task-status.ts";
 import { runGetTeamResult } from "../src/commands/get-team-result.ts";
 import { runGetTeamStatus } from "../src/commands/get-team-status.ts";
@@ -3090,6 +3091,63 @@ describe("wait-tasks", () => {
 		expect(waited.tasks[0]?.status).toBe("cancelled");
 		expect(waited.tasks[0]?.terminal).toBe(true);
 		expect(waited.tasks[0]?.result?.status).toBe("cancelled");
+	});
+});
+
+describe("task snapshot", () => {
+	it("returns deterministic context for parent-session tasks", async () => {
+		const dir = mkdtempSync(join(tmpdir(), "cuekit-snapshot-"));
+		try {
+			const submit = await runSubmitTask(ctx, {
+				objective: "manage this project",
+				agent_kind: "pi",
+				cwd: dir,
+				metadata: { run_kind: "parent_session", long_lived: true },
+			});
+			if (!submit.accepted) throw new Error("setup failed");
+			appendTaskEvent(db, {
+				id: "e_progress",
+				task_id: submit.task_id,
+				type: "progress",
+				message: "Started",
+				payload: null,
+			});
+			appendTaskEvent(db, {
+				id: "e_handoff",
+				task_id: submit.task_id,
+				type: "handoff",
+				message: "Handoff body",
+				payload: { artifact_path: `.cuekit/tasks/${submit.task_id}/handoffs/e_handoff.md` },
+			});
+			const task = getTaskById(db, submit.task_id);
+			if (!task?.transcript_ref) throw new Error("missing transcript ref");
+			writeFileSync(task.transcript_ref, "old\nrecent transcript\n");
+
+			const snapshot = await runGetTaskSnapshot(ctx, { task_id: submit.task_id });
+			expect("error" in snapshot).toBe(false);
+			if ("error" in snapshot) return;
+			expect(snapshot).toMatchObject({
+				task_id: submit.task_id,
+				status: "running",
+				agent_kind: "pi",
+				objective: "manage this project",
+				cwd: dir,
+				run_kind: "parent_session",
+				long_lived: true,
+			});
+			expect(snapshot.latest_events.map((event) => event.type)).toEqual(["progress", "handoff"]);
+			expect(snapshot.latest_handoffs[0]?.artifact_path).toContain("handoffs/e_handoff.md");
+			expect(snapshot.transcript_tail).toContain("recent transcript");
+			expect(snapshot.suggested_next_read_actions.length).toBeGreaterThan(0);
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
+	it("returns task_not_found for unknown snapshot targets", async () => {
+		const snapshot = await runGetTaskSnapshot(ctx, { task_id: "t_missing" });
+		expect("error" in snapshot).toBe(true);
+		if ("error" in snapshot) expect(snapshot.error.code).toBe("task_not_found");
 	});
 });
 

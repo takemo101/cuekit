@@ -67,6 +67,7 @@ describe("createCli", () => {
 			"start_team_strategy",
 			"create_team",
 			"get_status",
+			"get_task_snapshot",
 			"get_task_result",
 			"get_team_result",
 			"wait",
