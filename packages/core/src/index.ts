@@ -18,5 +18,6 @@ export * from "./task-result.ts";
 export * from "./task-spec.ts";
 export * from "./task-status.ts";
 export * from "./task-status-view.ts";
+export * from "./task-snapshot.ts";
 export * from "./task-summary.ts";
 export * from "./team.ts";

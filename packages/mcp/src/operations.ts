@@ -48,6 +48,11 @@ import {
 	runGetTaskStatus,
 } from "./commands/get-task-status.ts";
 import {
+	GetTaskSnapshotInputSchema,
+	GetTaskSnapshotOutputSchema,
+	runGetTaskSnapshot,
+} from "./commands/get-task-snapshot.ts";
+import {
 	GetTeamResultInputSchema,
 	GetTeamResultOutputSchema,
 	runGetTeamResult,
@@ -455,6 +460,14 @@ export const CUEKIT_MCP_OPERATIONS = [
 		run: runGetStatus,
 	}),
 	defineMcpOperation({
+		mcpName: "get_task_snapshot",
+		cliPath: ["task", "snapshot"],
+		description: "Fetch a deterministic context snapshot for a task before intervening.",
+		options: GetTaskSnapshotInputSchema,
+		output: GetTaskSnapshotOutputSchema,
+		run: runGetTaskSnapshot,
+	}),
+	defineMcpOperation({
 		mcpName: "get_task_result",
 		cliPath: ["task", "result"],
 		description: "Collect the normalized result of a terminal task.",
@@ -619,6 +632,13 @@ export const CUEKIT_CLI_OPERATIONS = [
 		options: GetTaskStatusInputSchema,
 		output: GetTaskStatusOutputSchema,
 		run: runGetTaskStatus,
+	}),
+	defineOperation({
+		cliPath: ["task", "snapshot"],
+		description: "Fetch a deterministic context snapshot for a task before intervening.",
+		options: GetTaskSnapshotInputSchema,
+		output: GetTaskSnapshotOutputSchema,
+		run: runGetTaskSnapshot,
 	}),
 	defineOperation({
 		cliPath: ["task", "result"],
