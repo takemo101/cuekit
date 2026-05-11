@@ -101,7 +101,10 @@ export type TuiContext = {
 	cancelTask(taskId: string): Promise<Ack>;
 	deleteTask(taskId: string): Promise<Ack>;
 	steerTask(taskId: string, message: string): Promise<Ack>;
-	createParentSession?(input?: { objective?: string; cwd?: string }): Promise<{ task_id: string } | { error: JobError }>;
+	createParentSession?(input?: {
+		objective?: string;
+		cwd?: string;
+	}): Promise<{ task_id: string } | { error: JobError }>;
 	cleanupTeam?(teamId: string): Promise<Ack>;
 	deleteTeam?(teamId: string): Promise<Ack>;
 	getTranscriptPath?(taskId: string): string | undefined;

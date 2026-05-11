@@ -10,7 +10,11 @@ import { removeHandoffArtifact, writeHandoffArtifact } from "../handoff-artifact
 export const SteerTaskInputSchema = z
 	.object({
 		task_id: z.string().min(1).describe("cuekit task id."),
-		message: z.string().min(1).optional().describe("Steering text to inject into the running agent."),
+		message: z
+			.string()
+			.min(1)
+			.optional()
+			.describe("Steering text to inject into the running agent."),
 		message_file: z.string().min(1).optional().describe("Path to steering text to read."),
 		event_type: z.enum(["handoff"]).optional(),
 		reason: z.string().min(1).optional(),

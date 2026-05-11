@@ -10,8 +10,8 @@ import {
 	buildJcodeRunLaunchCommand,
 	createJcodeAdapter,
 } from "../src/jcode-adapter.ts";
-import { TmuxBackend } from "../src/tmux-backend.ts";
 import { FakeTmuxRunner, hasTmux } from "../src/testing.ts";
+import { TmuxBackend } from "../src/tmux-backend.ts";
 
 let db: Database;
 let panes: TmuxBackend;

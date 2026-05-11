@@ -3,8 +3,8 @@ import { beforeEach, describe, expect, it } from "bun:test";
 import type { TaskSpec } from "@cuekit/core";
 import { createSession, runMigrations } from "@cuekit/store";
 import { buildGeminiLaunchCommand, createGeminiAdapter } from "../src/gemini-adapter.ts";
-import { TmuxBackend } from "../src/tmux-backend.ts";
 import { FakeTmuxRunner } from "../src/testing.ts";
+import { TmuxBackend } from "../src/tmux-backend.ts";
 
 let db: Database;
 let panes: TmuxBackend;

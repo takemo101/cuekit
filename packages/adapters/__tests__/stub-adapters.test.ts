@@ -10,9 +10,9 @@ import {
 	buildOpenCodeTuiLaunchCommand,
 	createOpenCodeAdapter,
 } from "../src/opencode-adapter.ts";
-import { TmuxBackend } from "../src/tmux-backend.ts";
 import { buildPiLaunchCommand, createPiAdapter } from "../src/pi-adapter.ts";
 import { FakeTmuxRunner } from "../src/testing.ts";
+import { TmuxBackend } from "../src/tmux-backend.ts";
 
 let db: Database;
 let panes: TmuxBackend;

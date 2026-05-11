@@ -95,7 +95,10 @@ export async function runGetTaskSnapshot(
 			created_at: event.created_at,
 		}));
 	const activity = getTaskActivity(ctx.db, task);
-	const transcriptTail = readTail(task.transcript_ref, input.transcript_lines ?? DEFAULT_TRANSCRIPT_LINES);
+	const transcriptTail = readTail(
+		task.transcript_ref,
+		input.transcript_lines ?? DEFAULT_TRANSCRIPT_LINES,
+	);
 	return {
 		task_id: task.id,
 		status: task.status,
@@ -105,7 +108,10 @@ export async function runGetTaskSnapshot(
 		...specFields(task.spec_json),
 		...taskRunMetadata(task),
 		...(activity.last_event_at || activity.last_transcript_at || task.updated_at
-			? { last_activity_at: activity.last_event_at ?? activity.last_transcript_at ?? task.updated_at }
+			? {
+					last_activity_at:
+						activity.last_event_at ?? activity.last_transcript_at ?? task.updated_at,
+				}
 			: {}),
 		latest_events: latestEvents,
 		latest_handoffs: latestHandoffs,

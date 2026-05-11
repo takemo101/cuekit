@@ -52,8 +52,8 @@ import { runWaitTasks } from "../src/commands/wait-tasks.ts";
 import { runWaitTeam } from "../src/commands/wait-team.ts";
 import {
 	applyMcpWaitSafetyBounds,
-	MCP_SAFE_WAIT_TIMEOUT_MS,
 	CUEKIT_MCP_OPERATIONS,
+	MCP_SAFE_WAIT_TIMEOUT_MS,
 } from "../src/operations.ts";
 
 let db: Database;
@@ -3283,12 +3283,11 @@ describe("steer-task", () => {
 	it("validates grouped steer task handoff message fields", () => {
 		const steer = CUEKIT_MCP_OPERATIONS.find((operation) => operation.mcpName === "steer");
 		if (!steer) throw new Error("missing steer operation");
+		expect(steer.options.safeParse({ kind: "task", task_id: "t1", message: "a" }).success).toBe(
+			true,
+		);
 		expect(
-			steer.options.safeParse({ kind: "task", task_id: "t1", message: "a" }).success,
-		).toBe(true);
-		expect(
-			steer.options.safeParse({ kind: "task", task_id: "t1", message_file: "HANDOFF.md" })
-				.success,
+			steer.options.safeParse({ kind: "task", task_id: "t1", message_file: "HANDOFF.md" }).success,
 		).toBe(true);
 		expect(
 			steer.options.safeParse({ kind: "task", task_id: "t1", message: "a", message_file: "b" })
@@ -3300,8 +3299,12 @@ describe("steer-task", () => {
 				.success,
 		).toBe(false);
 		expect(
-			steer.options.safeParse({ kind: "team", team_id: "tm_1", message: "a", event_type: "handoff" })
-				.success,
+			steer.options.safeParse({
+				kind: "team",
+				team_id: "tm_1",
+				message: "a",
+				event_type: "handoff",
+			}).success,
 		).toBe(false);
 	});
 
