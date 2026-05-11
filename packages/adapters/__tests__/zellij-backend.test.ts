@@ -360,7 +360,7 @@ describe("isAlive", () => {
 });
 
 describe("sendKeys", () => {
-	it("issues write-chars then write 13 (Enter) targeting the session focused pane", async () => {
+	it("resolves and targets the solo layout pane instead of relying on focus", async () => {
 		await panes.spawnPane({
 			task_id: "t_steer",
 			command: "x",
@@ -372,8 +372,24 @@ describe("sendKeys", () => {
 			(c) => c[0] === "--session" && (c[3] === "write-chars" || c[3] === "write"),
 		);
 		expect(writes).toHaveLength(2);
-		expect(writes[0]).toEqual(["--session", "ct-t_steer", "action", "write-chars", "hello world"]);
-		expect(writes[1]).toEqual(["--session", "ct-t_steer", "action", "write", "13"]);
+		expect(writes[0]).toEqual([
+			"--session",
+			"ct-t_steer",
+			"action",
+			"write-chars",
+			"-p",
+			"terminal_0",
+			"hello world",
+		]);
+		expect(writes[1]).toEqual([
+			"--session",
+			"ct-t_steer",
+			"action",
+			"write",
+			"-p",
+			"terminal_0",
+			"13",
+		]);
 	});
 });
 
@@ -386,9 +402,24 @@ describe("capturePane", () => {
 		const dump = runner.calls.find((c) => c[0] === "--session" && c[3] === "dump-screen");
 		expect(dump).toBeDefined();
 		expect(dump).toContain("--full");
+		expect(dump).not.toContain("-p");
+		expect(dump).not.toContain("--path");
 		// Path is the last argument (positional, not flag-paired).
 		const lastArg = dump?.at(-1) ?? "";
 		expect(lastArg).toMatch(/cuekit-zellij-.*\/dump\.txt$/);
+	});
+
+	it("keeps solo capture on the compatibility path after steering", async () => {
+		await panes.spawnPane({ task_id: "t_steer_cap", command: "x", cwd: "/tmp" });
+		await panes.sendKeys("t_steer_cap", "hello");
+		const captured = await panes.capturePane("t_steer_cap");
+		expect(captured).toBe("fake screen output\n");
+
+		const dump = runner.calls.find((c) => c[0] === "--session" && c[3] === "dump-screen");
+		expect(dump).toBeDefined();
+		expect(dump).toContain("--full");
+		expect(dump).not.toContain("-p");
+		expect(dump).not.toContain("--path");
 	});
 
 	it("dumps a team pane by pane id using the zellij 0.44 --path form", async () => {
@@ -412,6 +443,18 @@ describe("killPane", () => {
 		expect(runner.knownSessions()).not.toContain("ct-t_kill");
 		expect(runner.calls.at(-2)).toEqual(["kill-session", "ct-t_kill"]);
 		expect(runner.calls.at(-1)).toEqual(["delete-session", "ct-t_kill"]);
+	});
+
+	it("kills and deletes the solo session after steering", async () => {
+		await panes.spawnPane({ task_id: "t_steer_kill", command: "x", cwd: "/tmp" });
+		expect(runner.knownSessions()).toContain("ct-t_steer_kill");
+
+		await panes.sendKeys("t_steer_kill", "hello");
+		await panes.killPane("t_steer_kill");
+
+		expect(runner.knownSessions()).not.toContain("ct-t_steer_kill");
+		expect(runner.calls.at(-2)).toEqual(["kill-session", "ct-t_steer_kill"]);
+		expect(runner.calls.at(-1)).toEqual(["delete-session", "ct-t_steer_kill"]);
 	});
 
 	it("treats 'no such session' as idempotent success", async () => {
