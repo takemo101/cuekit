@@ -37,6 +37,19 @@ describe("HerdrBackend", () => {
 		expect(await backend.isAlive("t_abc")).toBe(false);
 	});
 
+	test("restored handle keeps attach command and session metadata on the persisted session", async () => {
+		const runner = new FakeHerdrRunner();
+		const first = new HerdrBackend({ runner, sessionName: "ck-old", sendKeysDelayMs: 0 });
+		const handle = await first.spawnPane({ task_id: "t_abc", cwd: "/repo", command: "cat" });
+
+		const restored = new HerdrBackend({ runner, sessionName: "ck-new", sendKeysDelayMs: 0 });
+		restored.restorePaneHandle?.(handle);
+
+		expect(await restored.isAlive("t_abc")).toBe(true);
+		expect(restored.sessionNameFor("t_abc")).toBe("ck-old");
+		expect(restored.attachCommand("t_abc")).toEqual({ argv: ["herdr", "--session", "ck-old"] });
+	});
+
 	test("restored handle validates workspace and tab before operating", async () => {
 		const runner = new FakeHerdrRunner();
 		const first = new HerdrBackend({ runner, sessionName: "ck-test", sendKeysDelayMs: 0 });
