@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { Logger } from "@cuekit/core";
 import type { MultiplexerBackend } from "./multiplexer-backend.ts";
 
@@ -8,10 +9,16 @@ import type { MultiplexerBackend } from "./multiplexer-backend.ts";
  * already have.
  */
 export interface MultiplexerConfigSlice {
-	multiplexer?: "tmux" | "zellij" | { backend?: "tmux" | "zellij"; strict?: boolean };
+	project?: { id?: string; name?: string };
+	multiplexer?:
+		| "tmux"
+		| "zellij"
+		| "herdr"
+		| { backend?: "tmux" | "zellij" | "herdr"; strict?: boolean };
 	multiplexer_strict?: boolean;
 }
 
+import { HerdrBackend } from "./herdr-backend.ts";
 import { TmuxBackend } from "./tmux-backend.ts";
 import { ZellijBackend } from "./zellij-backend.ts";
 
@@ -40,12 +47,13 @@ export interface BuildMultiplexerOptions {
 	probe?: {
 		tmux?: boolean;
 		zellij?: boolean;
+		herdr?: boolean;
 	};
 }
 
 export interface BuiltMultiplexer {
 	backend: MultiplexerBackend;
-	requested: "tmux" | "zellij";
+	requested: "tmux" | "zellij" | "herdr";
 	fallbackApplied: boolean;
 }
 
@@ -68,37 +76,70 @@ export async function buildMultiplexerBackend(
 	}
 
 	if (requested === "zellij") {
-		const zellijOk = options.probe?.zellij ?? (await probeBinary("zellij", ["--version"]));
-		if (zellijOk) {
-			return { backend: new ZellijBackend(), requested, fallbackApplied: false };
-		}
-		if (strict) {
-			throw new Error(
-				"multiplexer 'zellij' is configured with strict mode enabled but `zellij --version` failed; install zellij or relax the strict flag",
-			);
-		}
-		// Soft fallback to tmux. tmux must still probe.
-		const tmuxOk = options.probe?.tmux ?? (await probeBinary("tmux", ["-V"]));
-		if (!tmuxOk) {
-			throw new Error(
-				"multiplexer 'zellij' probe failed and the tmux fallback also failed; install one of them",
-			);
-		}
-		options.logger?.warn?.(
-			"project config requests multiplexer 'zellij' but its probe failed; falling back to tmux. Install zellij or set multiplexer.backend: tmux to silence this warning.",
-		);
-		return { backend: new TmuxBackend(), requested, fallbackApplied: true };
+		return buildOptionalBackend({
+			requested,
+			strict,
+			probeOk: options.probe?.zellij ?? (await probeBinary("zellij", ["--version"])),
+			fallbackTmuxOk: options.probe?.tmux ?? (await probeBinary("tmux", ["-V"])),
+			backend: () => new ZellijBackend(),
+			logger: options.logger,
+		});
+	}
+
+	if (requested === "herdr") {
+		return buildOptionalBackend({
+			requested,
+			strict,
+			probeOk: options.probe?.herdr ?? (await probeBinary("herdr", ["--version"])),
+			fallbackTmuxOk: options.probe?.tmux ?? (await probeBinary("tmux", ["-V"])),
+			backend: () => new HerdrBackend({ sessionName: resolveHerdrSessionName(config) }),
+			logger: options.logger,
+		});
 	}
 
 	throw new Error(`unknown multiplexer '${String(requested)}'`);
 }
 
+function buildOptionalBackend(params: {
+	requested: "zellij" | "herdr";
+	strict: boolean;
+	probeOk: boolean;
+	fallbackTmuxOk: boolean;
+	backend: () => MultiplexerBackend;
+	logger?: Logger;
+}): BuiltMultiplexer {
+	if (params.probeOk) {
+		return { backend: params.backend(), requested: params.requested, fallbackApplied: false };
+	}
+	if (params.strict) {
+		throw new Error(
+			`strict mode for multiplexer '${params.requested}' failed because its version probe failed; install ${params.requested} or relax the strict flag`,
+		);
+	}
+	if (!params.fallbackTmuxOk) {
+		throw new Error(
+			`multiplexer '${params.requested}' probe failed and the tmux fallback also failed; install one of them`,
+		);
+	}
+	params.logger?.warn?.(
+		`project config requests multiplexer '${params.requested}' but its probe failed; falling back to tmux. Install ${params.requested} or set multiplexer.backend: tmux to silence this warning.`,
+	);
+	return { backend: new TmuxBackend(), requested: params.requested, fallbackApplied: true };
+}
+
 function resolveRequestedMultiplexer(
 	config: MultiplexerConfigSlice | undefined,
-): "tmux" | "zellij" {
+): "tmux" | "zellij" | "herdr" {
 	const configured = config?.multiplexer;
 	if (typeof configured === "string") return configured;
 	return configured?.backend ?? "tmux";
+}
+
+function resolveHerdrSessionName(config: MultiplexerConfigSlice | undefined): string {
+	const projectId = config?.project?.id ?? config?.project?.name;
+	if (projectId) return `ck-${projectId}`;
+	const cwdHash = createHash("sha256").update(process.cwd()).digest("hex").slice(0, 12);
+	return `ck-${cwdHash}`;
 }
 
 function resolveStrictMode(config: MultiplexerConfigSlice | undefined): boolean {

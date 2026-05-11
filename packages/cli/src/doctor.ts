@@ -98,7 +98,10 @@ async function defaultCheckWritableState(
 	}
 }
 
-function readMultiplexerSettings(cwd: string): { requested: "tmux" | "zellij"; strict: boolean } {
+function readMultiplexerSettings(cwd: string): {
+	requested: "tmux" | "zellij" | "herdr";
+	strict: boolean;
+} {
 	try {
 		const loaded = loadProjectConfigFromDisk(cwd);
 		if (loaded.ok && loaded.discovery.source === "config") {
@@ -190,29 +193,33 @@ export async function runDoctor(options: RunDoctorOptions = {}): Promise<DoctorR
 	);
 
 	// Active multiplexer backend. Reads `multiplexer.backend` from project config
-	// (default tmux). When zellij is configured but its probe fails, the
-	// runtime factory soft-falls-back to tmux; doctor reports this so the
+	// (default tmux). When an optional backend is configured but its probe fails,
+	// the runtime factory soft-falls-back to tmux; doctor reports this so the
 	// operator can see at a glance whether they got the backend they asked
 	// for.
 	const cwdForConfig = options.cwd ?? process.cwd();
 	const { requested: requestedMultiplexer, strict: multiplexerStrict } =
 		readMultiplexerSettings(cwdForConfig);
-	const zellijProbe =
-		requestedMultiplexer === "zellij" ? await exec("zellij", ["--version"]) : null;
+	const optionalBackendProbe =
+		requestedMultiplexer === "zellij"
+			? await exec("zellij", ["--version"])
+			: requestedMultiplexer === "herdr"
+				? await exec("herdr", ["--version"])
+				: null;
 	const fallbackApplied =
-		requestedMultiplexer === "zellij" &&
-		zellijProbe !== null &&
-		!zellijProbe.ok &&
+		requestedMultiplexer !== "tmux" &&
+		optionalBackendProbe !== null &&
+		!optionalBackendProbe.ok &&
 		!multiplexerStrict;
 	const strictFailure =
-		requestedMultiplexer === "zellij" &&
-		zellijProbe !== null &&
-		!zellijProbe.ok &&
+		requestedMultiplexer !== "tmux" &&
+		optionalBackendProbe !== null &&
+		!optionalBackendProbe.ok &&
 		multiplexerStrict;
 	const activeBackend = strictFailure
-		? "zellij unavailable (strict mode)"
+		? `${requestedMultiplexer} unavailable (strict mode)`
 		: fallbackApplied
-			? "tmux (fallback from zellij)"
+			? `tmux (fallback from ${requestedMultiplexer})`
 			: requestedMultiplexer;
 	checks.push({
 		level: strictFailure ? "fail" : "ok",
@@ -220,25 +227,35 @@ export async function runDoctor(options: RunDoctorOptions = {}): Promise<DoctorR
 		detail: activeBackend,
 	});
 
-	if (zellijProbe !== null) {
+	if (optionalBackendProbe !== null && requestedMultiplexer !== "tmux") {
 		checks.push(
-			zellijProbe.ok
-				? { level: "ok", label: "zellij", detail: trimVersionOutput(zellijProbe.stdout) }
+			optionalBackendProbe.ok
+				? {
+						level: "ok",
+						label: requestedMultiplexer,
+						detail: trimVersionOutput(optionalBackendProbe.stdout),
+					}
 				: {
 						level: multiplexerStrict ? "fail" : "warn",
-						label: "zellij",
+						label: requestedMultiplexer,
 						detail:
-							zellijProbe.stderr ||
+							optionalBackendProbe.stderr ||
 							(multiplexerStrict ? "not found (strict mode)" : "not found (falling back to tmux)"),
 					},
 		);
 	}
 
 	const tmuxVersion = await exec("tmux", ["-V"]);
+	const tmuxRequired = requestedMultiplexer === "tmux" || fallbackApplied;
 	checks.push(
 		tmuxVersion.ok
 			? { level: "ok", label: "tmux", detail: trimVersionOutput(tmuxVersion.stdout) }
-			: { level: "fail", label: "tmux", detail: tmuxVersion.stderr || "not found" },
+			: {
+					level: tmuxRequired ? "fail" : "warn",
+					label: "tmux",
+					detail:
+						tmuxVersion.stderr || (tmuxRequired ? "not found" : "not found (not active backend)"),
+				},
 	);
 
 	// Confirm `capture-pane` is recognised as a subcommand. cuekit's TUI

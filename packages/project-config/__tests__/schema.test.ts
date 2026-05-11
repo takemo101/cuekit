@@ -156,11 +156,17 @@ describe("CuekitProjectConfigSchema", () => {
 					multiplexer: { backend: "zellij", strict: true },
 				}).multiplexer,
 			).toEqual({ backend: "zellij", strict: true });
+			expect(
+				CuekitProjectConfigSchema.parse({
+					multiplexer: { backend: "herdr", strict: true },
+				}).multiplexer,
+			).toEqual({ backend: "herdr", strict: true });
 		});
 
-		it("keeps accepting legacy tmux and zellij string values", () => {
+		it("keeps accepting legacy tmux, zellij, and herdr string values", () => {
 			expect(CuekitProjectConfigSchema.parse({ multiplexer: "tmux" }).multiplexer).toBe("tmux");
 			expect(CuekitProjectConfigSchema.parse({ multiplexer: "zellij" }).multiplexer).toBe("zellij");
+			expect(CuekitProjectConfigSchema.parse({ multiplexer: "herdr" }).multiplexer).toBe("herdr");
 		});
 
 		it("treats multiplexer as optional (default applied by buildMultiplexerBackend, not the schema)", () => {

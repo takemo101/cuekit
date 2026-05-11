@@ -4,7 +4,7 @@ export const ProjectIdSchema = z.string().regex(/^[A-Za-z0-9._-]+$/);
 export const TuiScopeSchema = z.enum(["project", "path"]);
 export const TeamCleanupSchema = z.enum(["keep-team", "delete-empty-team"]);
 export const AdapterPermissionSchema = z.enum(["prompt", "bypass"]);
-export const MultiplexerSchema = z.enum(["tmux", "zellij"]);
+export const MultiplexerSchema = z.enum(["tmux", "zellij", "herdr"]);
 export const MultiplexerConfigSchema = z.union([
 	MultiplexerSchema,
 	z

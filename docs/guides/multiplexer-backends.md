@@ -1,6 +1,6 @@
 # Multiplexer backend guide
 
-cuekit can run pane-backed tasks on tmux or zellij. The configured backend decides where **new** tasks are spawned, but each task records the backend that originally created it. This keeps attach/status safe when `.cuekit.yaml` is switched while tasks are still running.
+cuekit can run pane-backed tasks on tmux, zellij, or experimental Herdr. The configured backend decides where **new** tasks are spawned, but each task records the backend that originally created it. This keeps attach/status safe when `.cuekit.yaml` is switched while tasks are still running.
 
 ## Configure the backend
 
@@ -8,7 +8,7 @@ Preferred structured config:
 
 ```yaml
 multiplexer:
-  backend: zellij # or tmux
+  backend: zellij # tmux, zellij, or herdr
   strict: true    # fail instead of falling back when the backend is unavailable
 ```
 
@@ -30,6 +30,7 @@ The task row's `native_task_ref` is the durable owner handle:
 | tmux | `tmux:%1` | `tmux attach-session -t cuekit-task-<task_id>` |
 | zellij | `zellij:ct-<task_id>/pane` | `zellij attach ct-<task_id>` |
 | zellij team member | `zellij:ctm-<team_id_suffix>/terminal_N` | `zellij attach ctm-<team_id_suffix>` |
+| herdr | `herdr:<session>/<workspace_id>/<tab_id>/<pane_id>` | `herdr --session <session>` |
 | legacy tmux rows | `%1` | treated as tmux |
 
 Status views preserve legacy display fields by stripping the backend prefix:
@@ -57,6 +58,27 @@ Not performed through the wrong backend:
 - live liveness/capture operations
 
 Those operations require either switching `.cuekit.yaml` back to the owning backend and reloading the process, or manually attaching with the printed command and handling the pane yourself.
+
+## Herdr backend (experimental)
+
+When `multiplexer.backend: herdr` is active, cuekit maps tasks onto Herdr's own hierarchy:
+
+```text
+Herdr session   = cuekit project/runtime namespace
+Herdr workspace = cuekit solo task or cuekit team
+Herdr tab       = default tab initially
+Herdr pane      = cuekit task terminal
+```
+
+Solo tasks create one cuekit-owned workspace and run in the root pane. Team tasks share one cuekit-owned workspace with one pane per member; role-oriented tabs are deferred. The persisted `native_task_ref` stores the full Herdr coordinate because Herdr pane ids can compact when panes close. Before liveness, steering, capture, or kill, cuekit validates that the pane still belongs to the expected workspace and tab.
+
+Attach opens the Herdr session, not a single pane:
+
+```bash
+herdr --session <session>
+```
+
+Herdr's `agent_status` is display-only for cuekit. `task_events` remain canonical for task/team result reporting.
 
 ## Zellij team dashboards
 

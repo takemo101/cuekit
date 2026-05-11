@@ -84,6 +84,13 @@ export function hasZellij(): boolean {
 	}
 }
 
+import type {
+	HerdrPaneInfo,
+	HerdrReadSource,
+	HerdrRunner,
+	HerdrSplitDirection,
+	HerdrWorkspaceCreateResult,
+} from "./herdr-runner.ts";
 import type { ZellijRunner, ZellijRunResult } from "./zellij-runner.ts";
 
 /**
@@ -91,6 +98,222 @@ import type { ZellijRunner, ZellijRunResult } from "./zellij-runner.ts";
  * ids in the `terminal_<n>` shape zellij uses, and records every invocation
  * so tests can assert on argv shape.
  */
+interface FakeHerdrPane extends HerdrPaneInfo {
+	text: string;
+	cwd: string;
+}
+
+interface FakeHerdrWorkspace {
+	workspace_id: string;
+	tab_id: string;
+	label?: string;
+	cwd: string;
+	panes: FakeHerdrPane[];
+}
+
+interface FakeHerdrSession {
+	workspaces: FakeHerdrWorkspace[];
+}
+
+export class FakeHerdrRunner implements HerdrRunner {
+	readonly calls: Array<{ method: string; params: unknown }> = [];
+	private readonly sessions = new Map<string, FakeHerdrSession>();
+	private readonly failNextRunPanes = new Set<string>();
+	private workspaceCounter = 0;
+
+	async probe(): Promise<boolean> {
+		this.calls.push({ method: "probe", params: {} });
+		return true;
+	}
+
+	async createWorkspace(params: {
+		session: string;
+		cwd: string;
+		label?: string;
+	}): Promise<HerdrWorkspaceCreateResult> {
+		this.calls.push({ method: "createWorkspace", params: { ...params } });
+		const session = this.ensureSession(params.session);
+		this.workspaceCounter += 1;
+		const workspaceId = `w${this.workspaceCounter}`;
+		const tabId = `${workspaceId}:1`;
+		const rootPaneId = `${workspaceId}-1`;
+		const pane: FakeHerdrPane = {
+			pane_id: rootPaneId,
+			workspace_id: workspaceId,
+			tab_id: tabId,
+			cwd: params.cwd,
+			text: "",
+		};
+		session.workspaces.push({
+			workspace_id: workspaceId,
+			tab_id: tabId,
+			...(params.label ? { label: params.label } : {}),
+			cwd: params.cwd,
+			panes: [pane],
+		});
+		return { workspace_id: workspaceId, tab_id: tabId, root_pane_id: rootPaneId };
+	}
+
+	async getPane(params: { session: string; paneId: string }): Promise<HerdrPaneInfo> {
+		this.calls.push({ method: "getPane", params: { ...params } });
+		const pane = this.findPane(params.session, params.paneId);
+		if (!pane) throw new Error(`pane_not_found: ${params.paneId}`);
+		return this.publicPane(pane);
+	}
+
+	async listPanes(params: { session: string; workspaceId?: string }): Promise<HerdrPaneInfo[]> {
+		this.calls.push({ method: "listPanes", params: { ...params } });
+		const session = this.sessions.get(params.session);
+		if (!session) return [];
+		return session.workspaces
+			.filter((workspace) => !params.workspaceId || workspace.workspace_id === params.workspaceId)
+			.flatMap((workspace) => workspace.panes.map((pane) => this.publicPane(pane)));
+	}
+
+	async splitPane(params: {
+		session: string;
+		targetPaneId: string;
+		direction: HerdrSplitDirection;
+		cwd?: string;
+	}): Promise<HerdrPaneInfo> {
+		this.calls.push({ method: "splitPane", params: { ...params } });
+		const located = this.findWorkspaceForPane(params.session, params.targetPaneId);
+		if (!located) throw new Error(`pane_not_found: ${params.targetPaneId}`);
+		const { workspace } = located;
+		const paneId = `${workspace.workspace_id}-${workspace.panes.length + 1}`;
+		const pane: FakeHerdrPane = {
+			pane_id: paneId,
+			workspace_id: workspace.workspace_id,
+			tab_id: workspace.tab_id,
+			cwd: params.cwd ?? workspace.cwd,
+			text: "",
+		};
+		workspace.panes.push(pane);
+		return this.publicPane(pane);
+	}
+
+	async runInPane(params: { session: string; paneId: string; command: string }): Promise<void> {
+		this.calls.push({ method: "runInPane", params: { ...params } });
+		const pane = this.requirePane(params.session, params.paneId);
+		if (this.failNextRunPanes.delete(params.paneId) || this.failNextRunPanes.delete("*")) {
+			throw new Error(`run_failed: ${params.paneId}`);
+		}
+		pane.text += `$ ${params.command}\n`;
+	}
+
+	async sendInput(params: {
+		session: string;
+		paneId: string;
+		text: string;
+		keys: string[];
+	}): Promise<void> {
+		this.calls.push({ method: "sendInput", params: { ...params } });
+		const pane = this.requirePane(params.session, params.paneId);
+		pane.text += `${params.text}${params.keys.includes("Enter") ? "\n" : ""}`;
+	}
+
+	async readPane(params: {
+		session: string;
+		paneId: string;
+		source: HerdrReadSource;
+		lines?: number;
+	}): Promise<{ text: string }> {
+		this.calls.push({ method: "readPane", params: { ...params } });
+		const pane = this.requirePane(params.session, params.paneId);
+		const lines = pane.text.split("\n");
+		const text = params.lines ? lines.slice(-params.lines).join("\n") : pane.text;
+		return { text };
+	}
+
+	async closePane(params: { session: string; paneId: string }): Promise<void> {
+		this.calls.push({ method: "closePane", params: { ...params } });
+		const located = this.findWorkspaceForPane(params.session, params.paneId);
+		if (!located) return;
+		located.workspace.panes.splice(located.paneIndex, 1);
+		this.compactPaneIds(located.workspace);
+	}
+
+	async closeWorkspace(params: { session: string; workspaceId: string }): Promise<void> {
+		this.calls.push({ method: "closeWorkspace", params: { ...params } });
+		const session = this.sessions.get(params.session);
+		if (!session) return;
+		session.workspaces = session.workspaces.filter(
+			(workspace) => workspace.workspace_id !== params.workspaceId,
+		);
+	}
+
+	failNextRunInPane(paneId = "*"): void {
+		this.failNextRunPanes.add(paneId);
+	}
+
+	forcePaneWorkspaceMismatch(backendPaneId: string, workspaceId: string): void {
+		const paneId = backendPaneId.split("/").at(-1) ?? backendPaneId;
+		for (const session of this.sessions.values()) {
+			for (const workspace of session.workspaces) {
+				const pane = workspace.panes.find((candidate) => candidate.pane_id === paneId);
+				if (pane) pane.workspace_id = workspaceId;
+			}
+		}
+	}
+
+	private ensureSession(name: string): FakeHerdrSession {
+		let session = this.sessions.get(name);
+		if (!session) {
+			session = { workspaces: [] };
+			this.sessions.set(name, session);
+		}
+		return session;
+	}
+
+	private findPane(sessionName: string, paneId: string): FakeHerdrPane | undefined {
+		return this.findWorkspaceForPane(sessionName, paneId)?.pane;
+	}
+
+	private requirePane(sessionName: string, paneId: string): FakeHerdrPane {
+		const pane = this.findPane(sessionName, paneId);
+		if (!pane) throw new Error(`pane_not_found: ${paneId}`);
+		return pane;
+	}
+
+	private findWorkspaceForPane(
+		sessionName: string,
+		paneId: string,
+	): { workspace: FakeHerdrWorkspace; pane: FakeHerdrPane; paneIndex: number } | undefined {
+		const session = this.sessions.get(sessionName);
+		if (!session) return undefined;
+		for (const workspace of session.workspaces) {
+			const paneIndex = workspace.panes.findIndex((pane) => pane.pane_id === paneId);
+			if (paneIndex >= 0)
+				return { workspace, pane: workspace.panes[paneIndex] as FakeHerdrPane, paneIndex };
+		}
+		return undefined;
+	}
+
+	private compactPaneIds(workspace: FakeHerdrWorkspace): void {
+		workspace.panes.forEach((pane, index) => {
+			pane.pane_id = `${workspace.workspace_id}-${index + 1}`;
+		});
+	}
+
+	private publicPane(pane: FakeHerdrPane): HerdrPaneInfo {
+		return {
+			pane_id: pane.pane_id,
+			workspace_id: pane.workspace_id,
+			tab_id: pane.tab_id,
+			...(pane.agent_status ? { agent_status: pane.agent_status } : {}),
+		};
+	}
+}
+
+export function hasHerdr(): boolean {
+	try {
+		const proc = Bun.spawnSync(["herdr", "--version"], { stdout: "pipe", stderr: "pipe" });
+		return proc.exitCode === 0;
+	} catch {
+		return false;
+	}
+}
+
 export class FakeZellijRunner implements ZellijRunner {
 	readonly calls: string[][] = [];
 	private layoutContent: string | undefined;
