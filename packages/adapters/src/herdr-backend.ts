@@ -49,6 +49,7 @@ export class HerdrBackend implements MultiplexerBackend {
 	private readonly sendKeysDelayMs: number;
 	private readonly taskHandles = new Map<string, HerdrTaskHandle>();
 	private readonly teamWorkspaces = new Map<string, HerdrTeamWorkspace>();
+	private readonly teamSpawnLocks = new Map<string, Promise<void>>();
 
 	constructor(options: HerdrBackendOptions = {}) {
 		this.runner = options.runner ?? defaultHerdrRunner();
@@ -74,7 +75,7 @@ export class HerdrBackend implements MultiplexerBackend {
 			? `team:${params.team_id}:${params.team_position ?? "member"}:${params.task_id}`
 			: `task ${params.task_id}`;
 		const coordinate = params.team_id
-			? await this.spawnTeamPane(params, prepared)
+			? await this.withTeamSpawnLock(params.team_id, () => this.spawnTeamPane(params, prepared))
 			: await this.spawnSoloPane(params, prepared, label);
 		const handle: HerdrTaskHandle = {
 			...coordinate,
@@ -158,6 +159,21 @@ export class HerdrBackend implements MultiplexerBackend {
 		this.teamWorkspaces.delete(team_id);
 		for (const [taskId, handle] of this.taskHandles.entries()) {
 			if (handle.teamId === team_id) this.taskHandles.delete(taskId);
+		}
+	}
+
+	private async withTeamSpawnLock<T>(teamId: string, operation: () => Promise<T>): Promise<T> {
+		const previous = this.teamSpawnLocks.get(teamId) ?? Promise.resolve();
+		const run = previous.catch(() => {}).then(operation);
+		const tail = run.then(
+			() => {},
+			() => {},
+		);
+		this.teamSpawnLocks.set(teamId, tail);
+		try {
+			return await run;
+		} finally {
+			if (this.teamSpawnLocks.get(teamId) === tail) this.teamSpawnLocks.delete(teamId);
 		}
 	}
 
