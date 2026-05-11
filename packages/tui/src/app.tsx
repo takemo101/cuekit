@@ -16,6 +16,7 @@ import { TaskList } from "./components/task-list.tsx";
 import { TeamDetail } from "./components/team-detail.tsx";
 import { TeamList } from "./components/team-list.tsx";
 import {
+	loadParentSessionList,
 	loadTaskDetail,
 	loadTaskList,
 	loadTeamDetail,
@@ -106,7 +107,9 @@ export function App(props: {
 	const listRows = Math.max(1, terminal.height - 7);
 	const detailLoadDebounceMs = props.ctx.detailLoadDebounceMs ?? DEFAULT_DETAIL_LOAD_DEBOUNCE_MS;
 	const taskDetailLoading = Boolean(
-		mode === "tasks" && selectedTaskId && detail?.status.task_id !== selectedTaskId,
+		(mode === "tasks" || mode === "parents") &&
+			selectedTaskId &&
+			detail?.status.task_id !== selectedTaskId,
 	);
 	const teamDetailLoading = Boolean(
 		mode === "teams" && selectedTeamId && teamDetail?.team.team_id !== selectedTeamId,
@@ -123,7 +126,10 @@ export function App(props: {
 	);
 
 	const refreshTasks = useCallback(async () => {
-		const list = await loadTaskList(props.ctx, { limit: 100 });
+		const list =
+			mode === "parents"
+				? await loadParentSessionList(props.ctx, { limit: 100 })
+				: await loadTaskList(props.ctx, { limit: 100 });
 		if ("error" in list) {
 			setError(list.error.message);
 			setTasks([]);
@@ -137,7 +143,7 @@ export function App(props: {
 			return restoreIndexById(list.tasks, requested, current, (task) => task.task_id);
 		});
 		setMessage(`Loaded ${list.tasks.length} task(s)`);
-	}, [props.ctx]);
+	}, [mode, props.ctx]);
 
 	const refreshTeams = useCallback(async () => {
 		const list = await loadTeamList(props.ctx, { limit: 100 });
@@ -201,7 +207,7 @@ export function App(props: {
 
 	useEffect(() => {
 		setDebouncedTaskDetailId(undefined);
-		if (mode !== "tasks" || !selectedTaskId) return;
+		if ((mode !== "tasks" && mode !== "parents") || !selectedTaskId) return;
 		setDetail((current) => (current?.status.task_id === selectedTaskId ? current : undefined));
 		const timer = setTimeout(() => {
 			setDebouncedTaskDetailId(selectedTaskId);
@@ -210,7 +216,11 @@ export function App(props: {
 	}, [detailLoadDebounceMs, mode, selectedTaskId]);
 
 	useEffect(() => {
-		if (mode !== "tasks" || !debouncedTaskDetailId || debouncedTaskDetailId !== selectedTaskId)
+		if (
+			(mode !== "tasks" && mode !== "parents") ||
+			!debouncedTaskDetailId ||
+			debouncedTaskDetailId !== selectedTaskId
+		)
 			return;
 		let cancelled = false;
 		void (async () => {
@@ -423,7 +433,12 @@ export function App(props: {
 			return;
 		}
 		if (key.name === "t") {
-			setMode((current) => (current === "tasks" ? "teams" : "tasks"));
+			setMode((current) => (current === "teams" ? "tasks" : "teams"));
+			setTeamFocus("list");
+			return;
+		}
+		if (key.name === "p") {
+			setMode((current) => (current === "parents" ? "tasks" : "parents"));
 			setTeamFocus("list");
 			return;
 		}
@@ -475,7 +490,7 @@ export function App(props: {
 				setError("Selected task does not expose an attach command.");
 				return;
 			}
-			exit(buildTuiTaskAttachExit(command, detail.status.task_id, detail.status));
+			exit(buildTuiTaskAttachExit(command, detail.status.task_id, detail.status, mode));
 			return;
 		}
 		if (key.name === "c") {
@@ -495,7 +510,7 @@ export function App(props: {
 				setPendingConfirm({ kind: "cleanup-team", teamId: selectedTeam.team_id });
 				return;
 			}
-			if (mode !== "tasks" || !selectedTask || !canCancel(selectedTask.status)) {
+			if ((mode !== "tasks" && mode !== "parents") || !selectedTask || !canCancel(selectedTask.status)) {
 				setError("Selected task cannot be cancelled.");
 				return;
 			}
@@ -519,7 +534,7 @@ export function App(props: {
 				setPendingConfirm({ kind: "delete-team", teamId: selectedTeam.team_id });
 				return;
 			}
-			if (mode !== "tasks" || !selectedTask || !canDelete(selectedTask.status)) {
+			if ((mode !== "tasks" && mode !== "parents") || !selectedTask || !canDelete(selectedTask.status)) {
 				setError("Selected task cannot be deleted until it is terminal.");
 				return;
 			}
@@ -527,7 +542,7 @@ export function App(props: {
 			return;
 		}
 		if (key.name === "s") {
-			if (mode !== "tasks" || !selectedTask) {
+			if ((mode !== "tasks" && mode !== "parents") || !selectedTask) {
 				setError("No selected task to steer.");
 				return;
 			}
@@ -535,7 +550,7 @@ export function App(props: {
 		}
 	});
 
-	const selectedAttachable = mode === "tasks" && detail ? canAttach(detail.status) : false;
+	const selectedAttachable = (mode === "tasks" || mode === "parents") && detail ? canAttach(detail.status) : false;
 
 	return (
 		<box width="100%" height="100%" flexDirection="column" backgroundColor={theme.bg}>

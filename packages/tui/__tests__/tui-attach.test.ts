@@ -72,6 +72,21 @@ describe("tui tmux attach helpers", () => {
 		});
 	});
 
+	it("builds parent task attach exits with parent return state", () => {
+		expect(
+			buildTuiTaskAttachExit(
+				{ argv: ["tmux", "attach-session", "-t", "cuekit-task-t_parent"] },
+				"t_parent",
+				undefined,
+				"parents",
+			),
+		).toEqual({
+			kind: "attach",
+			args: buildTmuxAttachArgs("cuekit-task-t_parent"),
+			returnState: { mode: "parents", selected_task_id: "t_parent" },
+		});
+	});
+
 	it("builds team attach exits with return state for attach-and-return", () => {
 		expect(buildTuiTeamAttachExit({ argv: ["zellij", "attach", "ctm-abcd"] }, "tm_abcd")).toEqual({
 			kind: "attach",

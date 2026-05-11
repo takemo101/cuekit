@@ -40,7 +40,9 @@ describe("@cuekit/tui package smoke", () => {
 		).text();
 		expect(app).toContain("<TaskList");
 		expect(app).toContain("maxVisibleRows={listRows}");
-		expect(app).toContain("<TaskDetail task={selectedTask} detail={detail} />");
+		expect(app).toContain("<TaskDetail");
+		expect(app).toContain("task={selectedTask}");
+		expect(app).toContain("detail={detail}");
 		expect(taskList).toContain("const TASK_LIST_WIDTH = 42");
 		expect(taskList).toContain("listWindow");
 		expect(taskList).not.toContain("RESULT");

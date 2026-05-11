@@ -23,6 +23,7 @@ import {
 import type { TuiContext } from "../src/context.ts";
 import {
 	captureLivePaneTail,
+	loadParentSessionList,
 	loadTaskDetail,
 	loadTaskList,
 	loadTeamDetail,
@@ -136,6 +137,108 @@ describe("tui data helpers", () => {
 		if ("tasks" in list) {
 			expect(list.tasks.map((item) => item.task_id)).toContain(task.id);
 		}
+	});
+
+	it("loads parent session tasks through a command-layer run_kind filter", async () => {
+		const tui: TuiContext = {
+			async listTasks() {
+				return {
+					has_more: false,
+					tasks: [
+						{
+							task_id: "t_parent",
+							agent_kind: "pi",
+							status: "running",
+							run_kind: "parent_session",
+							long_lived: true,
+							updated_at: new Date().toISOString(),
+						},
+						{
+							task_id: "t_worker",
+							agent_kind: "pi",
+							status: "running",
+							updated_at: new Date().toISOString(),
+						},
+					],
+				};
+			},
+			async getTaskStatus(taskId) {
+				return { task_id: taskId, status: "failed" };
+			},
+			async listTaskEvents() {
+				return { events: [] };
+			},
+			async cancelTask() {
+				return { ok: true };
+			},
+			async deleteTask() {
+				return { ok: true };
+			},
+			async steerTask() {
+				return { ok: true };
+			},
+		};
+
+		const list = await loadParentSessionList(tui);
+
+		expect("tasks" in list).toBe(true);
+		if ("tasks" in list) expect(list.tasks.map((task) => task.task_id)).toEqual(["t_parent"]);
+	});
+
+	it("continues paging while looking for parent session tasks", async () => {
+		let calls = 0;
+		const tui: TuiContext = {
+			async listTasks(input) {
+				calls += 1;
+				if (!input.cursor) {
+					return {
+						has_more: true,
+						next_cursor: "page-2",
+						tasks: [
+							{
+								task_id: "t_worker",
+								agent_kind: "pi",
+								status: "running",
+								updated_at: new Date().toISOString(),
+							},
+						],
+					};
+				}
+				return {
+					has_more: false,
+					tasks: [
+						{
+							task_id: "t_parent_late",
+							agent_kind: "pi",
+							status: "running",
+							run_kind: "parent_session",
+							updated_at: new Date().toISOString(),
+						},
+					],
+				};
+			},
+			async getTaskStatus(taskId) {
+				return { task_id: taskId, status: "failed" };
+			},
+			async listTaskEvents() {
+				return { events: [] };
+			},
+			async cancelTask() {
+				return { ok: true };
+			},
+			async deleteTask() {
+				return { ok: true };
+			},
+			async steerTask() {
+				return { ok: true };
+			},
+		};
+
+		const list = await loadParentSessionList(tui, { limit: 100 });
+
+		expect(calls).toBe(2);
+		expect("tasks" in list).toBe(true);
+		if ("tasks" in list) expect(list.tasks.map((task) => task.task_id)).toEqual(["t_parent_late"]);
 	});
 
 	it("loads the cockpit task list without live status refresh", async () => {

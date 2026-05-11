@@ -94,13 +94,14 @@ export function buildTuiTaskAttachExit(
 	command: { argv: string[] },
 	taskId: string,
 	view?: TaskStatusView,
+	returnMode: "tasks" | "parents" = "tasks",
 ): TuiExit {
 	const preAttachArgs = preAttachArgsForTask(view);
 	return {
 		kind: "attach",
 		...(preAttachArgs ? { preAttachArgs } : {}),
 		args: attachArgsForTui(command),
-		returnState: { mode: "tasks", selected_task_id: taskId },
+		returnState: { mode: returnMode, selected_task_id: taskId },
 	};
 }
 
