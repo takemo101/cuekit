@@ -409,10 +409,19 @@ export class ZellijBackend implements MultiplexerBackend {
 		}
 	}
 
+	private async targetPaneId(task_id: string, sessionName: string): Promise<string | undefined> {
+		const handle = this.taskHandles.get(task_id);
+		if (handle?.paneId && /^terminal_\d+$/.test(handle.paneId)) return handle.paneId;
+		const panes = await this.listPanes(sessionName);
+		const terminalPanes = (panes ?? []).filter((pane) => pane.exited !== true);
+		if (terminalPanes.length !== 1) return undefined;
+		return `terminal_${terminalPanes[0]?.id}`;
+	}
+
 	async sendKeys(task_id: string, message: string): Promise<void> {
 		const target = this.sessionNameFor(task_id);
-		const paneId = this.taskHandles.get(task_id)?.paneId;
-		const paneArgs = paneId && /^terminal_\d+$/.test(paneId) ? ["-p", paneId] : [];
+		const paneId = await this.targetPaneId(task_id, target);
+		const paneArgs = paneId ? ["-p", paneId] : [];
 		const literal = await this.runner.run([
 			"--session",
 			target,
