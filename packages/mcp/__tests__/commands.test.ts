@@ -3707,6 +3707,31 @@ describe("delete-tasks", () => {
 		expect(getTaskById(db, submit.task_id)).not.toBeNull();
 	});
 
+	it("does not delete the task row when pane cleanup is owned by another backend", async () => {
+		createSession(db, {
+			id: "s_herdr",
+			project_root: "/tmp",
+			worktree_path: "/tmp",
+			parent_agent_kind: "pi",
+		});
+		createTask(db, {
+			id: "t_herdr_done",
+			session_id: "s_herdr",
+			agent_kind: "claude-code",
+			status: "completed",
+			objective: "x",
+			native_task_ref: "herdr:ck-cuekit/w1/w1:1/w1-1",
+		});
+
+		const ack = await runDeleteTasks(ctx, { task_ids: ["t_herdr_done"] });
+
+		expect(ack.ok).toBe(false);
+		expect(getTaskById(db, "t_herdr_done")).not.toBeNull();
+		if (!ack.ok) {
+			expect(ack.error.details?.cause).toContain("cannot cleanup task 't_herdr_done' through tmux");
+		}
+	});
+
 	it("kills the orphaned tmux session when a child-reported terminal task is deleted", async () => {
 		// Regression for cuekit-delete-session-tmux-leak: report_task_event(completed)
 		// updates DB status but does NOT kill the tmux session. delete_task must

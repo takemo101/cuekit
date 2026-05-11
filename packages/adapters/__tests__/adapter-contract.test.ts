@@ -248,7 +248,7 @@ describe.each(CASES)("AgentAdapter contract — $kind", (testCase) => {
 
 		const steer = await adapter.steer({ task_id, message: "hello" });
 		const cancel = await adapter.cancel(task_id);
-		await adapter.cleanup?.(task_id);
+		await expect(adapter.cleanup?.(task_id)).rejects.toThrow("cannot cleanup task");
 
 		expect(steer.ok).toBe(false);
 		if (!steer.ok) {

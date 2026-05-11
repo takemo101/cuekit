@@ -848,12 +848,12 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 			if (!task) return;
 			const backendMismatch = backendMismatchError(task, panes.kind, "cleanup");
 			if (backendMismatch) {
-				logger.warn("skipping cleanup for task owned by a different pane backend", {
+				logger.warn("refusing cleanup for task owned by a different pane backend", {
 					task_id,
 					pane_backend_kind: backendMismatch.details?.pane_backend_kind,
 					current_backend_kind: panes.kind,
 				});
-				return;
+				throw new Error(backendMismatch.message);
 			}
 			const persistedHandle = paneHandleForTask(task);
 			if (persistedHandle && panes.restorePaneHandle) panes.restorePaneHandle(persistedHandle);
