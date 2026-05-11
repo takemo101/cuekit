@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "bun:test";
-import { TmuxBackend } from "../src/tmux-backend.ts";
 import { FakeTmuxRunner } from "../src/testing.ts";
+import { TmuxBackend } from "../src/tmux-backend.ts";
 
 let runner: FakeTmuxRunner;
 let panes: TmuxBackend;
@@ -118,16 +118,16 @@ describe("spawnPane", () => {
 
 	it("throws when tmux reports a non-zero exit code", async () => {
 		runner.queueResponse({ stdout: "", stderr: "tmux: boom", exitCode: 1 });
-		await expect(
-			panes.spawnPane({ task_id: "t_abc", command: "x", cwd: "/tmp" }),
-		).rejects.toThrow(/tmux new-session.*failed/);
+		await expect(panes.spawnPane({ task_id: "t_abc", command: "x", cwd: "/tmp" })).rejects.toThrow(
+			/tmux new-session.*failed/,
+		);
 	});
 
 	it("throws when pane id is missing from stdout", async () => {
 		runner.queueResponse({ stdout: "   \n", stderr: "", exitCode: 0 });
-		await expect(
-			panes.spawnPane({ task_id: "t_abc", command: "x", cwd: "/tmp" }),
-		).rejects.toThrow(/did not report a pane id/);
+		await expect(panes.spawnPane({ task_id: "t_abc", command: "x", cwd: "/tmp" })).rejects.toThrow(
+			/did not report a pane id/,
+		);
 	});
 });
 

@@ -55,7 +55,10 @@ export const TaskStatusViewSchema = z
 		// shortcut consumes argv directly. `attach_hint` is derived from
 		// this (joined by spaces) and retained during the deprecation
 		// window — see Phase 5 (#422).
-		attach_command: z.object({ argv: z.array(z.string()) }).nullable().optional(),
+		attach_command: z
+			.object({ argv: z.array(z.string()) })
+			.nullable()
+			.optional(),
 		error: JobErrorSchema.optional(),
 		artifacts: z.array(ArtifactRefSchema).optional(),
 		metadata: z.record(z.string(), z.unknown()).optional(),

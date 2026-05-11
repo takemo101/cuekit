@@ -80,6 +80,7 @@ Choose by `description` and `intent`, not by name alone. Current common mappings
 | Behavior-preserving cleanup | `refactor` |
 | Docs-only improvements | `docs-polish` |
 | Validating cuekit MCP/team/TUI/adapters | `dogfood` |
+| Long-lived parent workspace / release coordination | `feature` or direct parent-session submit |
 
 For non-trivial changes (implementation, behavior, UX, MCP, adapter, TUI, docs-design), a strategy-backed team is required even when no exact strategy matches—pick the closest strategy or create a team and submit concrete tasks manually. Do not fall back to a single `submit_task` for these cases; see the narrow exceptions below.
 
@@ -140,9 +141,50 @@ Use `cuekit_submit_team_tasks` when you already have a team and concrete task sp
 
 For any non-trivial implementation, behavior, UX, MCP, adapter, TUI, or docs-design change, use a strategy-backed team instead. If you choose `submit_task` over a strategy team, state the exception reason explicitly in your progress report before submitting.
 
+### Read task snapshot before steering
+
+Before steering any running or parent-session task, call `cuekit_get_task_snapshot` to get recent events, handoff summaries, and a transcript tail in one read:
+
+```json
+{
+  "task_id": "t_...",
+  "event_limit": 10,
+  "transcript_lines": 80
+}
+```
+
+Use the snapshot's `latest_events`, `latest_handoffs`, and `transcript_tail` to understand current state before injecting input. This avoids steering blindly.
+
+CLI fallback:
+
+```bash
+cuekit task snapshot --task-id t_... --format json
+```
+
+### Send a handoff to a parent session
+
+Use typed handoff when transferring substantial context to a running parent-session task:
+
+```json
+{
+  "kind": "task",
+  "task_id": "t_...",
+  "event_type": "handoff",
+  "message_file": "/path/to/HANDOFF.md"
+}
+```
+
+Call `cuekit_steer`. The handoff artifact and `task_events` record are written only after successful injection. Put provenance (From/To/Date) in the HANDOFF body, not in `actor`/`source` fields (unsupported).
+
+CLI fallback:
+
+```bash
+cuekit steer target --kind task --task-id t_... --event-type handoff --message-file HANDOFF.md
+```
+
 ### Steering stalled work
 
-If a task/team is running but idle or off track, use `cuekit_steer` first:
+If a task/team is running but idle or off track, read the snapshot first (see above), then steer:
 
 ```json
 {
@@ -184,10 +226,22 @@ cuekit team result --team-id tm_... --format json
 cuekit task result --task-id t_... --format json
 ```
 
-Steer:
+Task snapshot (pre-steer read):
+
+```bash
+cuekit task snapshot --task-id t_... --format json
+```
+
+Steer (plain):
 
 ```bash
 cuekit steer target --kind team --team-id tm_... --message "..." --format json
+```
+
+Steer (typed handoff):
+
+```bash
+cuekit steer target --kind task --task-id t_... --event-type handoff --message-file HANDOFF.md --format json
 ```
 
 If a CLI command shape is uncertain, inspect help:

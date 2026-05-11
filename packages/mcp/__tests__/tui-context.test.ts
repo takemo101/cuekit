@@ -3,7 +3,11 @@ import { describe, expect, it } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { AdapterRegistry, createClaudeCodeAdapter, type MultiplexerBackend } from "@cuekit/adapters";
+import {
+	AdapterRegistry,
+	createClaudeCodeAdapter,
+	type MultiplexerBackend,
+} from "@cuekit/adapters";
 import {
 	createSession,
 	createTask,
@@ -45,12 +49,16 @@ describe("createTuiContext", () => {
 		runMigrations(db);
 		const registry = new AdapterRegistry();
 		registry.register(
-			createClaudeCodeAdapter(db, fakePanes({
-				spawnPane: async (params) => ({ task_id: params.task_id, backend_kind: "fake" }),
-				attachCommand: (taskId) => ({ argv: ["fake", "attach", taskId] }),
-			}), {
-				launchCommandOverride: () => "sleep 60",
-			}),
+			createClaudeCodeAdapter(
+				db,
+				fakePanes({
+					spawnPane: async (params) => ({ task_id: params.task_id, backend_kind: "fake" }),
+					attachCommand: (taskId) => ({ argv: ["fake", "attach", taskId] }),
+				}),
+				{
+					launchCommandOverride: () => "sleep 60",
+				},
+			),
 		);
 		const root = mkdtempSync(join(tmpdir(), "cuekit-parent-tui-"));
 		mkdirSync(join(root, ".git"));

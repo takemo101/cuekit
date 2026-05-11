@@ -4,10 +4,10 @@ import { chmodSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createSession, getTaskById, runMigrations } from "@cuekit/store";
-import { TmuxBackend } from "../src/tmux-backend.ts";
 import { createPiAdapter } from "../src/pi-adapter.ts";
 import { globalTaskArtifactPaths, taskArtifactPaths } from "../src/task-artifacts.ts";
 import { hasTmux } from "../src/testing.ts";
+import { TmuxBackend } from "../src/tmux-backend.ts";
 
 // Dogfood-style end-to-end: real tmux + real fs + real child processes.
 // Proves that the exit-code sentinel + onPaneDisappeared hook wired up in

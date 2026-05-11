@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import { TmuxBackend } from "../src/tmux-backend.ts";
 import { hasTmux } from "../src/testing.ts";
+import { TmuxBackend } from "../src/tmux-backend.ts";
 
 // Skipped automatically when `tmux` is not on PATH, so unit-test runs on
 // minimal dev containers stay green. Exercises the real tmux binary for the

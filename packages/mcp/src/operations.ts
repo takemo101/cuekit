@@ -43,15 +43,15 @@ import {
 	runGetTaskResult,
 } from "./commands/get-task-result.ts";
 import {
-	GetTaskStatusInputSchema,
-	GetTaskStatusOutputSchema,
-	runGetTaskStatus,
-} from "./commands/get-task-status.ts";
-import {
 	GetTaskSnapshotInputSchema,
 	GetTaskSnapshotOutputSchema,
 	runGetTaskSnapshot,
 } from "./commands/get-task-snapshot.ts";
+import {
+	GetTaskStatusInputSchema,
+	GetTaskStatusOutputSchema,
+	runGetTaskStatus,
+} from "./commands/get-task-status.ts";
 import {
 	GetTeamResultInputSchema,
 	GetTeamResultOutputSchema,
@@ -226,14 +226,12 @@ const SteerInputSchema = z
 	})
 	.refine(
 		(input) =>
-			input.kind === "task" ||
-			(input.message_file === undefined && input.event_type === undefined),
+			input.kind === "task" || (input.message_file === undefined && input.event_type === undefined),
 		{ message: "message_file and event_type are only supported for kind=task" },
 	)
 	.refine(
 		(input) =>
-			input.kind !== "task" ||
-			(input.message ? 1 : 0) + (input.message_file ? 1 : 0) === 1,
+			input.kind !== "task" || (input.message ? 1 : 0) + (input.message_file ? 1 : 0) === 1,
 		{ message: "exactly one of message or message_file is required for kind=task" },
 	)
 	.refine((input) => input.kind !== "team" || input.message !== undefined, {

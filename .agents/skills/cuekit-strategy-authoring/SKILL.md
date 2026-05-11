@@ -126,8 +126,11 @@ Derive categories from the project. Common useful categories include:
 | `store-migration` | Persistence/schema/migration changes |
 | `tui-work` | TUI/OpenTUI changes and interaction testing |
 | `release` | changelog/version/release preparation |
+| `parent-session` | long-lived parent workspaces for shared development coordination |
 
 Do not add all categories by default. Add only strategies supported by real project needs.
+
+> **Parent-session note**: a parent session is a long-lived task submitted with `role: parent`, `metadata.run_kind: "parent_session"`, and `metadata.long_lived: true` (and `timeout_ms: null`). It does not require a separate strategy — use `cuekit task submit` or `cuekit_submit_task` directly. Only add a `parent-session` strategy when the project wants to standardize coordinator/worker patterns for parent workspace workflows.
 
 ## Design Rules
 

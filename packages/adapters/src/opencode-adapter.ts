@@ -2,8 +2,8 @@ import type { Database } from "bun:sqlite";
 import type { Logger, TaskSpec } from "@cuekit/core";
 import { adapterRunModeFor, shouldDangerouslySkipPermissions } from "./adapter-options.ts";
 import type { AgentAdapter } from "./agent-adapter.ts";
-import { createPaneAdapter } from "./pane-adapter.ts";
 import type { MultiplexerBackend } from "./multiplexer-backend.ts";
+import { createPaneAdapter } from "./pane-adapter.ts";
 import { shellQuote } from "./shell-quote.ts";
 import { renderTaskSpecPrompt } from "./task-spec-prompt.ts";
 

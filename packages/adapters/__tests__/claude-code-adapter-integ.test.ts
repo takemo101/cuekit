@@ -5,8 +5,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createSession, getTaskById, runMigrations } from "@cuekit/store";
 import { createClaudeCodeAdapter } from "../src/claude-code-adapter.ts";
-import { TmuxBackend } from "../src/tmux-backend.ts";
 import { hasTmux } from "../src/testing.ts";
+import { TmuxBackend } from "../src/tmux-backend.ts";
 
 // Real tmux integration for the ClaudeCode adapter: exercises the whole
 // pipeline (adapter → PaneBackend → actual tmux binary → pane on disk) but

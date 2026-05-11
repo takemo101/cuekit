@@ -101,9 +101,13 @@ describe("team strategy helpers", () => {
 			objective: "Polish README wait guidance.",
 		});
 
-		expect(prompt).toContain("Do not emit your final completed report while submitted worker, reviewer, or finisher tasks are still non-terminal");
+		expect(prompt).toContain(
+			"Do not emit your final completed report while submitted worker, reviewer, or finisher tasks are still non-terminal",
+		);
 		expect(prompt).toContain("steer idle tasks once before deciding they are unusable");
-		expect(prompt).toContain("If you intentionally skip, cancel, or cannot wait for any submitted non-coordinator task");
+		expect(prompt).toContain(
+			"If you intentionally skip, cancel, or cannot wait for any submitted non-coordinator task",
+		);
 	});
 
 	it("includes finisher post-completion guidance in coordinator prompt", () => {
@@ -116,7 +120,9 @@ describe("team strategy helpers", () => {
 			objective: "Polish README wait guidance.",
 		});
 
-		expect(prompt).toContain("After a `position: finisher` task completes and all submitted non-coordinator tasks are terminal or explicitly accounted for");
+		expect(prompt).toContain(
+			"After a `position: finisher` task completes and all submitted non-coordinator tasks are terminal or explicitly accounted for",
+		);
 		expect(prompt).toContain("get_team_result");
 		expect(prompt).toContain("do not wait for parent steering");
 	});
