@@ -9,6 +9,8 @@ export const TaskSummarySchema = z.object({
 	role: z.string().min(1).optional(),
 	role_source: z.string().min(1).optional(),
 	role_selection_reason: z.string().min(1).optional(),
+	run_kind: z.string().min(1).optional(),
+	long_lived: z.boolean().optional(),
 	status: TaskStatusSchema,
 	team_id: z.string().min(1).optional(),
 	position: TeamPositionSchema.optional(),
