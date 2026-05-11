@@ -9,6 +9,7 @@ const expectedBuiltinIds = [
 	"scout",
 	"debugger",
 	"docs-writer",
+	"parent",
 	"pr-finisher",
 ];
 
@@ -34,6 +35,18 @@ describe("builtin agent profiles", () => {
 			expect(instructions).toContain("Do not override cuekit's final reporting contract");
 			expect(instructions.split(/\s+/).filter(Boolean).length).toBeGreaterThanOrEqual(120);
 		}
+	});
+
+	it("parent instructions describe long-lived handoff-aware coordination", () => {
+		const markdown = BUILTIN_AGENT_PROFILE_MARKDOWN.parent;
+		expect(markdown).toContain("id: parent");
+		expect(markdown).toContain("long-lived");
+		expect(markdown).toContain("agent_kind: claude-code");
+		const instructions = instructionsFor("parent");
+		expect(instructions).toContain("managed parent session task");
+		expect(instructions).toContain("HANDOFF");
+		expect(instructions).toContain("coordinators");
+		expect(instructions).toContain("not as your replacement");
 	});
 
 	it("pr-finisher instructions mention required tool keywords", () => {
