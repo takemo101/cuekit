@@ -27,6 +27,7 @@ import {
 	getTaskById,
 	listTaskEvents,
 	listTasks,
+	listTasksByTeam,
 	type Task,
 	updateTaskChildTokenHash,
 	updateTaskNativeRef,
@@ -206,6 +207,7 @@ function paneHandleForTask(task: Task): {
 	backend_kind: string;
 	backend_session?: string;
 	backend_pane_id?: string;
+	backend_label?: string;
 } | null {
 	const backendKind = nativeBackendKind(task);
 	if (!backendKind) return null;
@@ -460,6 +462,13 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 			const mode = adapterRunModeFor(input.spec);
 
 			try {
+				if (input.team_id && panes.restorePaneHandle) {
+					for (const teammate of listTasksByTeam(db, input.team_id)) {
+						if (teammate.id === task_id) continue;
+						const handle = paneHandleForTask(teammate);
+						if (handle) panes.restorePaneHandle(handle);
+					}
+				}
 				const handle = await panes.spawnPane({
 					task_id,
 					team_id: input.team_id,

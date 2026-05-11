@@ -527,6 +527,14 @@ export function App(props: {
 		}
 		if (key.name === "c") {
 			if (mode === "teams") {
+				if (teamFocus === "members") {
+					if (!selectedMember || !canCancel(selectedMember.status)) {
+						setError("Selected team member cannot be cancelled.");
+						return;
+					}
+					setPendingConfirm({ kind: "cancel", taskId: selectedMember.task_id });
+					return;
+				}
 				if (!selectedTeam) {
 					setError("Select a team to cleanup.");
 					return;
@@ -551,6 +559,14 @@ export function App(props: {
 		}
 		if (key.name === "d") {
 			if (mode === "teams") {
+				if (teamFocus === "members") {
+					if (!selectedMember || !canDelete(selectedMember.status)) {
+						setError("Selected team member cannot be deleted until it is terminal.");
+						return;
+					}
+					setPendingConfirm({ kind: "delete", taskId: selectedMember.task_id });
+					return;
+				}
 				if (!selectedTeam) {
 					setError("Select an empty team to delete.");
 					return;
@@ -574,6 +590,14 @@ export function App(props: {
 			return;
 		}
 		if (key.name === "s") {
+			if (mode === "teams") {
+				if (teamFocus !== "members" || !selectedMember) {
+					setError("Press Enter to choose a team member before steering.");
+					return;
+				}
+				setSteerInput({ taskId: selectedMember.task_id, value: "" });
+				return;
+			}
 			if ((mode !== "tasks" && mode !== "parents") || !selectedTask) {
 				setError("No selected task to steer.");
 				return;
