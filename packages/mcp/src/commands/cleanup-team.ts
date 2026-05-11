@@ -4,7 +4,13 @@ import {
 	TaskStatusSchema,
 	TeamTaskCountsSchema,
 } from "@cuekit/core";
-import { deleteTask, getTaskTeamById, listTasksByTeam } from "@cuekit/store";
+import {
+	clearTaskTeamMultiplexerMetadata,
+	deleteTask,
+	getTaskTeamById,
+	getTaskTeamMultiplexerMetadata,
+	listTasksByTeam,
+} from "@cuekit/store";
 import { z } from "incur";
 import { cleanupAdapterTask } from "../adapter-cleanup.ts";
 import type { CommandContext } from "../command-context.ts";
@@ -52,15 +58,21 @@ export async function runCleanupTeam(
 	const tasks = listTasksByTeam(ctx.db, team.id);
 	const terminalTasks = tasks.filter((task) => isTerminalTaskStatus(task.status));
 	if (!dryRun) {
+		const removesLastTeamTasks = terminalTasks.length === tasks.length;
 		for (const task of terminalTasks) {
 			const cleanup = await cleanupAdapterTask(ctx, task);
 			if (!cleanup.ok) return { error: cleanup.error };
-			deleteTask(ctx.db, task.id);
 		}
-		const remainingAfterDelete = listTasksByTeam(ctx.db, team.id);
-		if (remainingAfterDelete.length === 0 && ctx.panes?.killTeamSession) {
+		if (removesLastTeamTasks && ctx.panes?.killTeamSession) {
 			try {
+				if (ctx.panes.restoreTeamWorkspaceHandle) {
+					const teamHandle = getTaskTeamMultiplexerMetadata(ctx.db, team.id, ctx.panes.kind);
+					if (teamHandle !== undefined) {
+						ctx.panes.restoreTeamWorkspaceHandle(team.id, teamHandle);
+					}
+				}
 				await ctx.panes.killTeamSession(team.id);
+				clearTaskTeamMultiplexerMetadata(ctx.db, team.id, ctx.panes.kind);
 			} catch (error) {
 				return {
 					error: {
@@ -74,6 +86,9 @@ export async function runCleanupTeam(
 					},
 				};
 			}
+		}
+		for (const task of terminalTasks) {
+			deleteTask(ctx.db, task.id);
 		}
 	}
 	return {

@@ -7,9 +7,10 @@ import {
 	AdapterRegistry,
 	createClaudeCodeAdapter,
 	createPiAdapter,
+	HerdrBackend,
 	TmuxBackend,
 } from "@cuekit/adapters";
-import { FakeTmuxRunner } from "@cuekit/adapters/testing";
+import { FakeHerdrRunner, FakeTmuxRunner } from "@cuekit/adapters/testing";
 import {
 	appendTaskEvent,
 	createSession,
@@ -17,6 +18,7 @@ import {
 	createTaskTeam,
 	getSessionById,
 	getTaskById,
+	getTaskTeamMultiplexerMetadata,
 	listSessionsByWorktree,
 	listTaskEvents,
 	runMigrations,
@@ -1010,6 +1012,35 @@ describe("wait-team and cleanup-team", () => {
 		expect(getTaskById(db, "t_done")).toBeNull();
 		expect(getTaskById(db, "t_run")?.status).toBe("running");
 		expect(runGetTeamStatus(ctx, { team_id: "tm_1" })).toMatchObject({ team_id: "tm_1" });
+	});
+
+	it("cleanup-team preserves rows when backend team session cleanup fails", async () => {
+		const basePanes = ctx.panes as TmuxBackend & {
+			killTeamSession?: (teamId: string) => Promise<void>;
+		};
+		basePanes.killTeamSession = async () => {
+			throw new Error("cleanup failed");
+		};
+		createSession(db, {
+			id: "s_cleanup_fail",
+			project_root: "/p",
+			worktree_path: "/w",
+			parent_agent_kind: "pi",
+		});
+		createTaskTeam(db, { id: "tm_cleanup_fail", session_id: "s_cleanup_fail", title: "Team" });
+		createTask(db, {
+			id: "t_done_fail",
+			session_id: "s_cleanup_fail",
+			agent_kind: "claude-code",
+			team_id: "tm_cleanup_fail",
+			objective: "done",
+			status: "completed",
+		});
+
+		const result = await runCleanupTeam(ctx, { team_id: "tm_cleanup_fail" });
+
+		expect("error" in result).toBe(true);
+		expect(getTaskById(db, "t_done_fail")).not.toBeNull();
 	});
 
 	it("cleanup-team kills the backend team session when all members are deleted", async () => {
@@ -3647,6 +3678,69 @@ describe("show-mcp-config", () => {
 		expect(result.mcpServers).toEqual({
 			staging: { command: "/opt/cuekit/bin/cuekit", args: ["--mcp"] },
 		});
+	});
+});
+
+describe("herdr team workspace metadata", () => {
+	it("persists team workspace handles so later backend instances reuse the workspace", async () => {
+		const herdrRunner = new FakeHerdrRunner();
+		const team = runCreateTeam(ctx, { title: "Herdr Team", cwd: "/tmp" });
+		if ("error" in team) throw new Error("team setup failed");
+
+		let panes = new HerdrBackend({ runner: herdrRunner, sessionName: "ck-test" });
+		let registry = new AdapterRegistry();
+		registry.register(
+			createPiAdapter(db, panes, {
+				launchCommandOverride: () => "printf first",
+			}),
+		);
+		let herdrCtx: CommandContext = { db, registry, panes };
+		const first = await runSubmitTask(herdrCtx, {
+			objective: "first",
+			agent_kind: "pi",
+			cwd: "/tmp",
+			team_id: team.team_id,
+			position: "coordinator",
+		});
+		if (!first.accepted) throw new Error("first submit failed");
+		const persisted = getTaskTeamMultiplexerMetadata(db, team.team_id, "herdr");
+		expect(persisted).toMatchObject({
+			session: "ck-test",
+			tabs_by_position: { coordinator: expect.any(Object) },
+		});
+
+		panes = new HerdrBackend({ runner: herdrRunner, sessionName: "ck-test" });
+		registry = new AdapterRegistry();
+		registry.register(
+			createPiAdapter(db, panes, {
+				launchCommandOverride: () => "printf second",
+			}),
+		);
+		herdrCtx = { db, registry, panes };
+		const second = await runSubmitTask(herdrCtx, {
+			objective: "second",
+			agent_kind: "pi",
+			cwd: "/tmp",
+			team_id: team.team_id,
+			position: "worker",
+		});
+		if (!second.accepted) throw new Error("second submit failed");
+
+		expect(herdrRunner.calls.filter((call) => call.method === "createWorkspace")).toHaveLength(1);
+		const updated = getTaskTeamMultiplexerMetadata(db, team.team_id, "herdr");
+		expect(updated).toMatchObject({
+			session: "ck-test",
+			tabs_by_position: { coordinator: expect.any(Object), worker: expect.any(Object) },
+		});
+
+		await runCancelTasks(herdrCtx, { task_ids: [first.task_id, second.task_id] });
+		const deleteFirst = await runDeleteTasks(herdrCtx, { task_ids: [first.task_id] });
+		expect(deleteFirst.ok).toBe(true);
+		expect(getTaskTeamMultiplexerMetadata(db, team.team_id, "herdr")).toBeDefined();
+
+		const deleteSecond = await runDeleteTasks(herdrCtx, { task_ids: [second.task_id] });
+		expect(deleteSecond.ok).toBe(true);
+		expect(getTaskTeamMultiplexerMetadata(db, team.team_id, "herdr")).toBeUndefined();
 	});
 });
 

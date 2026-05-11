@@ -41,6 +41,12 @@ interface HerdrTeamWorkspace {
 	tabsByPosition: Map<string, HerdrPositionTab>;
 }
 
+interface PersistedHerdrTeamWorkspace {
+	session: string;
+	workspace_id: string;
+	tabs_by_position?: Record<string, { tab_id: string; seed_pane_id: string }>;
+}
+
 export interface HerdrBackendOptions {
 	runner?: HerdrRunner;
 	sessionName?: string;
@@ -95,6 +101,41 @@ export class HerdrBackend implements MultiplexerBackend {
 		};
 		this.taskHandles.set(params.task_id, handle);
 		return this.toPaneHandle(params.task_id, handle);
+	}
+
+	restoreTeamWorkspaceHandle(team_id: string, handle: unknown): void {
+		const restored = parsePersistedHerdrTeamWorkspace(handle);
+		if (!restored) return;
+		const tabsByPosition = new Map<string, HerdrPositionTab>();
+		for (const [position, tab] of Object.entries(restored.tabs_by_position ?? {})) {
+			tabsByPosition.set(position, {
+				tabId: tab.tab_id,
+				seedPaneId: tab.seed_pane_id,
+			});
+		}
+		const firstTab = [...tabsByPosition.values()][0];
+		this.teamWorkspaces.set(team_id, {
+			session: restored.session,
+			workspaceId: restored.workspace_id,
+			tabId: firstTab?.tabId ?? "",
+			seedPaneId: firstTab?.seedPaneId ?? "",
+			tabsByPosition,
+		});
+	}
+
+	getTeamWorkspaceHandle(team_id: string): unknown | undefined {
+		const workspace = this.teamWorkspaces.get(team_id);
+		if (!workspace) return undefined;
+		return {
+			session: workspace.session,
+			workspace_id: workspace.workspaceId,
+			tabs_by_position: Object.fromEntries(
+				[...workspace.tabsByPosition.entries()].map(([position, tab]) => [
+					position,
+					{ tab_id: tab.tabId, seed_pane_id: tab.seedPaneId },
+				]),
+			),
+		};
 	}
 
 	restorePaneHandle(handle: PaneHandle): void {
@@ -231,6 +272,10 @@ export class HerdrBackend implements MultiplexerBackend {
 		const teamId = params.team_id as string;
 		const position = params.team_position ?? "member";
 		let workspace = this.teamWorkspaces.get(teamId);
+		if (workspace && !(await this.teamWorkspaceExists(workspace))) {
+			this.teamWorkspaces.delete(teamId);
+			workspace = undefined;
+		}
 		let createdWorkspace = false;
 		let createdTab = false;
 		let paneId: string;
@@ -389,6 +434,18 @@ export class HerdrBackend implements MultiplexerBackend {
 		};
 	}
 
+	private async teamWorkspaceExists(workspace: HerdrTeamWorkspace): Promise<boolean> {
+		try {
+			const panes = await this.runner.listPanes({
+				session: workspace.session,
+				workspaceId: workspace.workspaceId,
+			});
+			return panes.length > 0;
+		} catch {
+			return false;
+		}
+	}
+
 	private async hasLivePaneInPositionTab(
 		workspace: HerdrTeamWorkspace,
 		positionTab: HerdrPositionTab,
@@ -541,6 +598,30 @@ export class HerdrBackend implements MultiplexerBackend {
 			},
 		};
 	}
+}
+
+function parsePersistedHerdrTeamWorkspace(value: unknown): PersistedHerdrTeamWorkspace | null {
+	if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+	const record = value as Record<string, unknown>;
+	if (typeof record.session !== "string" || typeof record.workspace_id !== "string") return null;
+	const tabs_by_position: Record<string, { tab_id: string; seed_pane_id: string }> = {};
+	const rawTabs = record.tabs_by_position;
+	if (rawTabs && typeof rawTabs === "object" && !Array.isArray(rawTabs)) {
+		for (const [position, tabValue] of Object.entries(rawTabs as Record<string, unknown>)) {
+			if (!tabValue || typeof tabValue !== "object" || Array.isArray(tabValue)) continue;
+			const tab = tabValue as Record<string, unknown>;
+			if (typeof tab.tab_id !== "string" || typeof tab.seed_pane_id !== "string") continue;
+			tabs_by_position[position] = {
+				tab_id: tab.tab_id,
+				seed_pane_id: tab.seed_pane_id,
+			};
+		}
+	}
+	return {
+		session: record.session,
+		workspace_id: record.workspace_id,
+		...(Object.keys(tabs_by_position).length > 0 ? { tabs_by_position } : {}),
+	};
 }
 
 function shellQuote(value: string): string {

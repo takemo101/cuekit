@@ -1,6 +1,6 @@
 import type { Database } from "bun:sqlite";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { mkdirSync, readFileSync, rmSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import {
@@ -21,13 +21,16 @@ import {
 } from "@cuekit/core";
 import {
 	appendTaskEvent,
+	clearTaskTeamMultiplexerMetadata,
 	completeTask,
 	createTask,
 	getSessionById,
 	getTaskById,
+	getTaskTeamMultiplexerMetadata,
 	listTaskEvents,
 	listTasks,
 	listTasksByTeam,
+	setTaskTeamMultiplexerMetadata,
 	type Task,
 	updateTaskChildTokenHash,
 	updateTaskNativeRef,
@@ -235,6 +238,56 @@ function paneHandleForTask(task: Task): {
 			? { backend_pane_id: displayNativeTaskRef(task.native_task_ref) as string }
 			: {}),
 	};
+}
+
+async function withTeamWorkspaceLock<T>(
+	cuekitHomeDir: string,
+	backendKind: string,
+	teamId: string,
+	operation: () => Promise<T>,
+): Promise<T> {
+	const lockRoot = join(cuekitHomeDir, "locks", "team-workspaces");
+	mkdirSync(lockRoot, { recursive: true });
+	const lockDir = join(
+		lockRoot,
+		`${sanitizeLockSegment(backendKind)}-${sanitizeLockSegment(teamId)}`,
+	);
+	for (let attempt = 0; attempt < 400; attempt += 1) {
+		try {
+			mkdirSync(lockDir);
+			try {
+				return await operation();
+			} finally {
+				rmSync(lockDir, { recursive: true, force: true });
+			}
+		} catch (error) {
+			if (!isAlreadyExistsError(error)) throw error;
+			if (isStaleLock(lockDir)) {
+				rmSync(lockDir, { recursive: true, force: true });
+				continue;
+			}
+			await Bun.sleep(50);
+		}
+	}
+	throw new Error(`timed out waiting for ${backendKind} team workspace lock for ${teamId}`);
+}
+
+function sanitizeLockSegment(value: string): string {
+	return value.replaceAll(/[^A-Za-z0-9_.-]/g, "_");
+}
+
+function isAlreadyExistsError(error: unknown): boolean {
+	return (
+		error instanceof Error && "code" in error && (error as NodeJS.ErrnoException).code === "EEXIST"
+	);
+}
+
+function isStaleLock(lockDir: string): boolean {
+	try {
+		return Date.now() - statSync(lockDir).mtimeMs > 5 * 60 * 1000;
+	} catch {
+		return false;
+	}
 }
 
 function backendMismatchError(
@@ -461,12 +514,18 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 				: rawLaunchCommand;
 			const mode = adapterRunModeFor(input.spec);
 
-			try {
-				if (input.team_id && panes.restorePaneHandle) {
-					for (const teammate of listTasksByTeam(db, input.team_id)) {
-						if (teammate.id === task_id) continue;
-						const handle = paneHandleForTask(teammate);
-						if (handle) panes.restorePaneHandle(handle);
+			const spawnWithMetadata = async () => {
+				if (input.team_id) {
+					const teamHandle = getTaskTeamMultiplexerMetadata(db, input.team_id, panes.kind);
+					if (teamHandle !== undefined && panes.restoreTeamWorkspaceHandle) {
+						panes.restoreTeamWorkspaceHandle(input.team_id, teamHandle);
+					}
+					if (panes.restorePaneHandle) {
+						for (const teammate of listTasksByTeam(db, input.team_id)) {
+							if (teammate.id === task_id) continue;
+							const handle = paneHandleForTask(teammate);
+							if (handle) panes.restorePaneHandle(handle);
+						}
 					}
 				}
 				const handle = await panes.spawnPane({
@@ -491,12 +550,31 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 				if (nativeRef) {
 					updateTaskNativeRef(db, task_id, nativeRef);
 				}
+				if (input.team_id && panes.getTeamWorkspaceHandle) {
+					const teamHandle = panes.getTeamWorkspaceHandle(input.team_id);
+					if (teamHandle !== undefined) {
+						setTaskTeamMultiplexerMetadata(db, input.team_id, panes.kind, teamHandle);
+					}
+				}
 				if (transcriptPath) {
 					updateTaskRefs(db, task_id, { transcript_ref: transcriptPath });
 				}
 				updateTaskStatus(db, task_id, "running");
 				return { ok: true as const, value: { task_id } };
+			};
+
+			try {
+				return input.team_id && panes.getTeamWorkspaceHandle
+					? await withTeamWorkspaceLock(cuekitHomeDir, panes.kind, input.team_id, spawnWithMetadata)
+					: await spawnWithMetadata();
 			} catch (err) {
+				if (
+					input.team_id &&
+					panes.getTeamWorkspaceHandle &&
+					panes.getTeamWorkspaceHandle(input.team_id) === undefined
+				) {
+					clearTaskTeamMultiplexerMetadata(db, input.team_id, panes.kind);
+				}
 				updateTaskStatus(db, task_id, "failed");
 				// Spawn failed before the child ever ran, so any
 				// `.cuekit/tasks/<id>/` dir we created above is
