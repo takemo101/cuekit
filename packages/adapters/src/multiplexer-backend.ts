@@ -115,6 +115,12 @@ export interface MultiplexerBackend {
 	/** Rename/mark a pane after its task reaches a terminal cuekit status. */
 	markPaneTerminal?(task_id: string, status: string): Promise<void>;
 
+	/** Restore a persisted shared backend workspace/session handle for a task team. */
+	restoreTeamWorkspaceHandle?(team_id: string, handle: unknown): void;
+
+	/** Return a persistable shared backend workspace/session handle for a task team. */
+	getTeamWorkspaceHandle?(team_id: string): unknown | undefined;
+
 	/** Tear down a shared backend session for a task team, when supported. */
 	killTeamSession?(team_id: string): Promise<void>;
 }

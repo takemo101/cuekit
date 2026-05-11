@@ -21,13 +21,16 @@ import {
 } from "@cuekit/core";
 import {
 	appendTaskEvent,
+	clearTaskTeamMultiplexerMetadata,
 	completeTask,
 	createTask,
 	getSessionById,
 	getTaskById,
+	getTaskTeamMultiplexerMetadata,
 	listTaskEvents,
 	listTasks,
 	listTasksByTeam,
+	setTaskTeamMultiplexerMetadata,
 	type Task,
 	updateTaskChildTokenHash,
 	updateTaskNativeRef,
@@ -462,11 +465,17 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 			const mode = adapterRunModeFor(input.spec);
 
 			try {
-				if (input.team_id && panes.restorePaneHandle) {
-					for (const teammate of listTasksByTeam(db, input.team_id)) {
-						if (teammate.id === task_id) continue;
-						const handle = paneHandleForTask(teammate);
-						if (handle) panes.restorePaneHandle(handle);
+				if (input.team_id) {
+					const teamHandle = getTaskTeamMultiplexerMetadata(db, input.team_id, panes.kind);
+					if (teamHandle !== undefined && panes.restoreTeamWorkspaceHandle) {
+						panes.restoreTeamWorkspaceHandle(input.team_id, teamHandle);
+					}
+					if (panes.restorePaneHandle) {
+						for (const teammate of listTasksByTeam(db, input.team_id)) {
+							if (teammate.id === task_id) continue;
+							const handle = paneHandleForTask(teammate);
+							if (handle) panes.restorePaneHandle(handle);
+						}
 					}
 				}
 				const handle = await panes.spawnPane({
@@ -491,12 +500,25 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 				if (nativeRef) {
 					updateTaskNativeRef(db, task_id, nativeRef);
 				}
+				if (input.team_id && panes.getTeamWorkspaceHandle) {
+					const teamHandle = panes.getTeamWorkspaceHandle(input.team_id);
+					if (teamHandle !== undefined) {
+						setTaskTeamMultiplexerMetadata(db, input.team_id, panes.kind, teamHandle);
+					}
+				}
 				if (transcriptPath) {
 					updateTaskRefs(db, task_id, { transcript_ref: transcriptPath });
 				}
 				updateTaskStatus(db, task_id, "running");
 				return { ok: true as const, value: { task_id } };
 			} catch (err) {
+				if (
+					input.team_id &&
+					panes.getTeamWorkspaceHandle &&
+					panes.getTeamWorkspaceHandle(input.team_id) === undefined
+				) {
+					clearTaskTeamMultiplexerMetadata(db, input.team_id, panes.kind);
+				}
 				updateTaskStatus(db, task_id, "failed");
 				// Spawn failed before the child ever ran, so any
 				// `.cuekit/tasks/<id>/` dir we created above is

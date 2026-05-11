@@ -7,9 +7,10 @@ import {
 	AdapterRegistry,
 	createClaudeCodeAdapter,
 	createPiAdapter,
+	HerdrBackend,
 	TmuxBackend,
 } from "@cuekit/adapters";
-import { FakeTmuxRunner } from "@cuekit/adapters/testing";
+import { FakeHerdrRunner, FakeTmuxRunner } from "@cuekit/adapters/testing";
 import {
 	appendTaskEvent,
 	createSession,
@@ -17,6 +18,7 @@ import {
 	createTaskTeam,
 	getSessionById,
 	getTaskById,
+	getTaskTeamMultiplexerMetadata,
 	listSessionsByWorktree,
 	listTaskEvents,
 	runMigrations,
@@ -3647,6 +3649,69 @@ describe("show-mcp-config", () => {
 		expect(result.mcpServers).toEqual({
 			staging: { command: "/opt/cuekit/bin/cuekit", args: ["--mcp"] },
 		});
+	});
+});
+
+describe("herdr team workspace metadata", () => {
+	it("persists team workspace handles so later backend instances reuse the workspace", async () => {
+		const herdrRunner = new FakeHerdrRunner();
+		const team = runCreateTeam(ctx, { title: "Herdr Team", cwd: "/tmp" });
+		if ("error" in team) throw new Error("team setup failed");
+
+		let panes = new HerdrBackend({ runner: herdrRunner, sessionName: "ck-test" });
+		let registry = new AdapterRegistry();
+		registry.register(
+			createPiAdapter(db, panes, {
+				launchCommandOverride: () => "printf first",
+			}),
+		);
+		let herdrCtx: CommandContext = { db, registry, panes };
+		const first = await runSubmitTask(herdrCtx, {
+			objective: "first",
+			agent_kind: "pi",
+			cwd: "/tmp",
+			team_id: team.team_id,
+			position: "coordinator",
+		});
+		if (!first.accepted) throw new Error("first submit failed");
+		const persisted = getTaskTeamMultiplexerMetadata(db, team.team_id, "herdr");
+		expect(persisted).toMatchObject({
+			session: "ck-test",
+			tabs_by_position: { coordinator: expect.any(Object) },
+		});
+
+		panes = new HerdrBackend({ runner: herdrRunner, sessionName: "ck-test" });
+		registry = new AdapterRegistry();
+		registry.register(
+			createPiAdapter(db, panes, {
+				launchCommandOverride: () => "printf second",
+			}),
+		);
+		herdrCtx = { db, registry, panes };
+		const second = await runSubmitTask(herdrCtx, {
+			objective: "second",
+			agent_kind: "pi",
+			cwd: "/tmp",
+			team_id: team.team_id,
+			position: "worker",
+		});
+		if (!second.accepted) throw new Error("second submit failed");
+
+		expect(herdrRunner.calls.filter((call) => call.method === "createWorkspace")).toHaveLength(1);
+		const updated = getTaskTeamMultiplexerMetadata(db, team.team_id, "herdr");
+		expect(updated).toMatchObject({
+			session: "ck-test",
+			tabs_by_position: { coordinator: expect.any(Object), worker: expect.any(Object) },
+		});
+
+		await runCancelTasks(herdrCtx, { task_ids: [first.task_id, second.task_id] });
+		const deleteFirst = await runDeleteTasks(herdrCtx, { task_ids: [first.task_id] });
+		expect(deleteFirst.ok).toBe(true);
+		expect(getTaskTeamMultiplexerMetadata(db, team.team_id, "herdr")).toBeDefined();
+
+		const deleteSecond = await runDeleteTasks(herdrCtx, { task_ids: [second.task_id] });
+		expect(deleteSecond.ok).toBe(true);
+		expect(getTaskTeamMultiplexerMetadata(db, team.team_id, "herdr")).toBeUndefined();
 	});
 });
 

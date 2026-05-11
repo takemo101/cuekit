@@ -4,7 +4,12 @@ import {
 	TaskStatusSchema,
 	TeamTaskCountsSchema,
 } from "@cuekit/core";
-import { deleteTask, getTaskTeamById, listTasksByTeam } from "@cuekit/store";
+import {
+	clearTaskTeamMultiplexerMetadata,
+	deleteTask,
+	getTaskTeamById,
+	listTasksByTeam,
+} from "@cuekit/store";
 import { z } from "incur";
 import { cleanupAdapterTask } from "../adapter-cleanup.ts";
 import type { CommandContext } from "../command-context.ts";
@@ -61,6 +66,7 @@ export async function runCleanupTeam(
 		if (remainingAfterDelete.length === 0 && ctx.panes?.killTeamSession) {
 			try {
 				await ctx.panes.killTeamSession(team.id);
+				clearTaskTeamMultiplexerMetadata(ctx.db, team.id, ctx.panes.kind);
 			} catch (error) {
 				return {
 					error: {

@@ -3,10 +3,13 @@ import { beforeEach, describe, expect, it } from "bun:test";
 import { runMigrations } from "../src/migrate.ts";
 import { createSession } from "../src/session-store.ts";
 import {
+	clearTaskTeamMultiplexerMetadata,
 	createTaskTeam,
 	deleteTaskTeam,
 	getTaskTeamById,
+	getTaskTeamMultiplexerMetadata,
 	listTaskTeamsBySession,
+	setTaskTeamMultiplexerMetadata,
 } from "../src/task-team-store.ts";
 
 let db: Database;
@@ -56,6 +59,33 @@ describe("task team store", () => {
 		createTaskTeam(db, { id: "tm_2", session_id: "s2", title: "Two" });
 
 		expect(listTaskTeamsBySession(db, "s1").map((team) => team.id)).toEqual(["tm_1"]);
+	});
+
+	it("stores and clears backend multiplexer metadata while preserving other metadata", () => {
+		createTaskTeam(db, {
+			id: "tm_meta",
+			session_id: "s1",
+			title: "Meta",
+			metadata: { source: "test" },
+		});
+
+		setTaskTeamMultiplexerMetadata(db, "tm_meta", "herdr", {
+			session: "ck-test",
+			workspace_id: "w1",
+		});
+
+		expect(getTaskTeamMultiplexerMetadata(db, "tm_meta", "herdr")).toEqual({
+			session: "ck-test",
+			workspace_id: "w1",
+		});
+		expect(JSON.parse(getTaskTeamById(db, "tm_meta")?.metadata_json ?? "{}").source).toBe("test");
+
+		clearTaskTeamMultiplexerMetadata(db, "tm_meta", "herdr");
+
+		expect(getTaskTeamMultiplexerMetadata(db, "tm_meta", "herdr")).toBeUndefined();
+		expect(JSON.parse(getTaskTeamById(db, "tm_meta")?.metadata_json ?? "{}")).toEqual({
+			source: "test",
+		});
 	});
 
 	it("deletes an empty task team", () => {

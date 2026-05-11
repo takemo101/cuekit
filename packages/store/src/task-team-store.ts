@@ -121,6 +121,90 @@ export function listTasksByTeam(db: Database, team_id: string): Task[] {
 	return rows.map((row) => TaskSchema.parse(row));
 }
 
+export function getTaskTeamMetadata(db: Database, id: string): Record<string, unknown> | null {
+	const team = getTaskTeamById(db, id);
+	if (!team) return null;
+	if (!team.metadata_json) return {};
+	try {
+		const parsed = JSON.parse(team.metadata_json);
+		return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+			? (parsed as Record<string, unknown>)
+			: {};
+	} catch {
+		return {};
+	}
+}
+
+export function setTaskTeamMetadata(
+	db: Database,
+	id: string,
+	metadata: Record<string, unknown>,
+): TaskTeamRow | null {
+	const now = new Date().toISOString();
+	const result = db
+		.prepare("update task_teams set metadata_json = ?, updated_at = ? where id = ?")
+		.run(JSON.stringify(metadata), now, id);
+	if (result.changes <= 0) return null;
+	return getTaskTeamById(db, id);
+}
+
+export function getTaskTeamMultiplexerMetadata(
+	db: Database,
+	id: string,
+	backendKind: string,
+): unknown | undefined {
+	const metadata = getTaskTeamMetadata(db, id);
+	const multiplexer = metadata?.multiplexer;
+	if (!multiplexer || typeof multiplexer !== "object" || Array.isArray(multiplexer))
+		return undefined;
+	return (multiplexer as Record<string, unknown>)[backendKind];
+}
+
+export function setTaskTeamMultiplexerMetadata(
+	db: Database,
+	id: string,
+	backendKind: string,
+	value: unknown,
+): TaskTeamRow | null {
+	const metadata = getTaskTeamMetadata(db, id);
+	if (!metadata) return null;
+	const existingMultiplexer = metadata.multiplexer;
+	const multiplexer =
+		existingMultiplexer &&
+		typeof existingMultiplexer === "object" &&
+		!Array.isArray(existingMultiplexer)
+			? { ...(existingMultiplexer as Record<string, unknown>) }
+			: {};
+	multiplexer[backendKind] = value;
+	return setTaskTeamMetadata(db, id, { ...metadata, multiplexer });
+}
+
+export function clearTaskTeamMultiplexerMetadata(
+	db: Database,
+	id: string,
+	backendKind: string,
+): TaskTeamRow | null {
+	const metadata = getTaskTeamMetadata(db, id);
+	if (!metadata) return null;
+	const existingMultiplexer = metadata.multiplexer;
+	if (
+		!existingMultiplexer ||
+		typeof existingMultiplexer !== "object" ||
+		Array.isArray(existingMultiplexer)
+	) {
+		return getTaskTeamById(db, id);
+	}
+	const multiplexer = { ...(existingMultiplexer as Record<string, unknown>) };
+	delete multiplexer[backendKind];
+	const nextMetadata = { ...metadata };
+	if (Object.keys(multiplexer).length === 0) {
+		delete nextMetadata.multiplexer;
+	} else {
+		nextMetadata.multiplexer = multiplexer;
+	}
+	return setTaskTeamMetadata(db, id, nextMetadata);
+}
+
 export function deleteTaskTeam(db: Database, id: string): boolean {
 	const result = db.prepare("delete from task_teams where id = ?").run(id);
 	return result.changes > 0;

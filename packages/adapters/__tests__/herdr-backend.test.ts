@@ -320,6 +320,74 @@ describe("HerdrBackend", () => {
 		expect(await backend.capturePane("t_worker_3")).toContain("t_worker_3");
 	});
 
+	test("recreates stale persisted team workspace handles", async () => {
+		const runner = new FakeHerdrRunner();
+		const first = new HerdrBackend({ runner, sessionName: "ck-test" });
+		const coordinator = await first.spawnPane({
+			task_id: "t_coord",
+			team_id: "tm_1",
+			team_position: "coordinator",
+			cwd: "/repo",
+			command: "coord",
+		});
+		const persisted = first.getTeamWorkspaceHandle?.("tm_1");
+		const [oldWorkspace] = (coordinator.backend_pane_id as string).split("/");
+		await runner.closeWorkspace({ session: "ck-test", workspaceId: oldWorkspace as string });
+
+		const restored = new HerdrBackend({ runner, sessionName: "ck-test" });
+		restored.restoreTeamWorkspaceHandle?.("tm_1", persisted);
+		const worker = await restored.spawnPane({
+			task_id: "t_worker",
+			team_id: "tm_1",
+			team_position: "worker",
+			cwd: "/repo",
+			command: "worker",
+		});
+
+		const [newWorkspace] = (worker.backend_pane_id as string).split("/");
+		expect(newWorkspace).not.toBe(oldWorkspace);
+		expect(runner.calls.filter((call) => call.method === "createWorkspace")).toHaveLength(2);
+	});
+
+	test("reuses a persisted team workspace handle for later team spawns", async () => {
+		const runner = new FakeHerdrRunner();
+		const first = new HerdrBackend({ runner, sessionName: "ck-test" });
+		const coordinator = await first.spawnPane({
+			task_id: "t_coord",
+			team_id: "tm_1",
+			team_position: "coordinator",
+			cwd: "/repo",
+			command: "coord",
+		});
+		const persisted = first.getTeamWorkspaceHandle?.("tm_1");
+
+		const restored = new HerdrBackend({ runner, sessionName: "ck-test" });
+		restored.restoreTeamWorkspaceHandle?.("tm_1", persisted);
+		const worker = await restored.spawnPane({
+			task_id: "t_worker",
+			team_id: "tm_1",
+			team_position: "worker",
+			cwd: "/repo",
+			command: "worker",
+		});
+
+		const [coordWorkspace] = (coordinator.backend_pane_id as string).split("/");
+		const [workerWorkspace, workerTab] = (worker.backend_pane_id as string).split("/");
+		expect(workerWorkspace).toBe(coordWorkspace);
+		expect(runner.calls.filter((call) => call.method === "createWorkspace")).toHaveLength(1);
+		expect(runner.tabLabels("ck-test", coordWorkspace as string)[workerTab as string]).toBe(
+			"worker",
+		);
+		expect(restored.getTeamWorkspaceHandle?.("tm_1")).toMatchObject({
+			session: "ck-test",
+			workspace_id: coordWorkspace,
+			tabs_by_position: {
+				coordinator: expect.any(Object),
+				worker: expect.any(Object),
+			},
+		});
+	});
+
 	test("reuses a restored team workspace for later team spawns", async () => {
 		const runner = new FakeHerdrRunner();
 		const first = new HerdrBackend({ runner, sessionName: "ck-test" });

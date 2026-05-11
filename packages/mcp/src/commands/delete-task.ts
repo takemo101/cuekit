@@ -1,5 +1,10 @@
 import { isTerminalTaskStatus, JobErrorSchema } from "@cuekit/core";
-import { deleteTask, getTaskById, listTasksByTeam } from "@cuekit/store";
+import {
+	clearTaskTeamMultiplexerMetadata,
+	deleteTask,
+	getTaskById,
+	listTasksByTeam,
+} from "@cuekit/store";
 import { z } from "incur";
 import { cleanupAdapterTask } from "../adapter-cleanup.ts";
 import type { CommandContext } from "../command-context.ts";
@@ -93,6 +98,7 @@ export async function runDeleteTasks(
 		if (task.team_id && isLastTeamTask) {
 			try {
 				await ctx.panes?.killTeamSession?.(task.team_id);
+				if (ctx.panes) clearTaskTeamMultiplexerMetadata(ctx.db, task.team_id, ctx.panes.kind);
 			} catch (error) {
 				results.push({
 					task_id: taskId,
