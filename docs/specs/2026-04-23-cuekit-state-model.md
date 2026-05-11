@@ -136,7 +136,7 @@ Represents a delegated child task created by an orchestration session.
 | `summary` | text | no | Current or final normalized summary |
 | `result_ref` | text | no | Path/reference to structured result file |
 | `transcript_ref` | text | no | Path/reference to transcript/log file |
-| `spec_json` | text | no | JSON-encoded original `TaskSpec` for recovery, audit, and policy enforcement |
+| `spec_json` | text | no | JSON-encoded original `TaskSpec` for recovery, audit, and policy enforcement. `spec_json.metadata.run_kind` (string) and `spec_json.metadata.long_lived` (boolean) are reserved keys extracted at read time and surfaced in status, summary, and snapshot responses. |
 | `created_at` | text | yes | ISO 8601 timestamp |
 | `updated_at` | text | yes | ISO 8601 timestamp |
 | `started_at` | text | no | ISO 8601 timestamp; written on the first `queued → running` transition, preserved across later transitions |
@@ -210,21 +210,31 @@ Once the post-v0 child reporting migration exists, canonical child-reported stat
 This preserves the v0 storage rule: SQLite stores indexed state and small structured payloads, while worktree-local files store large or human-readable artifacts.
 
 
-## 7.2 Post-v0 child reporting table
+## 7.2 task_events table
 
-Child reporting is a post-v0 extension. When implemented, prefer one append-only event table over multiple task-level reporting columns or a separate `parent_notifications` table:
+`task_events` is the append-only event table used for both child-reported progress and cuekit-recorded system events (e.g. handoff delivery). It is implemented as of migration 006.
 
 | Field | Type | Notes |
 |---|---|---|
-| `id` | text | Primary key for the event |
-| `task_id` | text | Task this child report belongs to |
-| `type` | text | `progress`, `completed`, `failed`, `blocked`, `help_requested`, or `log` |
-| `severity` | text | Optional display/routing hint, for example `info`, `warning`, or `error` |
-| `message` | text | Short human-readable summary |
-| `payload_json` | text | Small structured payload; large data remains in artifact refs |
-| `created_at` | text | Append timestamp |
+| `sequence` | integer | Auto-increment primary key; used for ordered reads |
+| `id` | text | Unique event id (`e_<uuid>`) |
+| `task_id` | text | Task this event belongs to |
+| `type` | text | Event type; see below |
+| `message` | text | Short human-readable content |
+| `payload_json` | text | Optional structured payload (must be valid JSON); large data remains in artifact files |
+| `created_at` | text | Append timestamp (ISO 8601) |
 
-The task row can continue to hold the latest summary/status for efficient listing, while `task_events` preserves the durable child-report inbox. Parent acknowledgement (`acked_at`) and delivery tracking are not planned unless concrete parent UX needs prove simple event listing insufficient. Terminal event types (`completed`, `failed`, `blocked`) may update `tasks.status` immediately through normal store transitions. Runtime shutdown evidence, if implemented as a separate lifecycle feature, should be stored separately from the report event and must not rewrite an explicit `failed` or `blocked` report into success.
+**Event types:**
+
+- `progress` — child-reported progress update
+- `completed` — child-declared terminal success; may update `tasks.status`
+- `failed` — child-declared terminal failure; may update `tasks.status`
+- `blocked` — child is waiting on external input
+- `help_requested` — child requests parent or operator attention
+- `log` — informational log entry
+- `handoff` — recorded by `steer_task` with `event_type: "handoff"` **only after successful injection**; payload includes `artifact_path` pointing to the stored handoff file
+
+The task row continues to hold the latest summary/status for efficient listing, while `task_events` preserves the durable event inbox. Parent acknowledgement (`acked_at`) and delivery tracking are not planned unless concrete parent UX needs prove simple event listing insufficient. Terminal event types (`completed`, `failed`, `blocked`) may update `tasks.status` immediately through normal store transitions. Runtime shutdown evidence, if implemented, should be stored separately and must not rewrite an explicit `failed` or `blocked` report into success.
 
 ---
 
@@ -270,20 +280,18 @@ create table tasks (
 );
 ```
 
-### 8.3 task_events (post-v0 child reporting)
-
-This table is deferred from the minimal v0 schema, but it is the preferred first schema addition for child reporting:
+### 8.3 task_events
 
 ```sql
-create table task_events (
-  id text primary key,
+create table if not exists task_events (
+  sequence integer primary key autoincrement,
+  id text not null unique,
   task_id text not null,
   type text not null,
-  severity text,
   message text,
-  payload_json text,
+  payload_json text check (payload_json is null or json_valid(payload_json)),
   created_at text not null,
-  foreign key(task_id) references tasks(id)
+  foreign key(task_id) references tasks(id) on delete cascade
 );
 ```
 
@@ -303,9 +311,8 @@ create index idx_tasks_parent_task_id on tasks(parent_task_id);
 create index idx_tasks_status on tasks(status);
 create index idx_tasks_agent_kind on tasks(agent_kind);
 
--- post-v0 child reporting
-create index idx_task_events_task_id on task_events(task_id);
-create index idx_task_events_created_at on task_events(created_at);
+create index if not exists idx_task_events_task_id_sequence on task_events(task_id, sequence);
+create index if not exists idx_task_events_type on task_events(type);
 ```
 
 These are enough for:

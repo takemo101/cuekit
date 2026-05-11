@@ -73,7 +73,7 @@ These grouped CLI commands replace the older flat command spelling. The CLI does
 ## 3. Tool Set
 
 The MCP API surface is organized into groups. The v0-required **protocol
-operations** (§5–§11, excluding the management/helper subsections §11.5+ where noted) are the thin projection of cuekit's protocol
+operations** (§5–§10.5, excluding the management/helper subsections §11.5+ where noted) are the thin projection of cuekit's protocol
 spec. The control surface exposes them; adapter-backed operations route to the relevant adapter, while store/registry operations such as listing tasks or adapters are handled by cuekit itself. The **management tools** and
 **helper tools** (§11.5 / §11.6) are v0 reference-control-surface tools but are not part
 of the core delegation protocol itself; they exist so an operator can run cuekit
@@ -88,23 +88,24 @@ Protocol operations:
 5. `cancel_task`
 6. `list_tasks`
 7. `list_adapters`
+8. `get_task_snapshot` (§10.6)
 
 Management tools (§11.5):
 
-8. `delete_task`
-9. `delete_session`
+9. `delete_task`
+10. `delete_session`
 
 Helper tools (§11.6):
 
-10. `show_mcp_config`
+11. `show_mcp_config`
 
 Future child-facing reporting tool (§11.7, experimental / post-v0):
 
-11. `report_task_event`
+12. `report_task_event`
 
 MCP callers that want to implement a pure "cuekit protocol client"
-can ignore groups 8–11. Child runtimes that can access MCP should prefer
-11 over CLI fallback commands.
+can ignore groups 9–12. Child runtimes that can access MCP should prefer
+12 over CLI fallback commands.
 
 ---
 
@@ -198,7 +199,9 @@ Submit a new cuekit task to a target adapter.
   "timeout_ms": 600000,
   "priority": "normal",
   "metadata": {
-    "parent_task": "task-12"
+    "parent_task": "task-12",
+    "run_kind": "parent_session",
+    "long_lived": true
   }
 }
 ```
@@ -212,6 +215,15 @@ Submit a new cuekit task to a target adapter.
 
 - `model` is optional. If omitted, the adapter launches the runtime without a model flag and the runtime uses its own default. If the adapter declares `supports_model_selection: false`, passing `model` returns `invalid_input`. If the adapter exposes `available_models`, the value is validated against the list at submit time.
 - `adapter_options` is optional and adapter-specific. The target adapter validates and translates the shape at submit time.
+
+### 5.3.2 Run Metadata
+
+`metadata` is an optional free-form JSON object. Two reserved keys influence cuekit behavior and are surfaced in task status/snapshot responses:
+
+- **`run_kind`** (string, optional) — semantic label for the task's runtime role. Use `"parent_session"` to mark a task as a long-lived parent development workspace. This value is surfaced in `get_task_status`, `list_tasks` summary, and `get_task_snapshot` responses for filtering and display.
+- **`long_lived`** (boolean, optional) — `true` signals that the task is expected to run indefinitely. The TUI Parent Sessions view filters on this flag. When `true`, callers should also pass `"timeout_ms": null` so a project-level default timeout does not cancel the workspace.
+
+All other `metadata` keys are stored as-is and returned in task status views without interpretation.
 
 ### 5.4 Output
 
@@ -267,6 +279,8 @@ Retrieve the current normalized state of a task.
   "task_id": "task_123",
   "agent_kind": "pi",
   "status": "running",
+  "run_kind": "parent_session",
+  "long_lived": true,
   "summary": "Editing retry logic and updating tests.",
   "progress_text": "Last observed activity: modifying src/api/client.ts",
   "created_at": "2026-04-23T10:00:00Z",
@@ -287,6 +301,8 @@ Retrieve the current normalized state of a task.
   }
 }
 ```
+
+`run_kind` and `long_lived` are optional; they are only present when supplied in the original `submit_task` metadata.
 
 ### 6.4 Status Values
 
@@ -323,6 +339,8 @@ Send a best-effort steering message to a running task.
 
 ### 7.2 Input
 
+Plain steering message:
+
 ```json
 {
   "task_id": "task_123",
@@ -330,6 +348,26 @@ Send a best-effort steering message to a running task.
   "reason": "Parent detected missing edge case"
 }
 ```
+
+Typed handoff (large context transfer from a file):
+
+```json
+{
+  "task_id": "task_123",
+  "event_type": "handoff",
+  "message_file": "/path/to/HANDOFF.md"
+}
+```
+
+Input fields:
+
+- **`task_id`** — required.
+- **`message`** — steering text to inject into the running agent. Exactly one of `message` or `message_file` is required.
+- **`message_file`** — path to a file whose contents are used as the steering text. Mutually exclusive with `message`. Useful for large handoff payloads that exceed inline JSON limits.
+- **`event_type`** — optional. Currently the only accepted value is `"handoff"`. When set, cuekit wraps the message with a `[HANDOFF]` preamble, writes a persistent artifact for the target task, and records a `handoff` event in `task_events` **only after successful injection**. Omit for ordinary steering.
+- **`reason`** — optional free-text explanation for the steering action.
+
+`actor` and `source` fields are explicitly unsupported; put provenance in the handoff body itself.
 
 ### 7.3 Output
 
@@ -373,6 +411,8 @@ Invalid state:
 - steering is best-effort in v0
 - adapters may only support steering for certain states
 - orchestrators should inspect `supports_steering` from `get_task_status`
+- when `event_type: "handoff"`, the handoff artifact and `task_events` record are written only after the adapter confirms successful injection; a failed steer leaves no artifact and no event record
+- handoff artifacts are stored relative to the task's work directory and can be retrieved via `get_task_snapshot` `latest_handoffs`
 
 ---
 
@@ -564,6 +604,8 @@ Each returned task includes:
 - `agent_kind`
 - `status`
 - `summary` (optional)
+- `run_kind` (optional) — present when set in submit metadata, e.g. `"parent_session"`
+- `long_lived` (optional, boolean) — present when set in submit metadata
 - `updated_at`
 
 ### 10.5 Pagination Semantics
@@ -577,6 +619,90 @@ guarantees:
   existing page anchors remain valid.
 - The `id` tiebreaker handles ms-precision timestamp collisions on
   rapid inserts without skipping or duplicating rows.
+
+---
+
+## 10.6 get_task_snapshot
+
+### 10.6.1 Purpose
+
+Return a pre-intervention read of a task's current state, combining key status fields, recent events, recent handoff summaries, and a transcript tail into a single response. Designed as the recommended read path before steering a running or parent-session task.
+
+### 10.6.2 Input
+
+```json
+{
+  "task_id": "task_123",
+  "event_limit": 10,
+  "transcript_lines": 80
+}
+```
+
+- **`task_id`** — required.
+- **`event_limit`** — maximum number of recent `task_events` to include. Default `10`. Used for both `latest_events` and `latest_handoffs`.
+- **`transcript_lines`** — maximum number of trailing lines to include from the transcript file. Default `80`. Capped at 64 KB of raw bytes.
+
+### 10.6.3 Output
+
+```json
+{
+  "task_id": "task_123",
+  "status": "running",
+  "agent_kind": "pi",
+  "model": "sonnet",
+  "role": "parent",
+  "objective": "Long-lived development workspace for feature-X.",
+  "cwd": "/repo",
+  "run_kind": "parent_session",
+  "long_lived": true,
+  "last_activity_at": "2026-04-23T10:05:00Z",
+  "latest_events": [
+    {
+      "sequence": 4,
+      "id": "e_abc123",
+      "task_id": "task_123",
+      "type": "handoff",
+      "message": "[HANDOFF]\n...",
+      "payload": { "artifact_path": ".cuekit/tasks/task_123/handoffs/e_abc123.md" },
+      "created_at": "2026-04-23T10:04:00Z"
+    }
+  ],
+  "latest_handoffs": [
+    {
+      "sequence": 4,
+      "message_preview": "[HANDOFF]\nThe following is context transfer...",
+      "artifact_path": ".cuekit/tasks/task_123/handoffs/e_abc123.md",
+      "created_at": "2026-04-23T10:04:00Z"
+    }
+  ],
+  "transcript_tail": "Last few lines of the running agent's terminal output...",
+  "suggested_next_read_actions": [
+    "Inspect latest_events before steering.",
+    "Open referenced handoff artifacts when latest_handoffs is non-empty.",
+    "Read transcript_tail for recent terminal context."
+  ]
+}
+```
+
+On `task_not_found`:
+
+```json
+{
+  "error": {
+    "code": "task_not_found",
+    "message": "task 'task_123' not found",
+    "retryable": false
+  }
+}
+```
+
+### 10.6.4 Semantics
+
+- `run_kind` and `long_lived` are only present when supplied in the original `submit_task` metadata.
+- `latest_handoffs` is a filtered view of `latest_events`, showing only events with `type: "handoff"`. Both fields are bounded by the same `event_limit`.
+- `transcript_tail` is read from the task's persistent `transcript_ref` file. Absent if the file does not exist or cannot be read.
+- `message_preview` in `latest_handoffs` is capped at 200 characters. Read the full artifact via `artifact_path` for complete handoff context.
+- This operation is read-only and always safe to call on running tasks. It does not affect task state or inject any input.
 
 ---
 
