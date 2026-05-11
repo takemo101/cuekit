@@ -3,6 +3,7 @@ import { getTaskById } from "@cuekit/store";
 import { z } from "incur";
 import type { CommandContext } from "../command-context.ts";
 import { getTaskActivity } from "../task-activity.ts";
+import { taskRunMetadata } from "../task-run-metadata.ts";
 
 export const GetTaskStatusInputSchema = z.object({
 	task_id: z.string().min(1).describe("cuekit task id."),
@@ -51,6 +52,7 @@ export async function runGetTaskStatus(
 			...(task.team_position ? { position: task.team_position } : {}),
 			...(task.role_source ? { role_source: task.role_source } : {}),
 			...(task.role_selection_reason ? { role_selection_reason: task.role_selection_reason } : {}),
+			...taskRunMetadata(task),
 			...getTaskActivity(ctx.db, { ...task, status: "failed" }),
 			status: "failed",
 			created_at: task.created_at,
@@ -59,9 +61,10 @@ export async function runGetTaskStatus(
 		};
 	}
 	const view = await adapterRes.value.status(input.task_id);
+	const { run_kind: _adapter_run_kind, long_lived: _adapter_long_lived, ...statusView } = view;
 	const refreshed = getTaskById(ctx.db, input.task_id) ?? task;
 	return {
-		...view,
+		...statusView,
 		...(refreshed.model ? { model: refreshed.model } : {}),
 		...(refreshed.role ? { role: refreshed.role } : {}),
 		...(refreshed.team_id ? { team_id: refreshed.team_id } : {}),
@@ -70,6 +73,7 @@ export async function runGetTaskStatus(
 		...(refreshed.role_selection_reason
 			? { role_selection_reason: refreshed.role_selection_reason }
 			: {}),
+		...taskRunMetadata(refreshed),
 		...getTaskActivity(ctx.db, refreshed),
 	};
 }

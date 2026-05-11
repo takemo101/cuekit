@@ -9,6 +9,7 @@ import {
 import { DEFAULT_LIST_TASKS_LIMIT, getTaskById, listTasks, type Task } from "@cuekit/store";
 import { z } from "incur";
 import type { CommandContext } from "../command-context.ts";
+import { taskRunMetadata } from "../task-run-metadata.ts";
 
 // Reuse core's canonical TaskListFilterSchema for persistence filters and add
 // control-surface-only refresh policy here so core/store stay pure.
@@ -119,6 +120,7 @@ export async function runListTasks(
 				...(t.team_position ? { position: t.team_position } : {}),
 				...(t.role_source ? { role_source: t.role_source } : {}),
 				...(t.role_selection_reason ? { role_selection_reason: t.role_selection_reason } : {}),
+				...taskRunMetadata(t),
 				status: t.status,
 				summary: t.summary ?? undefined,
 				updated_at: t.updated_at,

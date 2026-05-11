@@ -2052,6 +2052,33 @@ describe("submit-task", () => {
 		if ("tasks" in list) expect(list.tasks[0]?.role).toBe("docs-writer");
 	});
 
+	it("exposes parent-session run metadata in list and status surfaces", async () => {
+		const result = await runSubmitTask(ctx, {
+			objective: "manage this project",
+			agent_kind: "pi",
+			cwd: "/tmp",
+			metadata: { run_kind: "parent_session", long_lived: true, ignored: "private" },
+		});
+		expect(result.accepted).toBe(true);
+		if (!result.accepted) return;
+
+		const status = await runGetTaskStatus(ctx, { task_id: result.task_id });
+		expect(status.run_kind).toBe("parent_session");
+		expect(status.long_lived).toBe(true);
+		expect(status.metadata?.ignored).toBeUndefined();
+
+		const list = await runListTasks(ctx, { session_id: result.session_id });
+		expect("tasks" in list).toBe(true);
+		if ("tasks" in list) {
+			expect(list.tasks[0]).toMatchObject({
+				task_id: result.task_id,
+				run_kind: "parent_session",
+				long_lived: true,
+			});
+			expect((list.tasks[0] as { metadata?: unknown }).metadata).toBeUndefined();
+		}
+	});
+
 	it("auto role selection uses session worktree discovery", async () => {
 		const root = mkdtempSync(join(tmpdir(), "cuekit-submit-auto-role-"));
 		try {
