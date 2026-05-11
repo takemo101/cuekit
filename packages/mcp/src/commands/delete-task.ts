@@ -82,13 +82,15 @@ export async function runDeleteTasks(
 			continue;
 		}
 
+		const isLastTeamTask = task.team_id
+			? listTasksByTeam(ctx.db, task.team_id).every((teammate) => teammate.id === taskId)
+			: false;
 		const cleanup = await cleanupAdapterTask(ctx, task);
 		if (!cleanup.ok) {
 			results.push({ task_id: taskId, ok: false, error: cleanup.error });
 			continue;
 		}
-		deleteTask(ctx.db, taskId);
-		if (task.team_id && listTasksByTeam(ctx.db, task.team_id).length === 0) {
+		if (task.team_id && isLastTeamTask) {
 			try {
 				await ctx.panes?.killTeamSession?.(task.team_id);
 			} catch (error) {
@@ -108,6 +110,7 @@ export async function runDeleteTasks(
 				continue;
 			}
 		}
+		deleteTask(ctx.db, taskId);
 		results.push({ task_id: taskId, ok: true, message: `deleted task '${taskId}'` });
 	}
 

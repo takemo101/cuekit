@@ -203,6 +203,88 @@ describe("HerdrBackend", () => {
 		);
 	});
 
+	test("does not close the last pane in a different tab for a removed stale tab", async () => {
+		const runner = new FakeHerdrRunner();
+		const backend = new HerdrBackend({ runner, sessionName: "ck-test" });
+		await backend.spawnPane({
+			task_id: "t_coord",
+			team_id: "tm_1",
+			team_position: "coordinator",
+			cwd: "/repo",
+			command: "coord",
+		});
+		const stale = await backend.spawnPane({
+			task_id: "t_stale",
+			team_id: "tm_1",
+			team_position: "reviewer",
+			cwd: "/repo",
+			command: "reviewer",
+		});
+		const [workspaceId, staleTabId] = (stale.backend_pane_id as string).split("/");
+		await runner.closeTab({ session: "ck-test", tabId: staleTabId as string });
+
+		await backend.killPane("t_stale");
+
+		expect(await backend.isAlive("t_coord")).toBe(true);
+		expect(await runner.listPanes({ session: "ck-test", workspaceId })).toHaveLength(1);
+	});
+
+	test("kills a remaining team pane whose Herdr id was compacted after another pane closed", async () => {
+		const runner = new FakeHerdrRunner();
+		const backend = new HerdrBackend({ runner, sessionName: "ck-test" });
+		await backend.spawnPane({
+			task_id: "t_worker_1",
+			team_id: "tm_1",
+			team_position: "worker",
+			cwd: "/repo",
+			command: "worker 1",
+		});
+		const second = await backend.spawnPane({
+			task_id: "t_worker_2",
+			team_id: "tm_1",
+			team_position: "worker",
+			cwd: "/repo",
+			command: "worker 2",
+		});
+		const [workspaceId] = (second.backend_pane_id as string).split("/");
+
+		await backend.killPane("t_worker_1");
+		await backend.killPane("t_worker_2");
+
+		expect(await backend.isAlive("t_worker_2")).toBe(false);
+		expect(await runner.listPanes({ session: "ck-test", workspaceId })).toEqual([]);
+	});
+
+	test("reuses a restored team workspace for later team spawns", async () => {
+		const runner = new FakeHerdrRunner();
+		const first = new HerdrBackend({ runner, sessionName: "ck-test" });
+		const coordinator = await first.spawnPane({
+			task_id: "t_coord",
+			team_id: "tm_1",
+			team_position: "coordinator",
+			cwd: "/repo",
+			command: "coord",
+		});
+
+		const restored = new HerdrBackend({ runner, sessionName: "ck-test" });
+		restored.restorePaneHandle?.(coordinator);
+		const worker = await restored.spawnPane({
+			task_id: "t_worker",
+			team_id: "tm_1",
+			team_position: "worker",
+			cwd: "/repo",
+			command: "worker",
+		});
+
+		const [coordWorkspace] = (coordinator.backend_pane_id as string).split("/");
+		const [workerWorkspace, workerTab] = (worker.backend_pane_id as string).split("/");
+		expect(workerWorkspace).toBe(coordWorkspace);
+		expect(runner.calls.filter((call) => call.method === "createWorkspace")).toHaveLength(1);
+		expect(runner.tabLabels("ck-test", coordWorkspace as string)[workerTab as string]).toBe(
+			"worker",
+		);
+	});
+
 	test("restores legacy team labels as shared member panes", async () => {
 		const runner = new FakeHerdrRunner();
 		const first = new HerdrBackend({ runner, sessionName: "ck-test" });

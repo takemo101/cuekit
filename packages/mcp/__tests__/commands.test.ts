@@ -3792,6 +3792,28 @@ describe("delete-tasks", () => {
 		expect(closedTeams).toEqual([team.team_id]);
 	});
 
+	it("keeps the last team task row when backend team cleanup fails", async () => {
+		const team = runCreateTeam(ctx, { title: "Team", cwd: "/tmp" });
+		if ("error" in team) throw new Error("team setup failed");
+		const submit = await runSubmitTask(ctx, {
+			objective: "x",
+			agent_kind: "claude-code",
+			cwd: "/tmp",
+			team_id: team.team_id,
+			position: "worker",
+		});
+		if (!submit.accepted) throw new Error("task setup failed");
+		await runCancelTasks(ctx, { task_ids: [submit.task_id] });
+		(ctx.panes as typeof ctx.panes & { killTeamSession: (teamId: string) => Promise<void> }).killTeamSession = async () => {
+			throw new Error("close failed");
+		};
+
+		const ack = await runDeleteTasks(ctx, { task_ids: [submit.task_id] });
+
+		expect(ack.ok).toBe(false);
+		expect(getTaskById(db, submit.task_id)).not.toBeNull();
+	});
+
 	it("deletes multiple terminal tasks in one call", async () => {
 		const a = await runSubmitTask(ctx, { objective: "a", agent_kind: "claude-code", cwd: "/tmp" });
 		const b = await runSubmitTask(ctx, { objective: "b", agent_kind: "claude-code", cwd: "/tmp" });

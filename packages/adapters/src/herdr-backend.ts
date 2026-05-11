@@ -339,9 +339,6 @@ export class HerdrBackend implements MultiplexerBackend {
 				return;
 			}
 			if (panesInStoredTab.length === 0) {
-				if (panes.length === 1) {
-					await this.runner.closePane({ session: handle.session, paneId: panes[0]?.pane_id as string });
-				}
 				return;
 			}
 			throw error;
