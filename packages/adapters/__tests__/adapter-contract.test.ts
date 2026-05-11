@@ -215,6 +215,24 @@ describe.each(CASES)("AgentAdapter contract — $kind", (testCase) => {
 		expect(getTaskById(db, task_id)?.status).toBe("running");
 	});
 
+	it("status reconstructs herdr attach command and pane metadata from the persisted native ref", async () => {
+		const result = await adapter.submit({
+			spec: { agent_kind: testCase.kind, objective: "herdr persisted ref" },
+			session_id: "s1",
+		});
+		if (!result.ok) throw new Error(`submit failed: ${result.error.message}`);
+		const task_id = result.value.task_id;
+		updateTaskNativeRef(db, task_id, "herdr:ck-demo/w1/w1:1/w1-1");
+		await panes.killPane(task_id);
+
+		const view = await adapter.status(task_id);
+		expect(view.status).toBe("running");
+		expect(view.attach_command).toEqual({ argv: ["herdr", "--session", "ck-demo"] });
+		expect(view.metadata?.pane_backend_kind).toBe("herdr");
+		expect(view.metadata?.pane_session_name).toBe("ck-demo");
+		expect(view.metadata?.tmux_pane_id).toBe("w1/w1:1/w1-1");
+	});
+
 	it("steer, cancel, and cleanup do not operate through the wrong backend", async () => {
 		const result = await adapter.submit({
 			spec: { agent_kind: testCase.kind, objective: "backend mismatch operations" },

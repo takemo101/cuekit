@@ -159,7 +159,14 @@ function nativeBackendKind(task: Task): string | null {
 function displayNativeTaskRef(nativeRef: string | null): string | undefined {
 	if (!nativeRef) return undefined;
 	const separator = nativeRef.indexOf(":");
-	return separator > 0 ? nativeRef.slice(separator + 1) : nativeRef;
+	if (separator <= 0) return nativeRef;
+	const backendKind = nativeRef.slice(0, separator);
+	const displayRef = nativeRef.slice(separator + 1);
+	if (backendKind === "herdr") {
+		const parts = displayRef.split("/");
+		return parts.length === 4 ? parts.slice(1).join("/") : displayRef;
+	}
+	return displayRef;
 }
 
 function sessionNameForBackend(
@@ -173,6 +180,11 @@ function sessionNameForBackend(
 		const separator = displayRef?.indexOf("/") ?? -1;
 		return separator > 0 ? (displayRef?.slice(0, separator) ?? null) : `ct-${task_id}`;
 	}
+	if (kind === "herdr") {
+		const rawRef = nativeRef?.startsWith("herdr:") ? nativeRef.slice("herdr:".length) : undefined;
+		const separator = rawRef?.indexOf("/") ?? -1;
+		return separator > 0 ? (rawRef?.slice(0, separator) ?? null) : null;
+	}
 	return null;
 }
 
@@ -185,6 +197,7 @@ function attachCommandForBackend(
 	if (!sessionName) return null;
 	if (kind === "tmux") return { argv: ["tmux", "attach-session", "-t", sessionName] };
 	if (kind === "zellij") return { argv: ["zellij", "attach", sessionName] };
+	if (kind === "herdr") return { argv: ["herdr", "--session", sessionName] };
 	return null;
 }
 
@@ -199,8 +212,13 @@ function paneHandleForTask(task: Task): {
 	return {
 		task_id: task.id,
 		backend_kind: backendKind,
-		...(task.team_id && task.team_position
-			? { backend_label: `${task.team_position}:${task.id}` }
+		...(task.team_id
+			? {
+					backend_label:
+						backendKind === "herdr"
+							? `team:${task.team_id}:${task.team_position ?? "member"}:${task.id}`
+							: `${task.team_position ?? "team"}:${task.id}`,
+				}
 			: {}),
 		...(sessionNameForBackend(backendKind, task.id, task.native_task_ref)
 			? {
@@ -457,7 +475,9 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 					},
 				});
 				const nativeRef = handle.backend_pane_id
-					? `${handle.backend_kind}:${handle.backend_pane_id}`
+					? handle.backend_kind === "herdr" && handle.backend_session
+						? `${handle.backend_kind}:${handle.backend_session}/${handle.backend_pane_id}`
+						: `${handle.backend_kind}:${handle.backend_pane_id}`
 					: undefined;
 				if (nativeRef) {
 					updateTaskNativeRef(db, task_id, nativeRef);

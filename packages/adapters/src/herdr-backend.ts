@@ -198,6 +198,7 @@ export class HerdrBackend implements MultiplexerBackend {
 	): Promise<HerdrCoordinate> {
 		const teamId = params.team_id as string;
 		let workspace = this.teamWorkspaces.get(teamId);
+		let createdWorkspace = false;
 		let paneId: string;
 		if (!workspace) {
 			const created = await this.runner.createWorkspace({
@@ -212,6 +213,7 @@ export class HerdrBackend implements MultiplexerBackend {
 				seedPaneId: created.root_pane_id,
 			};
 			this.teamWorkspaces.set(teamId, workspace);
+			createdWorkspace = true;
 			paneId = created.root_pane_id;
 		} else {
 			const seedPaneId = await this.liveSeedPane(workspace);
@@ -231,7 +233,14 @@ export class HerdrBackend implements MultiplexerBackend {
 				command: prepared.command,
 			});
 		} catch (error) {
-			await this.runner.closePane({ session: workspace.session, paneId }).catch(() => {});
+			if (createdWorkspace) {
+				await this.runner
+					.closeWorkspace({ session: workspace.session, workspaceId: workspace.workspaceId })
+					.catch(() => {});
+				this.teamWorkspaces.delete(teamId);
+			} else {
+				await this.runner.closePane({ session: workspace.session, paneId }).catch(() => {});
+			}
 			await prepared.cleanup();
 			throw error;
 		}

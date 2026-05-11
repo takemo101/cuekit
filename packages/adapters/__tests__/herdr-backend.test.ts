@@ -128,6 +128,29 @@ describe("HerdrBackend", () => {
 		expect(await restored.isAlive("t_worker")).toBe(false);
 	});
 
+	test("cleans up first team workspace when command injection fails", async () => {
+		const runner = new FakeHerdrRunner();
+		const backend = new HerdrBackend({ runner, sessionName: "ck-test" });
+		runner.failNextRunInPane();
+		await expect(
+			backend.spawnPane({
+				task_id: "t_fail",
+				team_id: "tm_fail",
+				cwd: "/repo",
+				command: "boom",
+			}),
+		).rejects.toThrow(/run_failed/);
+		expect(await runner.listPanes({ session: "ck-test" })).toHaveLength(0);
+
+		await backend.spawnPane({
+			task_id: "t_retry",
+			team_id: "tm_fail",
+			cwd: "/repo",
+			command: "retry",
+		});
+		expect(await backend.isAlive("t_retry")).toBe(true);
+	});
+
 	test("cleans up solo workspace when command injection fails", async () => {
 		const runner = new FakeHerdrRunner();
 		const backend = new HerdrBackend({ runner, sessionName: "ck-test" });
