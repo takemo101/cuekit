@@ -89,6 +89,7 @@ import type {
 	HerdrReadSource,
 	HerdrRunner,
 	HerdrSplitDirection,
+	HerdrTabCreateResult,
 	HerdrWorkspaceCreateResult,
 } from "./herdr-runner.ts";
 import type { ZellijRunner, ZellijRunResult } from "./zellij-runner.ts";
@@ -103,11 +104,17 @@ interface FakeHerdrPane extends HerdrPaneInfo {
 	cwd: string;
 }
 
+interface FakeHerdrTab {
+	tab_id: string;
+	label?: string;
+}
+
 interface FakeHerdrWorkspace {
 	workspace_id: string;
 	tab_id: string;
 	label?: string;
 	cwd: string;
+	tabs: FakeHerdrTab[];
 	panes: FakeHerdrPane[];
 }
 
@@ -119,6 +126,7 @@ export class FakeHerdrRunner implements HerdrRunner {
 	readonly calls: Array<{ method: string; params: unknown }> = [];
 	private readonly sessions = new Map<string, FakeHerdrSession>();
 	private readonly failNextRunPanes = new Set<string>();
+	private failNextRenameTabFlag = false;
 	private workspaceCounter = 0;
 
 	async probe(): Promise<boolean> {
@@ -130,7 +138,7 @@ export class FakeHerdrRunner implements HerdrRunner {
 		session: string;
 		cwd: string;
 		label?: string;
-	}): Promise<HerdrWorkspaceCreateResult> {
+	}): Promise<HerdrTabCreateResult> {
 		this.calls.push({ method: "createWorkspace", params: { ...params } });
 		const session = this.ensureSession(params.session);
 		this.workspaceCounter += 1;
@@ -149,9 +157,64 @@ export class FakeHerdrRunner implements HerdrRunner {
 			tab_id: tabId,
 			...(params.label ? { label: params.label } : {}),
 			cwd: params.cwd,
+			tabs: [{ tab_id: tabId, label: "1" }],
 			panes: [pane],
 		});
 		return { workspace_id: workspaceId, tab_id: tabId, root_pane_id: rootPaneId };
+	}
+
+	async createTab(params: {
+		session: string;
+		workspaceId: string;
+		cwd?: string;
+		label?: string;
+	}): Promise<HerdrWorkspaceCreateResult> {
+		this.calls.push({ method: "createTab", params: { ...params } });
+		const session = this.sessions.get(params.session);
+		const workspace = session?.workspaces.find(
+			(candidate) => candidate.workspace_id === params.workspaceId,
+		);
+		if (!workspace) throw new Error(`workspace_not_found: ${params.workspaceId}`);
+		const tabId = `${workspace.workspace_id}:${workspace.tabs.length + 1}`;
+		const paneId = `${workspace.workspace_id}-${workspace.panes.length + 1}`;
+		workspace.tabs.push({ tab_id: tabId, ...(params.label ? { label: params.label } : {}) });
+		const pane: FakeHerdrPane = {
+			pane_id: paneId,
+			workspace_id: workspace.workspace_id,
+			tab_id: tabId,
+			cwd: params.cwd ?? workspace.cwd,
+			text: "",
+		};
+		workspace.panes.push(pane);
+		return { workspace_id: workspace.workspace_id, tab_id: tabId, root_pane_id: paneId };
+	}
+
+	async renameTab(params: { session: string; tabId: string; label: string }): Promise<void> {
+		this.calls.push({ method: "renameTab", params: { ...params } });
+		if (this.failNextRenameTabFlag) {
+			this.failNextRenameTabFlag = false;
+			throw new Error(`rename_failed: ${params.tabId}`);
+		}
+		const tab = this.findTab(params.session, params.tabId);
+		if (!tab) throw new Error(`tab_not_found: ${params.tabId}`);
+		tab.label = params.label;
+	}
+
+	async closeTab(params: { session: string; tabId: string }): Promise<void> {
+		this.calls.push({ method: "closeTab", params: { ...params } });
+		const workspace = this.findWorkspaceForTab(params.session, params.tabId);
+		if (!workspace) return;
+		workspace.tabs = workspace.tabs.filter((tab) => tab.tab_id !== params.tabId);
+		workspace.panes = workspace.panes.filter((pane) => pane.tab_id !== params.tabId);
+		this.compactPaneIds(workspace);
+	}
+
+	tabLabels(sessionName: string, workspaceId: string): Record<string, string | undefined> {
+		const session = this.sessions.get(sessionName);
+		const workspace = session?.workspaces.find(
+			(candidate) => candidate.workspace_id === workspaceId,
+		);
+		return Object.fromEntries(workspace?.tabs.map((tab) => [tab.tab_id, tab.label]) ?? []);
 	}
 
 	async getPane(params: { session: string; paneId: string }): Promise<HerdrPaneInfo> {
@@ -179,12 +242,12 @@ export class FakeHerdrRunner implements HerdrRunner {
 		this.calls.push({ method: "splitPane", params: { ...params } });
 		const located = this.findWorkspaceForPane(params.session, params.targetPaneId);
 		if (!located) throw new Error(`pane_not_found: ${params.targetPaneId}`);
-		const { workspace } = located;
+		const { workspace, pane: targetPane } = located;
 		const paneId = `${workspace.workspace_id}-${workspace.panes.length + 1}`;
 		const pane: FakeHerdrPane = {
 			pane_id: paneId,
 			workspace_id: workspace.workspace_id,
-			tab_id: workspace.tab_id,
+			tab_id: targetPane.tab_id,
 			cwd: params.cwd ?? workspace.cwd,
 			text: "",
 		};
@@ -246,6 +309,10 @@ export class FakeHerdrRunner implements HerdrRunner {
 		this.failNextRunPanes.add(paneId);
 	}
 
+	failNextRenameTab(): void {
+		this.failNextRenameTabFlag = true;
+	}
+
 	forcePaneWorkspaceMismatch(backendPaneId: string, workspaceId: string): void {
 		const paneId = backendPaneId.split("/").at(-1) ?? backendPaneId;
 		for (const session of this.sessions.values()) {
@@ -267,6 +334,17 @@ export class FakeHerdrRunner implements HerdrRunner {
 
 	private findPane(sessionName: string, paneId: string): FakeHerdrPane | undefined {
 		return this.findWorkspaceForPane(sessionName, paneId)?.pane;
+	}
+
+	private findWorkspaceForTab(sessionName: string, tabId: string): FakeHerdrWorkspace | undefined {
+		const session = this.sessions.get(sessionName);
+		return session?.workspaces.find((workspace) =>
+			workspace.tabs.some((tab) => tab.tab_id === tabId),
+		);
+	}
+
+	private findTab(sessionName: string, tabId: string): FakeHerdrTab | undefined {
+		return this.findWorkspaceForTab(sessionName, tabId)?.tabs.find((tab) => tab.tab_id === tabId);
 	}
 
 	private requirePane(sessionName: string, paneId: string): FakeHerdrPane {
