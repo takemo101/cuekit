@@ -91,6 +91,39 @@ describe("HerdrBackend", () => {
 		expect(worker.backend_pane_id).not.toBe(coordinator.backend_pane_id);
 	});
 
+	test("serializes concurrent first team member spawns into one workspace", async () => {
+		const runner = new FakeHerdrRunner();
+		const backend = new HerdrBackend({ runner, sessionName: "ck-test" });
+		const [coordinator, worker, reviewer] = await Promise.all([
+			backend.spawnPane({
+				task_id: "t_coord",
+				team_id: "tm_1",
+				team_position: "coordinator",
+				cwd: "/repo",
+				command: "coord",
+			}),
+			backend.spawnPane({
+				task_id: "t_worker",
+				team_id: "tm_1",
+				team_position: "worker",
+				cwd: "/repo",
+				command: "worker",
+			}),
+			backend.spawnPane({
+				task_id: "t_reviewer",
+				team_id: "tm_1",
+				team_position: "reviewer",
+				cwd: "/repo",
+				command: "reviewer",
+			}),
+		]);
+		const workspaces = [coordinator, worker, reviewer].map(
+			(handle) => (handle.backend_pane_id as string).split("/")[0],
+		);
+		expect(new Set(workspaces).size).toBe(1);
+		expect(runner.calls.filter((call) => call.method === "createWorkspace")).toHaveLength(1);
+	});
+
 	test("restored team pane kill closes only that pane, not the whole workspace", async () => {
 		const runner = new FakeHerdrRunner();
 		const first = new HerdrBackend({ runner, sessionName: "ck-test" });
