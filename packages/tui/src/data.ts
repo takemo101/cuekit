@@ -54,6 +54,31 @@ export async function loadTaskList(
 	return ctx.listTasks({ ...options, limit: options.limit ?? 100, refresh_status: false });
 }
 
+export async function loadParentSessionList(
+	ctx: TuiContext,
+	options: LoadTaskListOptions = {},
+): Promise<TuiTaskListOutput> {
+	const requestedLimit = options.limit ?? 100;
+	const parents: TaskSummary[] = [];
+	let cursor = options.cursor;
+	let hasMore = false;
+	for (;;) {
+		const list = await loadTaskList(ctx, { ...options, limit: requestedLimit, cursor });
+		if ("error" in list) return list;
+		parents.push(...list.tasks.filter((task) => task.run_kind === "parent_session"));
+		if (parents.length >= requestedLimit) {
+			hasMore = list.has_more;
+			break;
+		}
+		if (!list.has_more || !list.next_cursor) break;
+		cursor = list.next_cursor;
+	}
+	return {
+		tasks: parents.slice(0, requestedLimit),
+		has_more: hasMore,
+	};
+}
+
 export async function loadTeamList(
 	ctx: TuiContext,
 	options: TuiTeamListInput = {},

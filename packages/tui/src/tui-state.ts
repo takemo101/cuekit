@@ -1,4 +1,4 @@
-export type TuiMode = "tasks" | "teams";
+export type TuiMode = "tasks" | "teams" | "parents";
 export type TeamFocus = "list" | "members";
 
 export type TuiReturnState = {
