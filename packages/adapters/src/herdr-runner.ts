@@ -10,6 +10,12 @@ export interface HerdrWorkspaceCreateResult {
 	root_pane_id: string;
 }
 
+export interface HerdrTabCreateResult {
+	workspace_id: string;
+	tab_id: string;
+	root_pane_id: string;
+}
+
 export interface HerdrPaneInfo {
 	pane_id: string;
 	workspace_id: string;
@@ -34,6 +40,14 @@ export interface HerdrRunner {
 		cwd: string;
 		label?: string;
 	}): Promise<HerdrWorkspaceCreateResult>;
+	createTab(params: {
+		session: string;
+		workspaceId: string;
+		cwd?: string;
+		label?: string;
+	}): Promise<HerdrTabCreateResult>;
+	renameTab(params: { session: string; tabId: string; label: string }): Promise<void>;
+	closeTab(params: { session: string; tabId: string }): Promise<void>;
 	getPane(params: { session: string; paneId: string }): Promise<HerdrPaneInfo>;
 	listPanes(params: { session: string; workspaceId?: string }): Promise<HerdrPaneInfo[]>;
 	splitPane(params: {
@@ -99,6 +113,35 @@ class HerdrCliRunner implements HerdrRunner {
 			tab_id: stringField(tab.tab_id ?? result.tab_id),
 			root_pane_id: stringField(rootPane.pane_id ?? result.root_pane_id),
 		};
+	}
+
+	async createTab(params: {
+		session: string;
+		workspaceId: string;
+		cwd?: string;
+		label?: string;
+	}): Promise<HerdrTabCreateResult> {
+		const args = ["--session", params.session, "tab", "create", "--workspace", params.workspaceId];
+		if (params.cwd) args.push("--cwd", params.cwd);
+		if (params.label) args.push("--label", params.label);
+		args.push("--no-focus");
+		const json = await this.runJson(args);
+		const result = asObject(json.result ?? json);
+		const tab = asObject(result.tab);
+		const rootPane = asObject(result.root_pane);
+		return {
+			workspace_id: stringField(tab.workspace_id ?? result.workspace_id ?? params.workspaceId),
+			tab_id: stringField(tab.tab_id ?? result.tab_id),
+			root_pane_id: stringField(rootPane.pane_id ?? result.root_pane_id),
+		};
+	}
+
+	async renameTab(params: { session: string; tabId: string; label: string }): Promise<void> {
+		await this.runOk(["--session", params.session, "tab", "rename", params.tabId, params.label]);
+	}
+
+	async closeTab(params: { session: string; tabId: string }): Promise<void> {
+		await this.runOk(["--session", params.session, "tab", "close", params.tabId]);
 	}
 
 	async getPane(params: { session: string; paneId: string }): Promise<HerdrPaneInfo> {

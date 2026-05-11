@@ -22,8 +22,14 @@ interface PreparedHerdrCommand {
 
 interface HerdrTaskHandle extends HerdrCoordinate {
 	teamId?: string;
+	teamPosition?: string;
 	cuekitOwnedWorkspace: boolean;
 	label?: string;
+}
+
+interface HerdrPositionTab {
+	tabId: string;
+	seedPaneId: string;
 }
 
 interface HerdrTeamWorkspace {
@@ -31,6 +37,7 @@ interface HerdrTeamWorkspace {
 	workspaceId: string;
 	tabId: string;
 	seedPaneId: string;
+	tabsByPosition: Map<string, HerdrPositionTab>;
 }
 
 export interface HerdrBackendOptions {
@@ -80,6 +87,7 @@ export class HerdrBackend implements MultiplexerBackend {
 		const handle: HerdrTaskHandle = {
 			...coordinate,
 			...(params.team_id ? { teamId: params.team_id } : {}),
+			...(params.team_id ? { teamPosition: params.team_position ?? "member" } : {}),
 			cuekitOwnedWorkspace: !params.team_id,
 			label,
 		};
@@ -94,9 +102,11 @@ export class HerdrBackend implements MultiplexerBackend {
 		const restored = this.restoreTaskHandleMetadata(coordinate, handle.backend_label);
 		this.taskHandles.set(handle.task_id, restored);
 		if (restored.teamId) {
-			this.teamWorkspaces.set(restored.teamId, {
-				session: restored.session,
-				workspaceId: restored.workspaceId,
+			const workspace =
+				this.teamWorkspaces.get(restored.teamId) ??
+				this.createRestoredTeamWorkspace(restored.teamId, restored);
+			const position = restored.teamPosition ?? "member";
+			workspace.tabsByPosition.set(position, {
 				tabId: restored.tabId,
 				seedPaneId: restored.paneId,
 			});
@@ -213,34 +223,71 @@ export class HerdrBackend implements MultiplexerBackend {
 		prepared: PreparedHerdrCommand,
 	): Promise<HerdrCoordinate> {
 		const teamId = params.team_id as string;
+		const position = params.team_position ?? "member";
 		let workspace = this.teamWorkspaces.get(teamId);
 		let createdWorkspace = false;
+		let createdTab = false;
 		let paneId: string;
+		let positionTab: HerdrPositionTab;
 		if (!workspace) {
 			const created = await this.runner.createWorkspace({
 				session: this.sessionName,
 				cwd: params.cwd,
 				label: `team ${teamId}`,
 			});
+			try {
+				await this.runner.renameTab({
+					session: this.sessionName,
+					tabId: created.tab_id,
+					label: position,
+				});
+			} catch (error) {
+				await this.runner
+					.closeWorkspace({ session: this.sessionName, workspaceId: created.workspace_id })
+					.catch(() => {});
+				await prepared.cleanup();
+				throw error;
+			}
+			positionTab = { tabId: created.tab_id, seedPaneId: created.root_pane_id };
 			workspace = {
 				session: this.sessionName,
 				workspaceId: created.workspace_id,
 				tabId: created.tab_id,
 				seedPaneId: created.root_pane_id,
+				tabsByPosition: new Map([[position, positionTab]]),
 			};
 			this.teamWorkspaces.set(teamId, workspace);
 			createdWorkspace = true;
 			paneId = created.root_pane_id;
 		} else {
-			const seedPaneId = await this.liveSeedPane(workspace);
-			const pane = await this.runner.splitPane({
-				session: workspace.session,
-				targetPaneId: seedPaneId,
-				direction: "right",
-				cwd: params.cwd,
-			});
-			paneId = pane.pane_id;
-			workspace.seedPaneId = paneId;
+			positionTab = workspace.tabsByPosition.get(position) as HerdrPositionTab;
+			if (positionTab && !(await this.hasLivePaneInPositionTab(workspace, positionTab))) {
+				workspace.tabsByPosition.delete(position);
+				positionTab = undefined as unknown as HerdrPositionTab;
+			}
+			if (!positionTab) {
+				const tab = await this.runner.createTab({
+					session: workspace.session,
+					workspaceId: workspace.workspaceId,
+					cwd: params.cwd,
+					label: position,
+				});
+				positionTab = { tabId: tab.tab_id, seedPaneId: tab.root_pane_id };
+				workspace.tabsByPosition.set(position, positionTab);
+				createdTab = true;
+				paneId = tab.root_pane_id;
+			} else {
+				const seedPaneId = await this.liveSeedPane(workspace, positionTab);
+				const pane = await this.runner.splitPane({
+					session: workspace.session,
+					targetPaneId: seedPaneId,
+					direction: "right",
+					cwd: params.cwd,
+				});
+				paneId = pane.pane_id;
+				positionTab.seedPaneId = paneId;
+				workspace.seedPaneId = paneId;
+			}
 		}
 		try {
 			await this.runner.runInPane({
@@ -254,6 +301,11 @@ export class HerdrBackend implements MultiplexerBackend {
 					.closeWorkspace({ session: workspace.session, workspaceId: workspace.workspaceId })
 					.catch(() => {});
 				this.teamWorkspaces.delete(teamId);
+			} else if (createdTab) {
+				await this.runner
+					.closeTab({ session: workspace.session, tabId: positionTab.tabId })
+					.catch(() => {});
+				workspace.tabsByPosition.delete(position);
 			} else {
 				await this.runner.closePane({ session: workspace.session, paneId }).catch(() => {});
 			}
@@ -263,18 +315,32 @@ export class HerdrBackend implements MultiplexerBackend {
 		return {
 			session: workspace.session,
 			workspaceId: workspace.workspaceId,
-			tabId: workspace.tabId,
+			tabId: positionTab.tabId,
 			paneId,
 		};
 	}
 
-	private async liveSeedPane(workspace: HerdrTeamWorkspace): Promise<string> {
+	private async hasLivePaneInPositionTab(
+		workspace: HerdrTeamWorkspace,
+		positionTab: HerdrPositionTab,
+	): Promise<boolean> {
+		const panes = await this.runner.listPanes({
+			session: workspace.session,
+			workspaceId: workspace.workspaceId,
+		});
+		return panes.some((pane) => pane.tab_id === positionTab.tabId);
+	}
+
+	private async liveSeedPane(
+		workspace: HerdrTeamWorkspace,
+		positionTab: HerdrPositionTab,
+	): Promise<string> {
 		try {
 			const pane = await this.runner.getPane({
 				session: workspace.session,
-				paneId: workspace.seedPaneId,
+				paneId: positionTab.seedPaneId,
 			});
-			if (pane.workspace_id === workspace.workspaceId && pane.tab_id === workspace.tabId) {
+			if (pane.workspace_id === workspace.workspaceId && pane.tab_id === positionTab.tabId) {
 				return pane.pane_id;
 			}
 		} catch {
@@ -284,9 +350,9 @@ export class HerdrBackend implements MultiplexerBackend {
 			session: workspace.session,
 			workspaceId: workspace.workspaceId,
 		});
-		const candidate = panes.find((pane) => pane.tab_id === workspace.tabId);
-		if (!candidate)
-			throw new Error(`no live herdr panes remain for team workspace ${workspace.workspaceId}`);
+		const candidate = panes.find((pane) => pane.tab_id === positionTab.tabId);
+		if (!candidate) throw new Error(`no live herdr panes remain for team tab ${positionTab.tabId}`);
+		positionTab.seedPaneId = candidate.pane_id;
 		workspace.seedPaneId = candidate.pane_id;
 		return candidate.pane_id;
 	}
@@ -295,25 +361,42 @@ export class HerdrBackend implements MultiplexerBackend {
 		coordinate: HerdrCoordinate,
 		label: string | undefined,
 	): HerdrTaskHandle {
-		const teamMatch = label?.match(/^team:([^:]+):/);
+		const newTeamMatch = label?.match(/^team:([^:]+):([^:]+):/);
+		const legacyTeamMatch = newTeamMatch ? null : label?.match(/^team:([^:]+):/);
+		const teamId = newTeamMatch?.[1] ?? legacyTeamMatch?.[1];
+		const teamPosition = newTeamMatch?.[2] ?? (legacyTeamMatch ? "member" : undefined);
 		return {
 			...coordinate,
-			...(teamMatch ? { teamId: teamMatch[1] } : {}),
-			cuekitOwnedWorkspace: !teamMatch,
+			...(teamId ? { teamId } : {}),
+			...(teamPosition ? { teamPosition } : {}),
+			cuekitOwnedWorkspace: !teamId,
 			...(label ? { label } : {}),
 		};
 	}
 
-	private restoreTeamWorkspaceFromHandles(teamId: string): HerdrTeamWorkspace | undefined {
-		const handle = [...this.taskHandles.values()].find((candidate) => candidate.teamId === teamId);
-		if (!handle) return undefined;
+	private createRestoredTeamWorkspace(teamId: string, handle: HerdrTaskHandle): HerdrTeamWorkspace {
 		const workspace = {
 			session: handle.session,
 			workspaceId: handle.workspaceId,
 			tabId: handle.tabId,
 			seedPaneId: handle.paneId,
+			tabsByPosition: new Map<string, HerdrPositionTab>(),
 		};
 		this.teamWorkspaces.set(teamId, workspace);
+		return workspace;
+	}
+
+	private restoreTeamWorkspaceFromHandles(teamId: string): HerdrTeamWorkspace | undefined {
+		const handle = [...this.taskHandles.values()].find((candidate) => candidate.teamId === teamId);
+		if (!handle) return undefined;
+		const workspace = this.createRestoredTeamWorkspace(teamId, handle);
+		for (const candidate of this.taskHandles.values()) {
+			if (candidate.teamId !== teamId) continue;
+			workspace.tabsByPosition.set(candidate.teamPosition ?? "member", {
+				tabId: candidate.tabId,
+				seedPaneId: candidate.paneId,
+			});
+		}
 		return workspace;
 	}
 

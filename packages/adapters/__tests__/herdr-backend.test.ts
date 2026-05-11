@@ -68,7 +68,7 @@ describe("HerdrBackend", () => {
 		);
 	});
 
-	test("team member tasks share one workspace with separate panes", async () => {
+	test("team positions use named tabs inside one workspace", async () => {
 		const runner = new FakeHerdrRunner();
 		const backend = new HerdrBackend({ runner, sessionName: "ck-test" });
 		const coordinator = await backend.spawnPane({
@@ -85,10 +85,51 @@ describe("HerdrBackend", () => {
 			cwd: "/repo",
 			command: "worker",
 		});
-		const [coordWorkspace] = (coordinator.backend_pane_id as string).split("/");
-		const [workerWorkspace] = (worker.backend_pane_id as string).split("/");
+		const reviewer = await backend.spawnPane({
+			task_id: "t_reviewer",
+			team_id: "tm_1",
+			team_position: "reviewer",
+			cwd: "/repo",
+			command: "reviewer",
+		});
+		const [coordWorkspace, coordTab] = (coordinator.backend_pane_id as string).split("/");
+		const [workerWorkspace, workerTab] = (worker.backend_pane_id as string).split("/");
+		const [reviewerWorkspace, reviewerTab] = (reviewer.backend_pane_id as string).split("/");
 		expect(workerWorkspace).toBe(coordWorkspace);
-		expect(worker.backend_pane_id).not.toBe(coordinator.backend_pane_id);
+		expect(reviewerWorkspace).toBe(coordWorkspace);
+		expect(new Set([coordTab, workerTab, reviewerTab]).size).toBe(3);
+		expect(runner.tabLabels("ck-test", coordWorkspace as string)).toEqual({
+			[coordTab as string]: "coordinator",
+			[workerTab as string]: "worker",
+			[reviewerTab as string]: "reviewer",
+		});
+	});
+
+	test("same team position shares an existing named tab", async () => {
+		const runner = new FakeHerdrRunner();
+		const backend = new HerdrBackend({ runner, sessionName: "ck-test" });
+		const first = await backend.spawnPane({
+			task_id: "t_worker_1",
+			team_id: "tm_1",
+			team_position: "worker",
+			cwd: "/repo",
+			command: "worker 1",
+		});
+		const second = await backend.spawnPane({
+			task_id: "t_worker_2",
+			team_id: "tm_1",
+			team_position: "worker",
+			cwd: "/repo",
+			command: "worker 2",
+		});
+		const [firstWorkspace, firstTab, firstPane] = (first.backend_pane_id as string).split("/");
+		const [secondWorkspace, secondTab, secondPane] = (second.backend_pane_id as string).split("/");
+		expect(secondWorkspace).toBe(firstWorkspace);
+		expect(secondTab).toBe(firstTab);
+		expect(secondPane).not.toBe(firstPane);
+		expect(runner.tabLabels("ck-test", firstWorkspace as string)).toEqual({
+			[firstTab as string]: "worker",
+		});
 	});
 
 	test("serializes concurrent first team member spawns into one workspace", async () => {
@@ -117,11 +158,76 @@ describe("HerdrBackend", () => {
 				command: "reviewer",
 			}),
 		]);
-		const workspaces = [coordinator, worker, reviewer].map(
-			(handle) => (handle.backend_pane_id as string).split("/")[0],
+		const coordinates = [coordinator, worker, reviewer].map((handle) =>
+			(handle.backend_pane_id as string).split("/"),
 		);
+		const workspaces = coordinates.map(([workspace]) => workspace);
+		const tabs = coordinates.map(([, tab]) => tab);
 		expect(new Set(workspaces).size).toBe(1);
+		expect(new Set(tabs).size).toBe(3);
 		expect(runner.calls.filter((call) => call.method === "createWorkspace")).toHaveLength(1);
+	});
+
+	test("recreates a position tab after the previous position pane is closed", async () => {
+		const runner = new FakeHerdrRunner();
+		const backend = new HerdrBackend({ runner, sessionName: "ck-test" });
+		const first = await backend.spawnPane({
+			task_id: "t_worker_1",
+			team_id: "tm_1",
+			team_position: "worker",
+			cwd: "/repo",
+			command: "worker 1",
+		});
+		await backend.spawnPane({
+			task_id: "t_reviewer",
+			team_id: "tm_1",
+			team_position: "reviewer",
+			cwd: "/repo",
+			command: "reviewer",
+		});
+		await backend.killPane("t_worker_1");
+
+		const second = await backend.spawnPane({
+			task_id: "t_worker_2",
+			team_id: "tm_1",
+			team_position: "worker",
+			cwd: "/repo",
+			command: "worker 2",
+		});
+		const [firstWorkspace, firstTab] = (first.backend_pane_id as string).split("/");
+		const [secondWorkspace, secondTab] = (second.backend_pane_id as string).split("/");
+		expect(secondWorkspace).toBe(firstWorkspace);
+		expect(secondTab).not.toBe(firstTab);
+		expect(runner.tabLabels("ck-test", firstWorkspace as string)[secondTab as string]).toBe(
+			"worker",
+		);
+	});
+
+	test("restores legacy team labels as shared member panes", async () => {
+		const runner = new FakeHerdrRunner();
+		const first = new HerdrBackend({ runner, sessionName: "ck-test" });
+		const coordinator = await first.spawnPane({
+			task_id: "t_coord",
+			team_id: "tm_1",
+			team_position: "coordinator",
+			cwd: "/repo",
+			command: "coord",
+		});
+		const worker = await first.spawnPane({
+			task_id: "t_worker",
+			team_id: "tm_1",
+			team_position: "worker",
+			cwd: "/repo",
+			command: "worker",
+		});
+
+		const restored = new HerdrBackend({ runner, sessionName: "ck-test" });
+		restored.restorePaneHandle?.({ ...coordinator, backend_label: "team:tm_1:t_coord" });
+		restored.restorePaneHandle?.({ ...worker, backend_label: "team:tm_1:t_worker" });
+		await restored.killPane("t_worker");
+
+		expect(await restored.isAlive("t_coord")).toBe(true);
+		expect(await restored.isAlive("t_worker")).toBe(false);
 	});
 
 	test("restored team pane kill closes only that pane, not the whole workspace", async () => {
@@ -172,6 +278,33 @@ describe("HerdrBackend", () => {
 		await restored.killTeamSession?.("tm_1");
 		expect(await restored.isAlive("t_coord")).toBe(false);
 		expect(await restored.isAlive("t_worker")).toBe(false);
+	});
+
+	test("cleans up first team workspace when initial tab rename fails", async () => {
+		const runner = new FakeHerdrRunner();
+		runner.failNextRenameTab();
+		const backend = new HerdrBackend({ runner, sessionName: "ck-test" });
+
+		await expect(
+			backend.spawnPane({
+				task_id: "t_coord",
+				team_id: "tm_fail",
+				team_position: "coordinator",
+				cwd: "/repo",
+				command: "coord",
+			}),
+		).rejects.toThrow(/rename_failed/);
+		expect(runner.calls.some((call) => call.method === "closeWorkspace")).toBe(true);
+
+		const retry = await backend.spawnPane({
+			task_id: "t_coord_retry",
+			team_id: "tm_fail",
+			team_position: "coordinator",
+			cwd: "/repo",
+			command: "coord retry",
+		});
+		expect(await backend.isAlive("t_coord_retry")).toBe(true);
+		expect((retry.backend_pane_id as string).split("/")[0]).toBe("w2");
 	});
 
 	test("cleans up first team workspace when command injection fails", async () => {
