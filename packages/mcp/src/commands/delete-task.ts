@@ -1,5 +1,5 @@
 import { isTerminalTaskStatus, JobErrorSchema } from "@cuekit/core";
-import { deleteTask, getTaskById } from "@cuekit/store";
+import { deleteTask, getTaskById, listTasksByTeam } from "@cuekit/store";
 import { z } from "incur";
 import { cleanupAdapterTask } from "../adapter-cleanup.ts";
 import type { CommandContext } from "../command-context.ts";
@@ -88,6 +88,26 @@ export async function runDeleteTasks(
 			continue;
 		}
 		deleteTask(ctx.db, taskId);
+		if (task.team_id && listTasksByTeam(ctx.db, task.team_id).length === 0) {
+			try {
+				await ctx.panes?.killTeamSession?.(task.team_id);
+			} catch (error) {
+				results.push({
+					task_id: taskId,
+					ok: false,
+					error: {
+						code: "runtime_crash",
+						message: `team session cleanup failed for team '${task.team_id}'`,
+						retryable: true,
+						details: {
+							team_id: task.team_id,
+							cause: error instanceof Error ? error.message : String(error),
+						},
+					},
+				});
+				continue;
+			}
+		}
 		results.push({ task_id: taskId, ok: true, message: `deleted task '${taskId}'` });
 	}
 

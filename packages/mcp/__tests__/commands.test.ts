@@ -3769,6 +3769,29 @@ describe("delete-tasks", () => {
 		if (!ack.ok) expect(ack.error.code).toBe("task_not_found");
 	});
 
+	it("closes the backend team session when deleting the last team task directly", async () => {
+		const team = runCreateTeam(ctx, { title: "Team", cwd: "/tmp" });
+		if ("error" in team) throw new Error("team setup failed");
+		const submit = await runSubmitTask(ctx, {
+			objective: "x",
+			agent_kind: "claude-code",
+			cwd: "/tmp",
+			team_id: team.team_id,
+			position: "worker",
+		});
+		if (!submit.accepted) throw new Error("task setup failed");
+		await runCancelTasks(ctx, { task_ids: [submit.task_id] });
+		const closedTeams: string[] = [];
+		(ctx.panes as typeof ctx.panes & { killTeamSession: (teamId: string) => Promise<void> }).killTeamSession = async (teamId: string) => {
+			closedTeams.push(teamId);
+		};
+
+		const ack = await runDeleteTasks(ctx, { task_ids: [submit.task_id] });
+
+		expect(ack.ok).toBe(true);
+		expect(closedTeams).toEqual([team.team_id]);
+	});
+
 	it("deletes multiple terminal tasks in one call", async () => {
 		const a = await runSubmitTask(ctx, { objective: "a", agent_kind: "claude-code", cwd: "/tmp" });
 		const b = await runSubmitTask(ctx, { objective: "b", agent_kind: "claude-code", cwd: "/tmp" });
