@@ -1,6 +1,6 @@
 import { Database } from "bun:sqlite";
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -16,9 +16,12 @@ import { createCli } from "../src/cli.ts";
 import type { CommandContext } from "../src/command-context.ts";
 import { runCancelTasks } from "../src/commands/cancel-task.ts";
 import { runGetTaskResult } from "../src/commands/get-task-result.ts";
+import { runGetTaskSnapshot } from "../src/commands/get-task-snapshot.ts";
 import { runGetTaskStatus } from "../src/commands/get-task-status.ts";
 import { runListTaskEvents } from "../src/commands/list-task-events.ts";
+import { runListTasks } from "../src/commands/list-tasks.ts";
 import { runReportTaskEvent } from "../src/commands/report-task-event.ts";
+import { runSteerTask } from "../src/commands/steer-task.ts";
 import { runSubmitTask } from "../src/commands/submit-task.ts";
 
 // Full delegation flow: submit → status → cancel → get-task-result.
@@ -110,6 +113,89 @@ describe("e2e: submit → status → cancel → result", () => {
 			const transcript = collected.artifacts.find((a: { kind: string }) => a.kind === "transcript");
 			expect(transcript).toBeDefined();
 			expect(transcript?.ref).toContain(".cuekit/tasks/");
+		}
+	});
+
+	it("covers parent session metadata, snapshot, and delivered handoff events", async () => {
+		const submit = await runSubmitTask(ctx, {
+			role: "parent",
+			agent_kind: "pi",
+			objective: "You are a long-lived parent development agent for this project.",
+			cwd: tmpRoot,
+			metadata: { run_kind: "parent_session", long_lived: true },
+			timeout_ms: null,
+		});
+		expect(submit.accepted).toBe(true);
+		if (!submit.accepted) throw new Error("submit failed");
+		const task_id = submit.task_id;
+
+		const task = getTaskById(db, task_id);
+		expect(task?.role).toBe("parent");
+		const spec = JSON.parse(task?.spec_json ?? "{}");
+		expect(spec.metadata).toEqual({ run_kind: "parent_session", long_lived: true });
+		expect(spec.timeout_ms).toBeUndefined();
+
+		const listed = await runListTasks(ctx, { limit: 10, refresh_status: false });
+		expect("tasks" in listed).toBe(true);
+		if ("tasks" in listed) {
+			expect(listed.tasks).toContainEqual(
+				expect.objectContaining({
+					task_id,
+					role: "parent",
+					run_kind: "parent_session",
+					long_lived: true,
+				}),
+			);
+		}
+
+		const status = await runGetTaskStatus(ctx, { task_id });
+		expect(status).toMatchObject({
+			task_id,
+			role: "parent",
+			run_kind: "parent_session",
+			long_lived: true,
+			status: "running",
+		});
+
+		const beforeHandoff = await runGetTaskSnapshot(ctx, { task_id });
+		expect("task_id" in beforeHandoff).toBe(true);
+		if ("task_id" in beforeHandoff) {
+			expect(beforeHandoff.run_kind).toBe("parent_session");
+			expect(beforeHandoff.latest_handoffs).toEqual([]);
+		}
+
+		const handoffPath = join(tmpRoot, "HANDOFF.md");
+		writeFileSync(handoffPath, "# HANDOFF\n\nContinue from the smoke test state.\n");
+		const handoff = await runSteerTask(ctx, {
+			task_id,
+			event_type: "handoff",
+			message_file: handoffPath,
+		});
+		expect(handoff.ok).toBe(true);
+
+		const events = await runListTaskEvents(ctx, { task_id });
+		expect("events" in events).toBe(true);
+		if ("events" in events) {
+			expect(events.events).toHaveLength(1);
+			expect(events.events[0]).toMatchObject({ type: "handoff" });
+			expect(events.events[0]?.payload).toEqual({
+				artifact_path: `.cuekit/tasks/${task_id}/handoffs/${events.events[0]?.id}.md`,
+			});
+			expect(
+				existsSync(
+					join(tmpRoot, ".cuekit", "tasks", task_id, "handoffs", `${events.events[0]?.id}.md`),
+				),
+			).toBe(true);
+		}
+		expect(
+			runner.calls.some((call) => call[0] === "send-keys" && call.join(" ").includes("[HANDOFF]")),
+		).toBe(true);
+
+		const afterHandoff = await runGetTaskSnapshot(ctx, { task_id });
+		expect("task_id" in afterHandoff).toBe(true);
+		if ("task_id" in afterHandoff) {
+			expect(afterHandoff.latest_handoffs).toHaveLength(1);
+			expect(afterHandoff.latest_handoffs[0]?.artifact_path).toContain("/handoffs/");
 		}
 	});
 
