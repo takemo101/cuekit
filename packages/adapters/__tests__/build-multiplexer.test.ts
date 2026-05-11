@@ -50,6 +50,50 @@ describe("buildMultiplexerBackend", () => {
 		expect(warnings.some((w) => w.includes("falling back to tmux"))).toBe(true);
 	});
 
+	it("returns herdr when configured and herdr probes ok", async () => {
+		const result = await buildMultiplexerBackend(
+			{ project: { id: "demo-project" }, multiplexer: { backend: "herdr", strict: false } },
+			{ probe: { herdr: true } },
+		);
+		expect(result.requested).toBe("herdr");
+		expect(result.fallbackApplied).toBe(false);
+		expect(result.backend.kind).toBe("herdr");
+		expect(result.backend.attachCommand("t_1")?.argv).toEqual([
+			"herdr",
+			"--session",
+			"ck-demo-project",
+		]);
+	});
+
+	it("falls back to tmux when herdr probe fails and strict is false", async () => {
+		const warnings: string[] = [];
+		const result = await buildMultiplexerBackend(
+			{ multiplexer: "herdr" },
+			{
+				probe: { herdr: false, tmux: true },
+				logger: {
+					debug: () => {},
+					info: () => {},
+					warn: (msg: unknown) => warnings.push(String(msg)),
+					error: () => {},
+				},
+			},
+		);
+		expect(result.requested).toBe("herdr");
+		expect(result.backend.kind).toBe("tmux");
+		expect(result.fallbackApplied).toBe(true);
+		expect(warnings.join("\n")).toContain("herdr");
+	});
+
+	it("hard-fails when herdr probe fails and strict is true", async () => {
+		await expect(
+			buildMultiplexerBackend(
+				{ multiplexer: { backend: "herdr", strict: true } },
+				{ probe: { herdr: false } },
+			),
+		).rejects.toThrow(/strict.*herdr.*failed/i);
+	});
+
 	it("hard-fails when zellij probe fails and structured strict is true", async () => {
 		await expect(
 			buildMultiplexerBackend(
