@@ -12,6 +12,7 @@ import { runListTaskEvents } from "./commands/list-task-events.ts";
 import { runListTasks } from "./commands/list-tasks.ts";
 import { runListTeams } from "./commands/list-teams.ts";
 import { runSteerTask } from "./commands/steer-task.ts";
+import { runSubmitTask } from "./commands/submit-task.ts";
 
 export interface TuiProjectScope {
 	project_uid?: string;
@@ -55,6 +56,19 @@ export function createTuiContext(ctx: CommandContext, scope: TuiScopeOptions = {
 		cancelTask: (taskId: string) => runCancelTasks(ctx, { task_ids: [taskId] }),
 		deleteTask: (taskId: string) => runDeleteTasks(ctx, { task_ids: [taskId] }),
 		steerTask: (taskId: string, message: string) => runSteerTask(ctx, { task_id: taskId, message }),
+		createParentSession: async (input?: { objective?: string; cwd?: string }) => {
+			const result = await runSubmitTask(ctx, {
+				role: "parent",
+				objective:
+					input?.objective?.trim() ||
+					"You are a long-lived parent development agent for this project. Wait for user instructions.",
+				cwd: input?.cwd ?? scope.projectRoot ?? process.cwd(),
+				metadata: { run_kind: "parent_session", long_lived: true },
+				timeout_ms: null,
+			});
+			if (!result.accepted) return { error: result.error };
+			return { task_id: result.task_id };
+		},
 		cleanupTeam: async (teamId: string) => {
 			const result = await runCleanupTeam(ctx, { team_id: teamId });
 			if ("error" in result) return { ok: false as const, error: result.error };
