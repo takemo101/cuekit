@@ -3707,6 +3707,31 @@ describe("delete-tasks", () => {
 		expect(getTaskById(db, submit.task_id)).not.toBeNull();
 	});
 
+	it("does not delete the task row when pane cleanup is owned by another backend", async () => {
+		createSession(db, {
+			id: "s_herdr",
+			project_root: "/tmp",
+			worktree_path: "/tmp",
+			parent_agent_kind: "pi",
+		});
+		createTask(db, {
+			id: "t_herdr_done",
+			session_id: "s_herdr",
+			agent_kind: "claude-code",
+			status: "completed",
+			objective: "x",
+			native_task_ref: "herdr:ck-cuekit/w1/w1:1/w1-1",
+		});
+
+		const ack = await runDeleteTasks(ctx, { task_ids: ["t_herdr_done"] });
+
+		expect(ack.ok).toBe(false);
+		expect(getTaskById(db, "t_herdr_done")).not.toBeNull();
+		if (!ack.ok) {
+			expect(ack.error.details?.cause).toContain("cannot cleanup task 't_herdr_done' through tmux");
+		}
+	});
+
 	it("kills the orphaned tmux session when a child-reported terminal task is deleted", async () => {
 		// Regression for cuekit-delete-session-tmux-leak: report_task_event(completed)
 		// updates DB status but does NOT kill the tmux session. delete_task must
@@ -3742,6 +3767,55 @@ describe("delete-tasks", () => {
 		const ack = await runDeleteTasks(ctx, { task_ids: ["t_nope"] });
 		expect(ack.ok).toBe(false);
 		if (!ack.ok) expect(ack.error.code).toBe("task_not_found");
+	});
+
+	it("closes the backend team session when deleting the last team task directly", async () => {
+		const team = runCreateTeam(ctx, { title: "Team", cwd: "/tmp" });
+		if ("error" in team) throw new Error("team setup failed");
+		const submit = await runSubmitTask(ctx, {
+			objective: "x",
+			agent_kind: "claude-code",
+			cwd: "/tmp",
+			team_id: team.team_id,
+			position: "worker",
+		});
+		if (!submit.accepted) throw new Error("task setup failed");
+		await runCancelTasks(ctx, { task_ids: [submit.task_id] });
+		const closedTeams: string[] = [];
+		(
+			ctx.panes as typeof ctx.panes & { killTeamSession: (teamId: string) => Promise<void> }
+		).killTeamSession = async (teamId: string) => {
+			closedTeams.push(teamId);
+		};
+
+		const ack = await runDeleteTasks(ctx, { task_ids: [submit.task_id] });
+
+		expect(ack.ok).toBe(true);
+		expect(closedTeams).toEqual([team.team_id]);
+	});
+
+	it("keeps the last team task row when backend team cleanup fails", async () => {
+		const team = runCreateTeam(ctx, { title: "Team", cwd: "/tmp" });
+		if ("error" in team) throw new Error("team setup failed");
+		const submit = await runSubmitTask(ctx, {
+			objective: "x",
+			agent_kind: "claude-code",
+			cwd: "/tmp",
+			team_id: team.team_id,
+			position: "worker",
+		});
+		if (!submit.accepted) throw new Error("task setup failed");
+		await runCancelTasks(ctx, { task_ids: [submit.task_id] });
+		(
+			ctx.panes as typeof ctx.panes & { killTeamSession: (teamId: string) => Promise<void> }
+		).killTeamSession = async () => {
+			throw new Error("close failed");
+		};
+
+		const ack = await runDeleteTasks(ctx, { task_ids: [submit.task_id] });
+
+		expect(ack.ok).toBe(false);
+		expect(getTaskById(db, submit.task_id)).not.toBeNull();
 	});
 
 	it("deletes multiple terminal tasks in one call", async () => {

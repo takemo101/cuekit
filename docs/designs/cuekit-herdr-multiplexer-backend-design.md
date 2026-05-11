@@ -83,21 +83,62 @@ For a team member task:
 cuekit team
   -> Herdr session: ck-<project>
   -> Herdr workspace: team <team_id> [short objective]
-  -> Herdr tab: default tab initially
+  -> Herdr tab: named by cuekit team position
   -> Herdr pane: one pane per cuekit task
 ```
 
-Phase 2 may add role-oriented tabs:
+Use position-oriented tabs inside the team workspace:
 
 ```text
 team workspace
   tab: coordinator
-  tab: workers
-  tab: review
-  tab: finish
+  tab: worker
+  tab: reviewer
+  tab: finisher
+  tab: observer
 ```
 
-However, the first team-aware implementation should use a single tab to reduce restore and focus complexity. Role tabs are a UX improvement, not a core backend requirement.
+Tasks with the same `team_position` share the same Herdr tab and split into multiple panes inside that tab. Different positions use different named tabs. The first team member reuses the root tab created with the workspace, renaming it to that member's position. Later positions create new tabs.
+
+The team workspace identity must be persisted independently of task pane references. Coordinator-led teams often create additional workers/reviewers from a different CLI/MCP/TUI process than the process that created the coordinator. Therefore the team workspace cannot be only in `HerdrBackend` memory and should not be inferred from whichever task happens to still exist.
+
+## Persisted team workspace handle
+
+Persist the Herdr team workspace handle on the `task_teams` row, preferably in `task_teams.metadata_json` to avoid a schema migration for a Herdr-specific concept. This metadata is the canonical mapping from cuekit team to Herdr workspace; task `native_task_ref` remains the canonical mapping from cuekit task to Herdr pane.
+
+Recommended metadata shape:
+
+```json
+{
+  "multiplexer": {
+    "herdr": {
+      "session": "ck-cuekit",
+      "workspace_id": "w6518c578d670a1a",
+      "tabs_by_position": {
+        "coordinator": {
+          "tab_id": "w6518c578d670a1a:1",
+          "seed_pane_id": "w6518c578d670a1a-1"
+        },
+        "worker": {
+          "tab_id": "w6518c578d670a1a:2",
+          "seed_pane_id": "w6518c578d670a1a-2"
+        }
+      }
+    }
+  }
+}
+```
+
+Semantics:
+
+- The store row is the cross-process source of truth for `team_id -> Herdr workspace`.
+- `session` and `workspace_id` identify the team workspace.
+- `tabs_by_position` is a cache of position tab coordinates used to avoid searching Herdr for the correct tab on every spawn.
+- `seed_pane_id` is only a best-effort split target. Herdr pane IDs can compact after pane close, so it must be validated before use and refreshed from live panes in the tab when stale.
+- Unknown or malformed Herdr metadata should be ignored and recreated only after confirming no live cuekit-owned workspace is still referenced by tasks for that team.
+- Closing a team workspace through cuekit cleanup or after deleting the last team task should remove the Herdr metadata from the team row.
+
+Store helpers should keep this metadata manipulation in `@cuekit/store`, e.g. read/merge/delete helpers around `metadata_json`, so `@cuekit/adapters` does not need to hand-edit arbitrary JSON. The adapter can receive a small team-handle persistence interface from the control layer, or the control layer can hydrate `HerdrBackend` before spawn using these helpers. In either case, `@cuekit/store` must not import adapter code.
 
 ## Persisted native task reference
 
@@ -127,9 +168,13 @@ The corresponding `PaneHandle` should contain:
 
 `backend_pane_id` uses a slash-separated Herdr coordinate because the generic `PaneHandle` currently has only one backend pane field. The Herdr backend should parse this into `{ workspaceId, tabId, paneId }` internally.
 
+For team tasks, `native_task_ref` is intentionally not the source of truth for the team workspace. It is the source of truth for that task's pane only. This distinction matters because task rows can be deleted while the team row remains, and Herdr can compact pane IDs after pane deletion.
+
 ## Restore behavior
 
 `HerdrBackend.restorePaneHandle(handle)` must parse the persisted coordinate and populate an internal task handle map.
+
+For teams, restore should prefer the persisted team workspace handle from `task_teams.metadata_json`. Task handle restore is still needed for per-task operations such as capture, steer, and delete, but spawning later team members should start from the team handle rather than scanning existing tasks.
 
 When operating on a restored task:
 
@@ -140,6 +185,8 @@ When operating on a restored task:
 5. Otherwise treat the pane as not alive and let cuekit fall back to transcript/task-event state.
 
 Do not silently steer or kill a different pane just because a compact public pane ID now exists. If validation fails, return a clear dead/mismatch result.
+
+Delete/cleanup is slightly different from steer: if the stored task pane and stored task tab are both gone, cleanup may treat the pane as already removed and allow DB deletion to proceed. If the stored pane is gone but the stored tab still has exactly one live pane, cleanup may close that live pane as the compacted replacement. If multiple plausible panes remain, fail rather than deleting the wrong pane.
 
 ## Backend operations
 
@@ -160,15 +207,20 @@ Solo task flow:
 
 Team task flow:
 
-1. Ensure a team workspace exists for `team_id`, creating it when absent.
-2. For the first member, use the root pane.
-3. For additional members, split from a known live pane with `pane.split --direction right|down` and run the command in the new pane.
-4. Store each task's returned coordinate.
+1. Load the Herdr team workspace handle for `team_id` from `task_teams.metadata_json`.
+2. If the handle exists, validate that the Herdr workspace is still present. If it is stale, clear the metadata and create a fresh workspace.
+3. If no handle exists, create a Herdr workspace labeled `team <team_id>`, rename the root tab to the current position, and persist the workspace handle.
+4. For a position that already has a live tab, split from a validated live seed pane in that tab.
+5. For a new position, create a new Herdr tab labeled with `team_position` and persist that tab in `tabs_by_position`.
+6. Run the command in the selected/new pane.
+7. Store each task's returned coordinate in `native_task_ref`.
 
 Failure handling:
 
 - If command injection fails after creating a solo workspace, close the workspace or root pane when safe.
-- If team member pane creation fails, close only the newly-created pane; do not delete the whole team workspace.
+- If team member pane creation fails after creating a new tab, close that tab and remove the tab metadata.
+- If the first team member fails after creating a new workspace, close the workspace and remove the team metadata.
+- If adding a split pane fails, close only the newly-created pane when known; do not delete the whole team workspace.
 - Never include child reporting tokens in command-line args, labels, or logs. Pass them only through environment if Herdr exposes an env-aware run API; otherwise use the existing cuekit launch-script pattern that sources a `0600` temp env file before running the command.
 
 Open implementation detail: Herdr's current CLI `pane.run <pane_id> <command>` sends text into an existing shell. If Herdr does not offer an env-bearing spawn API, `HerdrBackend` should generate a temporary launch script similar to `ZellijBackend` and run `sh <launchScriptPath>` in the pane.
@@ -214,7 +266,7 @@ Use Herdr `pane.read`:
 
 For solo task workspaces, close the workspace or pane. Prefer workspace close if the workspace is cuekit-owned and contains only that task.
 
-For team task panes, close only the member pane. Team workspace cleanup belongs to `killTeamSession(team_id)` / team cleanup paths.
+For team task panes, close only the member pane. If deleting that task leaves the team with no remaining task rows, the control layer should call `killTeamSession(team_id)` so the Herdr workspace and persisted team metadata are removed. Team cleanup paths should also use `killTeamSession(team_id)` when cleanup deletes the last member.
 
 Missing pane/session should be treated as idempotent success when cancelling an already-gone task.
 
@@ -237,6 +289,8 @@ Future enhancement: use Herdr pane labels or `pane.report_agent` / `pane.release
 ### `killTeamSession(team_id)`
 
 Close the team workspace when it is empty or when cleanup explicitly asks to remove cuekit-owned team UI. Do not stop the entire Herdr session unless cuekit owns no remaining workspaces in that session.
+
+After a successful close, clear the Herdr team workspace handle from `task_teams.metadata_json`. If the workspace is already gone, treat cleanup as idempotent success and still clear the metadata.
 
 ## Socket/CLI integration layer
 
@@ -283,7 +337,8 @@ This preserves the existing zellij fallback semantics.
 ### Phase 2 — team workspace support
 
 - `team_id` tasks share one Herdr workspace.
-- Additional team members split panes in the team workspace.
+- Team workspace handle is persisted in `task_teams.metadata_json` so later coordinator-spawned members reuse the same workspace across processes.
+- `team_position` maps to named Herdr tabs; same-position members split panes in the same tab.
 - `killTeamSession` closes cuekit-owned team workspace.
 - Tests cover multiple team members and cleanup.
 
@@ -298,15 +353,17 @@ This preserves the existing zellij fallback semantics.
 
 | Risk | Mitigation |
 |---|---|
-| Pane IDs compact after close. | Persist full coordinate, validate workspace/tab before operations, never steer mismatched pane. |
+| Pane IDs compact after close. | Persist full coordinate, validate workspace/tab before operations, never steer mismatched pane. For cleanup only, allow idempotent success when the stored tab/pane are already gone. |
+| Coordinator-spawned members create a second workspace. | Persist `team_id -> Herdr workspace` on the team row and hydrate/create the workspace from that metadata before every team spawn. |
+| Last individual task delete leaves an empty Herdr workspace. | After task deletion, if no tasks remain for the team, call `killTeamSession(team_id)` and clear Herdr team metadata. |
 | Herdr CLI lacks env-bearing command spawn. | Use cuekit-owned temp env + launch script; run only `sh <script>` in the pane. |
 | Attach does not focus exact task pane. | Treat attach as session-level for Phase 1; add focus pre-step only when Herdr exposes stable support. |
 | Herdr server lifecycle differs from tmux/zellij. | Encapsulate startup/probe/socket readiness in `HerdrRunner`; keep backend semantics unchanged above that layer. |
-| Team pane layout complexity. | Ship solo backend first; add team workspace in a separate phase; role tabs are optional polish. |
+| Team pane layout complexity. | Keep the persisted team handle small: session, workspace id, tabs by position, and best-effort seed pane ids only. |
 
 ## Open questions before implementation
 
 1. Should Herdr session naming use project id, cwd hash, or both? Recommendation: `ck-<project-id>` when configured, else `ck-<cwd-hash>`.
 2. Should solo task cancellation close the whole workspace or only the root pane? Recommendation: close the workspace when cuekit created it and it has no non-cuekit panes.
 3. Should capture use `recent` or `visible`? Recommendation: `recent` initially for context, with possible TUI-specific `visible` later.
-4. Should first team support use one tab or role tabs? Recommendation: one tab first.
+4. Should team workspace handles live in a new table or `task_teams.metadata_json`? Recommendation: `metadata_json` first; promote to a table only if other backends need first-class team runtime handles.
