@@ -56,8 +56,8 @@ export class HerdrBackend implements MultiplexerBackend {
 		this.sendKeysDelayMs = options.sendKeysDelayMs ?? 200;
 	}
 
-	sessionNameFor(_task_id: string): string {
-		return this.sessionName;
+	sessionNameFor(task_id: string): string {
+		return this.taskHandles.get(task_id)?.session ?? this.sessionName;
 	}
 
 	async spawnPane(params: SpawnPaneParams): Promise<PaneHandle> {
@@ -143,8 +143,8 @@ export class HerdrBackend implements MultiplexerBackend {
 		this.taskHandles.delete(task_id);
 	}
 
-	attachCommand(_task_id: string): { argv: string[] } | null {
-		return { argv: ["herdr", "--session", this.sessionName] };
+	attachCommand(task_id: string): { argv: string[] } | null {
+		return { argv: ["herdr", "--session", this.sessionNameFor(task_id)] };
 	}
 
 	async killTeamSession(team_id: string): Promise<void> {
