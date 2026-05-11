@@ -468,6 +468,38 @@ export function App(props: {
 			void refresh();
 			return;
 		}
+		if (key.name === "n" && mode === "parents") {
+			const createParentSession = props.ctx.createParentSession;
+			if (!createParentSession) {
+				setError("Parent session creation is not available.");
+				return;
+			}
+			void (async () => {
+				setLoading(true);
+				setError(undefined);
+				try {
+					const result = await createParentSession();
+					if ("error" in result) {
+						setError(result.error.message);
+						return;
+					}
+					initialState.current = { ...initialState.current, selected_task_id: result.task_id };
+					const status = await props.ctx.getTaskStatus(result.task_id);
+					const command = canAttach(status) ? getPaneAttachCommand(status) : null;
+					if (command) {
+						exit(buildTuiTaskAttachExit(command, result.task_id, status, "parents"));
+						return;
+					}
+					setMessage(`Created parent session ${result.task_id}. Attach after refresh.`);
+					await refresh();
+				} catch (err) {
+					setError(err instanceof Error ? err.message : String(err));
+				} finally {
+					setLoading(false);
+				}
+			})();
+			return;
+		}
 		if (key.sequence === "A" && mode === "teams") {
 			void attachSelectedTeam();
 			return;

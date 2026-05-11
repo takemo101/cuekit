@@ -7,25 +7,27 @@ import { theme } from "../theme.ts";
 const TASK_FULL_HOTKEYS = ["↑/↓|j/k select", "r refresh"];
 const TASK_ATTACH_FULL_HOTKEY = "a attach";
 const TASK_TRAILING_FULL_HOTKEYS = ["t teams", "p parents", "s steer", "c cancel", "d delete", "q quit", "auto 3s"];
+const PARENT_TRAILING_FULL_HOTKEYS = ["t teams", "p tasks", "n new parent", "s steer", "c cancel", "d delete", "q quit", "auto 3s"];
 
 const TASK_COMPACT_HOTKEYS = "↑/↓|j/k sel  r ref";
 const TASK_ATTACH_COMPACT_HOTKEY = "a att";
 const TASK_TRAILING_COMPACT_HOTKEYS = "t teams  p parents  s steer  c cancel  d del  q quit  auto3s";
+const PARENT_TRAILING_COMPACT_HOTKEYS = "t teams  p tasks  n new  s steer  c cancel  d del  q quit  auto3s";
 const COMPACT_SELECTION_WIDTH = 72;
 
-function taskFullHotkeys(attachable: boolean): string {
+function taskFullHotkeys(attachable: boolean, parents = false): string {
 	return [
 		...TASK_FULL_HOTKEYS,
 		...(attachable ? [TASK_ATTACH_FULL_HOTKEY] : []),
-		...TASK_TRAILING_FULL_HOTKEYS,
+		...(parents ? PARENT_TRAILING_FULL_HOTKEYS : TASK_TRAILING_FULL_HOTKEYS),
 	].join("   ");
 }
 
-function taskCompactHotkeys(attachable: boolean): string {
+function taskCompactHotkeys(attachable: boolean, parents = false): string {
 	return [
 		TASK_COMPACT_HOTKEYS,
 		...(attachable ? [TASK_ATTACH_COMPACT_HOTKEY] : []),
-		TASK_TRAILING_COMPACT_HOTKEYS,
+		parents ? PARENT_TRAILING_COMPACT_HOTKEYS : TASK_TRAILING_COMPACT_HOTKEYS,
 	].join("  ");
 }
 
@@ -64,11 +66,15 @@ function teamHotkeys(focus: TeamFocus, attachable: boolean, compact: boolean): s
 }
 
 function fullHotkeys(mode: TuiMode, attachable: boolean, teamFocus: TeamFocus): string {
-	return mode === "teams" ? teamHotkeys(teamFocus, attachable, false) : taskFullHotkeys(attachable);
+	return mode === "teams"
+		? teamHotkeys(teamFocus, attachable, false)
+		: taskFullHotkeys(attachable, mode === "parents");
 }
 
 function compactHotkeys(mode: TuiMode, attachable: boolean, teamFocus: TeamFocus): string {
-	return mode === "teams" ? teamHotkeys(teamFocus, attachable, true) : taskCompactHotkeys(attachable);
+	return mode === "teams"
+		? teamHotkeys(teamFocus, attachable, true)
+		: taskCompactHotkeys(attachable, mode === "parents");
 }
 
 export function footerLine(

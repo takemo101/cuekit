@@ -1,6 +1,9 @@
 import { Database } from "bun:sqlite";
 import { describe, expect, it } from "bun:test";
-import { AdapterRegistry, type MultiplexerBackend } from "@cuekit/adapters";
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { AdapterRegistry, createClaudeCodeAdapter, type MultiplexerBackend } from "@cuekit/adapters";
 import {
 	createSession,
 	createTask,
@@ -36,6 +39,37 @@ function fakePanes(overrides: Partial<MultiplexerBackend>): MultiplexerBackend {
 }
 
 describe("createTuiContext", () => {
+	it("creates parent session tasks with parent metadata and null timeout", async () => {
+		const db = new Database(":memory:");
+		db.exec("pragma foreign_keys = ON;");
+		runMigrations(db);
+		const registry = new AdapterRegistry();
+		registry.register(
+			createClaudeCodeAdapter(db, fakePanes({
+				spawnPane: async (params) => ({ task_id: params.task_id, backend_kind: "fake" }),
+				attachCommand: (taskId) => ({ argv: ["fake", "attach", taskId] }),
+			}), {
+				launchCommandOverride: () => "sleep 60",
+			}),
+		);
+		const root = mkdtempSync(join(tmpdir(), "cuekit-parent-tui-"));
+		mkdirSync(join(root, ".git"));
+		const tui = createTuiContext({ db, registry }, { projectRoot: root });
+
+		const result = await tui.createParentSession?.();
+
+		expect(result).toBeDefined();
+		expect(result && "task_id" in result).toBe(true);
+		if (!result || !("task_id" in result) || !result.task_id) return;
+		const task = getTaskById(db, result.task_id);
+		expect(task?.role).toBe("parent");
+		const spec = JSON.parse(task?.spec_json ?? "{}");
+		expect(spec.metadata).toEqual({ run_kind: "parent_session", long_lived: true });
+		expect(spec.timeout_ms).toBeUndefined();
+		expect(spec.cwd).toBe(root);
+		rmSync(root, { recursive: true, force: true });
+	});
+
 	it("scopes task listing to the current repository cwd by default", async () => {
 		const { db, tui } = makeHarness();
 		createSession(db, {
