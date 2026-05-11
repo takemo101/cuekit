@@ -330,8 +330,18 @@ export class HerdrBackend implements MultiplexerBackend {
 				workspaceId: handle.workspaceId,
 			});
 			if (panes.length === 0) return;
-			if (panes.length === 1) {
-				await this.runner.closePane({ session: handle.session, paneId: panes[0]?.pane_id as string });
+			const panesInStoredTab = panes.filter((pane) => pane.tab_id === handle.tabId);
+			if (panesInStoredTab.length === 1) {
+				await this.runner.closePane({
+					session: handle.session,
+					paneId: panesInStoredTab[0]?.pane_id as string,
+				});
+				return;
+			}
+			if (panesInStoredTab.length === 0) {
+				if (panes.length === 1) {
+					await this.runner.closePane({ session: handle.session, paneId: panes[0]?.pane_id as string });
+				}
 				return;
 			}
 			throw error;
