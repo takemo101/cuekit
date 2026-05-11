@@ -237,14 +237,14 @@ describe("HerdrBackend", () => {
 			team_id: "tm_1",
 			team_position: "worker",
 			cwd: "/repo",
-			command: "worker 1",
+			command: "worker 1 t_worker_1",
 		});
 		const second = await backend.spawnPane({
 			task_id: "t_worker_2",
 			team_id: "tm_1",
 			team_position: "worker",
 			cwd: "/repo",
-			command: "worker 2",
+			command: "worker 2 t_worker_2",
 		});
 		const [workspaceId] = (second.backend_pane_id as string).split("/");
 
@@ -253,6 +253,42 @@ describe("HerdrBackend", () => {
 
 		expect(await backend.isAlive("t_worker_2")).toBe(false);
 		expect(await runner.listPanes({ session: "ck-test", workspaceId })).toEqual([]);
+	});
+
+	test("uses pane transcript identity to avoid closing the wrong compacted same-tab pane", async () => {
+		const runner = new FakeHerdrRunner();
+		const backend = new HerdrBackend({ runner, sessionName: "ck-test" });
+		await backend.spawnPane({
+			task_id: "t_worker_1",
+			team_id: "tm_1",
+			team_position: "worker",
+			cwd: "/repo",
+			command: "worker 1 t_worker_1",
+		});
+		await backend.spawnPane({
+			task_id: "t_worker_2",
+			team_id: "tm_1",
+			team_position: "worker",
+			cwd: "/repo",
+			command: "worker 2 t_worker_2",
+		});
+		const third = await backend.spawnPane({
+			task_id: "t_worker_3",
+			team_id: "tm_1",
+			team_position: "worker",
+			cwd: "/repo",
+			command: "worker 3 t_worker_3",
+		});
+		const [workspaceId] = (third.backend_pane_id as string).split("/");
+
+		await backend.killPane("t_worker_1");
+		await backend.killPane("t_worker_2");
+
+		expect(await backend.isAlive("t_worker_2")).toBe(false);
+		expect(await backend.isAlive("t_worker_3")).toBe(true);
+		const remaining = await runner.listPanes({ session: "ck-test", workspaceId });
+		expect(remaining).toHaveLength(1);
+		expect(await backend.capturePane("t_worker_3")).toContain("t_worker_3");
 	});
 
 	test("reuses a restored team workspace for later team spawns", async () => {

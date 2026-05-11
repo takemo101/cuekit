@@ -21,6 +21,7 @@ interface PreparedHerdrCommand {
 }
 
 interface HerdrTaskHandle extends HerdrCoordinate {
+	taskId: string;
 	teamId?: string;
 	teamPosition?: string;
 	cuekitOwnedWorkspace: boolean;
@@ -85,6 +86,7 @@ export class HerdrBackend implements MultiplexerBackend {
 			? await this.withTeamSpawnLock(params.team_id, () => this.spawnTeamPane(params, prepared))
 			: await this.spawnSoloPane(params, prepared, label);
 		const handle: HerdrTaskHandle = {
+			taskId: params.task_id,
 			...coordinate,
 			...(params.team_id ? { teamId: params.team_id } : {}),
 			...(params.team_id ? { teamPosition: params.team_position ?? "member" } : {}),
@@ -99,7 +101,7 @@ export class HerdrBackend implements MultiplexerBackend {
 		if (handle.backend_kind !== this.kind) return;
 		const coordinate = parseHerdrBackendPaneId(handle.backend_session, handle.backend_pane_id);
 		if (!coordinate) return;
-		const restored = this.restoreTaskHandleMetadata(coordinate, handle.backend_label);
+		const restored = this.restoreTaskHandleMetadata(handle.task_id, coordinate, handle.backend_label);
 		this.taskHandles.set(handle.task_id, restored);
 		if (restored.teamId) {
 			const workspace =
@@ -321,28 +323,50 @@ export class HerdrBackend implements MultiplexerBackend {
 	}
 
 	private async closeTeamPane(handle: HerdrTaskHandle): Promise<void> {
-		try {
-			await this.runner.closePane({ session: handle.session, paneId: handle.paneId });
-			return;
-		} catch (error) {
-			const panes = await this.runner.listPanes({
+		const panes = await this.runner.listPanes({
+			session: handle.session,
+			workspaceId: handle.workspaceId,
+		});
+		if (panes.length === 0) return;
+		const panesInStoredTab = panes.filter((pane) => pane.tab_id === handle.tabId);
+		if (panesInStoredTab.length === 0) return;
+		if (panesInStoredTab.length === 1) {
+			await this.runner.closePane({
 				session: handle.session,
-				workspaceId: handle.workspaceId,
+				paneId: panesInStoredTab[0]?.pane_id as string,
 			});
-			if (panes.length === 0) return;
-			const panesInStoredTab = panes.filter((pane) => pane.tab_id === handle.tabId);
-			if (panesInStoredTab.length === 1) {
-				await this.runner.closePane({
-					session: handle.session,
-					paneId: panesInStoredTab[0]?.pane_id as string,
-				});
-				return;
-			}
-			if (panesInStoredTab.length === 0) {
-				return;
-			}
-			throw error;
+			return;
 		}
+
+		const verified = await this.findVerifiedPaneForTask(handle, panesInStoredTab);
+		if (verified) {
+			await this.runner.closePane({ session: handle.session, paneId: verified.pane_id });
+			return;
+		}
+		throw new Error(
+			`herdr pane identity for task ${handle.taskId} is ambiguous in tab ${handle.tabId}`,
+		);
+	}
+
+	private async findVerifiedPaneForTask(
+		handle: HerdrTaskHandle,
+		panes: Array<{ pane_id: string; tab_id: string; workspace_id: string }>,
+	): Promise<{ pane_id: string; tab_id: string; workspace_id: string } | null> {
+		const matches = [];
+		for (const pane of panes) {
+			try {
+				const capture = await this.runner.readPane({
+					session: handle.session,
+					paneId: pane.pane_id,
+					source: "recent",
+					lines: DEFAULT_CAPTURE_SCROLLBACK,
+				});
+				if (capture.text.includes(handle.taskId)) matches.push(pane);
+			} catch {
+				// Treat unreadable panes as unverified.
+			}
+		}
+		return matches.length === 1 ? (matches[0] as { pane_id: string; tab_id: string; workspace_id: string }) : null;
 	}
 
 	private async hasLivePaneInPositionTab(
@@ -383,6 +407,7 @@ export class HerdrBackend implements MultiplexerBackend {
 	}
 
 	private restoreTaskHandleMetadata(
+		taskId: string,
 		coordinate: HerdrCoordinate,
 		label: string | undefined,
 	): HerdrTaskHandle {
@@ -391,6 +416,7 @@ export class HerdrBackend implements MultiplexerBackend {
 		const teamId = newTeamMatch?.[1] ?? legacyTeamMatch?.[1];
 		const teamPosition = newTeamMatch?.[2] ?? (legacyTeamMatch ? "member" : undefined);
 		return {
+			taskId,
 			...coordinate,
 			...(teamId ? { teamId } : {}),
 			...(teamPosition ? { teamPosition } : {}),
@@ -431,9 +457,31 @@ export class HerdrBackend implements MultiplexerBackend {
 		try {
 			const pane = await this.runner.getPane({ session: handle.session, paneId: handle.paneId });
 			if (pane.workspace_id !== handle.workspaceId || pane.tab_id !== handle.tabId) return null;
+			if (handle.teamId) {
+				const panes = await this.runner.listPanes({
+					session: handle.session,
+					workspaceId: handle.workspaceId,
+				});
+				const panesInTab = panes.filter((candidate) => candidate.tab_id === handle.tabId);
+				if (panesInTab.length > 1) {
+					const verified = await this.findVerifiedPaneForTask(handle, panesInTab);
+					if (verified?.pane_id !== pane.pane_id) return null;
+				}
+			}
 			return handle;
 		} catch {
-			return null;
+			if (!handle.teamId) return null;
+			const panes = await this.runner.listPanes({
+				session: handle.session,
+				workspaceId: handle.workspaceId,
+			});
+			const verified = await this.findVerifiedPaneForTask(
+				handle,
+				panes.filter((candidate) => candidate.tab_id === handle.tabId),
+			);
+			if (!verified) return null;
+			handle.paneId = verified.pane_id;
+			return handle;
 		}
 	}
 
