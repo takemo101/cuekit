@@ -255,6 +255,35 @@ describe("HerdrBackend", () => {
 		expect(await runner.listPanes({ session: "ck-test", workspaceId })).toEqual([]);
 	});
 
+	test("does not close a different single remaining same-tab pane for a stale handle", async () => {
+		const runner = new FakeHerdrRunner();
+		const backend = new HerdrBackend({ runner, sessionName: "ck-test" });
+		const first = await backend.spawnPane({
+			task_id: "t_worker_1",
+			team_id: "tm_1",
+			team_position: "worker",
+			cwd: "/repo",
+			command: "worker 1 t_worker_1",
+		});
+		const second = await backend.spawnPane({
+			task_id: "t_worker_2",
+			team_id: "tm_1",
+			team_position: "worker",
+			cwd: "/repo",
+			command: "worker 2 t_worker_2",
+		});
+		const [workspaceId] = (second.backend_pane_id as string).split("/");
+		await runner.closePane({ session: "ck-test", paneId: "w1-1" });
+		const restored = new HerdrBackend({ runner, sessionName: "ck-test" });
+		restored.restorePaneHandle?.(first);
+		restored.restorePaneHandle?.(second);
+
+		await expect(restored.killPane("t_worker_1")).rejects.toThrow("ambiguous");
+
+		expect(await restored.isAlive("t_worker_2")).toBe(true);
+		expect(await runner.listPanes({ session: "ck-test", workspaceId })).toHaveLength(1);
+	});
+
 	test("uses pane transcript identity to avoid closing the wrong compacted same-tab pane", async () => {
 		const runner = new FakeHerdrRunner();
 		const backend = new HerdrBackend({ runner, sessionName: "ck-test" });

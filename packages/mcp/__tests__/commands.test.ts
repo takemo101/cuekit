@@ -3782,7 +3782,9 @@ describe("delete-tasks", () => {
 		if (!submit.accepted) throw new Error("task setup failed");
 		await runCancelTasks(ctx, { task_ids: [submit.task_id] });
 		const closedTeams: string[] = [];
-		(ctx.panes as typeof ctx.panes & { killTeamSession: (teamId: string) => Promise<void> }).killTeamSession = async (teamId: string) => {
+		(
+			ctx.panes as typeof ctx.panes & { killTeamSession: (teamId: string) => Promise<void> }
+		).killTeamSession = async (teamId: string) => {
 			closedTeams.push(teamId);
 		};
 
@@ -3804,7 +3806,9 @@ describe("delete-tasks", () => {
 		});
 		if (!submit.accepted) throw new Error("task setup failed");
 		await runCancelTasks(ctx, { task_ids: [submit.task_id] });
-		(ctx.panes as typeof ctx.panes & { killTeamSession: (teamId: string) => Promise<void> }).killTeamSession = async () => {
+		(
+			ctx.panes as typeof ctx.panes & { killTeamSession: (teamId: string) => Promise<void> }
+		).killTeamSession = async () => {
 			throw new Error("close failed");
 		};
 

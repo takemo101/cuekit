@@ -101,7 +101,11 @@ export class HerdrBackend implements MultiplexerBackend {
 		if (handle.backend_kind !== this.kind) return;
 		const coordinate = parseHerdrBackendPaneId(handle.backend_session, handle.backend_pane_id);
 		if (!coordinate) return;
-		const restored = this.restoreTaskHandleMetadata(handle.task_id, coordinate, handle.backend_label);
+		const restored = this.restoreTaskHandleMetadata(
+			handle.task_id,
+			coordinate,
+			handle.backend_label,
+		);
 		this.taskHandles.set(handle.task_id, restored);
 		if (restored.teamId) {
 			const workspace =
@@ -330,17 +334,17 @@ export class HerdrBackend implements MultiplexerBackend {
 		if (panes.length === 0) return;
 		const panesInStoredTab = panes.filter((pane) => pane.tab_id === handle.tabId);
 		if (panesInStoredTab.length === 0) return;
-		if (panesInStoredTab.length === 1) {
+
+		const verified = await this.findVerifiedPaneForTask(handle, panesInStoredTab);
+		if (verified.pane) {
+			await this.runner.closePane({ session: handle.session, paneId: verified.pane.pane_id });
+			return;
+		}
+		if (panesInStoredTab.length === 1 && !verified.foundOtherKnownTask) {
 			await this.runner.closePane({
 				session: handle.session,
 				paneId: panesInStoredTab[0]?.pane_id as string,
 			});
-			return;
-		}
-
-		const verified = await this.findVerifiedPaneForTask(handle, panesInStoredTab);
-		if (verified) {
-			await this.runner.closePane({ session: handle.session, paneId: verified.pane_id });
 			return;
 		}
 		throw new Error(
@@ -351,8 +355,15 @@ export class HerdrBackend implements MultiplexerBackend {
 	private async findVerifiedPaneForTask(
 		handle: HerdrTaskHandle,
 		panes: Array<{ pane_id: string; tab_id: string; workspace_id: string }>,
-	): Promise<{ pane_id: string; tab_id: string; workspace_id: string } | null> {
+	): Promise<{
+		pane: { pane_id: string; tab_id: string; workspace_id: string } | null;
+		foundOtherKnownTask: boolean;
+	}> {
 		const matches = [];
+		let foundOtherKnownTask = false;
+		const otherTaskIds = [...this.taskHandles.values()]
+			.filter((candidate) => candidate.taskId !== handle.taskId)
+			.map((candidate) => candidate.taskId);
 		for (const pane of panes) {
 			try {
 				const capture = await this.runner.readPane({
@@ -362,11 +373,20 @@ export class HerdrBackend implements MultiplexerBackend {
 					lines: DEFAULT_CAPTURE_SCROLLBACK,
 				});
 				if (capture.text.includes(handle.taskId)) matches.push(pane);
+				if (otherTaskIds.some((taskId) => capture.text.includes(taskId))) {
+					foundOtherKnownTask = true;
+				}
 			} catch {
 				// Treat unreadable panes as unverified.
 			}
 		}
-		return matches.length === 1 ? (matches[0] as { pane_id: string; tab_id: string; workspace_id: string }) : null;
+		return {
+			pane:
+				matches.length === 1
+					? (matches[0] as { pane_id: string; tab_id: string; workspace_id: string })
+					: null,
+			foundOtherKnownTask,
+		};
 	}
 
 	private async hasLivePaneInPositionTab(
@@ -463,10 +483,9 @@ export class HerdrBackend implements MultiplexerBackend {
 					workspaceId: handle.workspaceId,
 				});
 				const panesInTab = panes.filter((candidate) => candidate.tab_id === handle.tabId);
-				if (panesInTab.length > 1) {
-					const verified = await this.findVerifiedPaneForTask(handle, panesInTab);
-					if (verified?.pane_id !== pane.pane_id) return null;
-				}
+				const verified = await this.findVerifiedPaneForTask(handle, panesInTab);
+				if (verified.pane) return verified.pane.pane_id === pane.pane_id ? handle : null;
+				if (verified.foundOtherKnownTask) return null;
 			}
 			return handle;
 		} catch {
@@ -479,8 +498,8 @@ export class HerdrBackend implements MultiplexerBackend {
 				handle,
 				panes.filter((candidate) => candidate.tab_id === handle.tabId),
 			);
-			if (!verified) return null;
-			handle.paneId = verified.pane_id;
+			if (!verified.pane) return null;
+			handle.paneId = verified.pane.pane_id;
 			return handle;
 		}
 	}
