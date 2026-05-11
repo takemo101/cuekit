@@ -291,7 +291,7 @@ export class FakeHerdrRunner implements HerdrRunner {
 	async closePane(params: { session: string; paneId: string }): Promise<void> {
 		this.calls.push({ method: "closePane", params: { ...params } });
 		const located = this.findWorkspaceForPane(params.session, params.paneId);
-		if (!located) return;
+		if (!located) throw new Error(`pane_not_found: ${params.paneId}`);
 		located.workspace.panes.splice(located.paneIndex, 1);
 		this.compactPaneIds(located.workspace);
 	}

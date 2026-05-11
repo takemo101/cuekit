@@ -149,7 +149,7 @@ export class HerdrBackend implements MultiplexerBackend {
 				workspaceId: handle.workspaceId,
 			});
 		} else {
-			await this.runner.closePane({ session: handle.session, paneId: handle.paneId });
+			await this.closeTeamPane(handle);
 		}
 		this.taskHandles.delete(task_id);
 	}
@@ -318,6 +318,24 @@ export class HerdrBackend implements MultiplexerBackend {
 			tabId: positionTab.tabId,
 			paneId,
 		};
+	}
+
+	private async closeTeamPane(handle: HerdrTaskHandle): Promise<void> {
+		try {
+			await this.runner.closePane({ session: handle.session, paneId: handle.paneId });
+			return;
+		} catch (error) {
+			const panes = await this.runner.listPanes({
+				session: handle.session,
+				workspaceId: handle.workspaceId,
+			});
+			if (panes.length === 0) return;
+			if (panes.length === 1) {
+				await this.runner.closePane({ session: handle.session, paneId: panes[0]?.pane_id as string });
+				return;
+			}
+			throw error;
+		}
 	}
 
 	private async hasLivePaneInPositionTab(
