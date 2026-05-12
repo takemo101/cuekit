@@ -310,12 +310,14 @@ Top-level keys are strict: unknown top-level keys are rejected.
 
 Supported events:
 
+- `on_task_start` — task starts running
 - `on_task_complete` — task reaches terminal status `completed`
 - `on_task_fail` — task reaches terminal status `failed`
 - `on_task_cancel` — task is cancelled
 - `on_task_timeout` — task reaches terminal status `timed_out`
-- `on_team_start` — team starts (coordinator task submitted)
-- `on_team_complete` — all team tasks reach a terminal status
+- `on_task_block` — task reaches terminal status `blocked`
+- `on_team_start` — first task is accepted for a team, regardless of submit path or position
+- `on_team_complete` — all non-empty team tasks reach a terminal status
 
 Each event accepts either a single hook definition or an array of definitions. When an array is provided, all hooks run concurrently (fire-and-forget) and independently.
 
@@ -328,6 +330,9 @@ Each hook definition is an object with:
 
 ```yaml
 hooks:
+  on_task_start:
+    command: "osascript -e 'display notification \"Started: $CUEKIT_OBJECTIVE\" with title \"cuekit\"'"
+    timeout: 10
   on_task_complete:
     - command: "osascript -e 'display notification \"Done: $CUEKIT_OBJECTIVE\" with title \"cuekit\"'"
       timeout: 10
@@ -337,13 +342,13 @@ hooks:
 
 ### Environment variables
 
-Hooks receive event metadata via environment variables:
+Hooks receive event metadata via environment variables. Task lifecycle hooks include fields such as `CUEKIT_TASK_ID` and `CUEKIT_OBJECTIVE`; task hooks also expose `CUEKIT_TEAM_ID` when the task belongs to a team.
 
 | Variable | Description |
 |----------|-------------|
 | `CUEKIT_EVENT` | Event name, e.g. `on_task_complete` |
 | `CUEKIT_TASK_ID` | Task ID |
-| `CUEKIT_STATUS` | Terminal status: `completed`, `failed`, `cancelled`, `timed_out` |
+| `CUEKIT_STATUS` | Task status: `running`, `completed`, `failed`, `cancelled`, `timed_out`, `blocked` |
 | `CUEKIT_AGENT_KIND` | Agent kind, e.g. `claude-code`, `pi` |
 | `CUEKIT_AGENT_MODEL` | Model identifier (if known) |
 | `CUEKIT_OBJECTIVE` | Task objective (truncated to 500 chars) |
@@ -369,7 +374,18 @@ hooks:
   on_task_timeout:
     command: "osascript -e 'display notification \"Timed out: $CUEKIT_OBJECTIVE\" with title \"cuekit\"'"
     timeout: 10
+  on_task_block:
+    command: "osascript -e 'display notification \"Blocked: $CUEKIT_OBJECTIVE\" with title \"cuekit\"'"
+    timeout: 10
+  on_team_start:
+    command: "osascript -e 'display notification \"Team started: $CUEKIT_TEAM_ID\" with title \"cuekit\"'"
+    timeout: 10
+  on_team_complete:
+    command: "osascript -e 'display notification \"Team done: $CUEKIT_TEAM_ID\" with title \"cuekit\"'"
+    timeout: 10
 ```
+
+> Tip: append `subtitle \"$CUEKIT_TASK_ID\"` to the `display notification` clause to surface the task ID as a separate macOS notification subtitle alongside the objective.
 
 ### Example: Slack webhook
 

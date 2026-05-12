@@ -1,9 +1,11 @@
 import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
+import { HookDispatcher } from "@cuekit/adapters";
 import { type JobError, JobErrorSchema, TaskSpecSchema, type TaskStatus } from "@cuekit/core";
 import { appendTaskEvent, getTaskById, type Task, updateTaskStatus } from "@cuekit/store";
 import { z } from "incur";
 import { cleanupAdapterTask } from "../adapter-cleanup.ts";
 import type { CommandContext } from "../command-context.ts";
+import { fireTeamCompleteHookIfDone } from "../team-hooks.ts";
 
 const REPORT_TYPES = [
 	"progress",
@@ -141,7 +143,20 @@ export async function runReportTaskEvent(
 				payload: payload.value,
 			});
 			const terminalStatus = TERMINAL_REPORT_STATUS[input.type];
+			const shouldFireTerminalHook = terminalStatus !== undefined && task.status !== terminalStatus;
 			if (terminalStatus) updateTaskStatus(ctx.db, task_id, terminalStatus);
+			// Fire hooks for terminal self-reports so that notifications
+			// trigger even when the child reports its own completion. Same-status
+			// duplicate reports append events but do not represent a new transition.
+			if (shouldFireTerminalHook && ctx.hooks) {
+				const updated = getTaskById(ctx.db, task_id);
+				const event = HookDispatcher.taskEventName(terminalStatus);
+				if (updated && event) {
+					const env = HookDispatcher.taskEnv(updated);
+					env.CUEKIT_EVENT = event;
+					ctx.hooks.fire(event, env);
+				}
+			}
 		})();
 	} catch (cause) {
 		return error(
@@ -151,6 +166,9 @@ export async function runReportTaskEvent(
 	}
 
 	const updated = getTaskById(ctx.db, task_id);
+	if (TERMINAL_REPORT_STATUS[input.type] && updated?.team_id) {
+		fireTeamCompleteHookIfDone(ctx, updated.team_id);
+	}
 
 	// Opt-in pane cleanup. The default contract is "reporting does not close
 	// your pane or process"; setting `adapter_options.cleanup_on_terminal_report`

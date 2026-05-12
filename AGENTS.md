@@ -53,7 +53,7 @@ Teams は関連子タスクの軽量ビュー、Strategies は開発の playbook
 
 - `@cuekit/core` — プロトコル型 / Zod schema / lifecycle ヘルパ。**runtime 依存禁止**。
 - `@cuekit/store` — SQLite 永続化 (`~/.cuekit/state.db`)、マイグレーション、行デコード。
-- `@cuekit/adapters` — ランタイムバインディング (`MultiplexerBackend` + tmux/zellij 実装 + claude-code / pi / opencode / `jcode repl` / gemini)。
+- `@cuekit/adapters` — ランタイムバインディング (`MultiplexerBackend` + tmux/zellij/herdr 実装 + claude-code / pi / opencode / `jcode repl` / gemini)。
 - `@cuekit/agent-profiles` — role 解決 (project → user → builtin)。
 - `@cuekit/project-config` — `.cuekit.yaml` loader / validator / defaults。
 - `@cuekit/mcp` — MCP サーバと grouped tool projection。

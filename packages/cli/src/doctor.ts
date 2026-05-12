@@ -1,7 +1,12 @@
 import { accessSync, constants, existsSync, statSync } from "node:fs";
 import { dirname } from "node:path";
 import { loadProjectConfig as loadProjectConfigFromDisk } from "@cuekit/project-config";
-import { DEFAULT_DB_PATH } from "@cuekit/store";
+import {
+	DEFAULT_DB_PATH,
+	findInvalidTaskRows,
+	openDatabase,
+	repairTaskSqliteTimestamps,
+} from "@cuekit/store";
 import pkg from "../package.json" with { type: "json" };
 import { formatCheckLine } from "./output.ts";
 
@@ -31,8 +36,13 @@ export type LatestReleaseResult = { ok: true; tag: string } | { ok: false; reaso
 export type RunDoctorOptions = {
 	cwd?: string;
 	env?: Record<string, string | undefined>;
+	fix?: boolean;
 	exec?: DoctorExec;
 	checkWritableState?: (env: Record<string, string | undefined>) => Promise<WritableStateResult>;
+	checkStateDbTaskRows?: (
+		env: Record<string, string | undefined>,
+		fix: boolean,
+	) => Promise<DoctorCheck>;
 	loadProjectConfig?: (cwd: string) => DoctorProjectConfigResult;
 	getCurrentVersion?: () => string | undefined;
 	getLatestRelease?: () => Promise<LatestReleaseResult>;
@@ -95,6 +105,56 @@ async function defaultCheckWritableState(
 		return { ok: true, path };
 	} catch (error) {
 		return { ok: false, path, reason: error instanceof Error ? error.message : String(error) };
+	}
+}
+
+async function defaultCheckStateDbTaskRows(
+	env: Record<string, string | undefined>,
+	fix: boolean,
+): Promise<DoctorCheck> {
+	const path =
+		env.CUEKIT_DB_PATH && env.CUEKIT_DB_PATH.length > 0 ? env.CUEKIT_DB_PATH : DEFAULT_DB_PATH;
+	if (path === ":memory:") {
+		return { level: "ok", label: "state db task rows", detail: "skipped (:memory:)" };
+	}
+	if (!existsSync(path)) {
+		return { level: "ok", label: "state db task rows", detail: "not created yet" };
+	}
+	let db: ReturnType<typeof openDatabase> | undefined;
+	try {
+		db = openDatabase({ path });
+		const repaired = fix ? repairTaskSqliteTimestamps(db) : 0;
+		const invalid = findInvalidTaskRows(db);
+		if (invalid.length === 0) {
+			return {
+				level: "ok",
+				label: "state db task rows",
+				detail: repaired > 0 ? `repaired ${repaired} SQLite timestamp(s)` : "healthy",
+			};
+		}
+		const examples = invalid
+			.slice(0, 3)
+			.map((row) => row.id)
+			.join(", ");
+		return {
+			level: "warn",
+			label: "state db task rows",
+			detail: `${invalid.length} invalid task row(s)${examples ? ` (${examples})` : ""}${
+				fix ? " after repair" : " (run cuekit doctor --fix)"
+			}`,
+		};
+	} catch (error) {
+		return {
+			level: "warn",
+			label: "state db task rows",
+			detail: `could not inspect (${error instanceof Error ? error.message : String(error)})`,
+		};
+	} finally {
+		try {
+			db?.close();
+		} catch {
+			// ignore close errors in diagnostics
+		}
 	}
 }
 
@@ -175,6 +235,7 @@ function renderDoctor(checks: DoctorCheck[]): string {
 
 export async function runDoctor(options: RunDoctorOptions = {}): Promise<DoctorResult> {
 	const env = options.env ?? process.env;
+	const fix = options.fix === true;
 	const exec = options.exec ?? defaultDoctorExec;
 	const checks: DoctorCheck[] = [];
 
@@ -299,6 +360,7 @@ export async function runDoctor(options: RunDoctorOptions = {}): Promise<DoctorR
 					detail: `${writableState.path}: ${writableState.reason}`,
 				},
 	);
+	checks.push(await (options.checkStateDbTaskRows ?? defaultCheckStateDbTaskRows)(env, fix));
 
 	const projectConfig = (options.loadProjectConfig ?? defaultLoadProjectConfig)(
 		options.cwd ?? process.cwd(),

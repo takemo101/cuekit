@@ -14,6 +14,7 @@ import {
 	ManualSteerHintSchema,
 	TeamAttentionItemSchema,
 } from "../team-attention.ts";
+import { fireTeamCompleteHookIfDone } from "../team-hooks.ts";
 import { buildTeamSummary } from "../team-status.ts";
 
 const TERMINAL_REPORT_TYPES = new Set(["completed", "failed", "blocked"]);
@@ -104,6 +105,9 @@ export function runGetTeamResult(
 	const attentionItems = buildTeamAttentionItemsFromEvents(taskEvents);
 	const manualSteerHints = buildManualSteerHintsFromAttentionItems(attentionItems);
 	const summary = buildTeamSummary(team, [...tasksById.values()]);
+	if (tasks.length > 0 && tasks.every((task) => isTerminalTaskStatus(task.status))) {
+		fireTeamCompleteHookIfDone(ctx, team.id);
+	}
 	const cleanupHint = cleanupHintForTeam(
 		team.id,
 		tasks.filter((task) => isTerminalTaskStatus(task.status)).length,

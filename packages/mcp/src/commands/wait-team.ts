@@ -4,6 +4,7 @@ import { getSessionById, getTaskTeamById, listTasksByTeam, type Task } from "@cu
 import { z } from "incur";
 import { cleanupHintForTeam } from "../cleanup-hints.ts";
 import type { CommandContext } from "../command-context.ts";
+import { fireTeamCompleteHookIfDone } from "../team-hooks.ts";
 import {
 	buildTeamRunSummary,
 	emptyTeamRunSummary,
@@ -157,6 +158,8 @@ export async function runWaitTeam(
 		);
 	}
 	const terminalTaskCount = latest.filter((task) => isTerminalTaskStatus(task.status)).length;
+	if (latest.length > 0 && terminalTaskCount === latest.length)
+		fireTeamCompleteHookIfDone(ctx, team.id);
 	const cleanupHint = cleanupHintForTeam(team.id, terminalTaskCount);
 	return {
 		team_id: team.id,

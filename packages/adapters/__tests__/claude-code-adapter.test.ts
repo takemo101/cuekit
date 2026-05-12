@@ -76,6 +76,28 @@ describe("submit", () => {
 		expect(runner.calls[0]?.[0]).toBe("new-session");
 	});
 
+	it("fires the configured start hook after the task starts running", async () => {
+		const fired: Array<{ event: string; env: Record<string, string> }> = [];
+		const hooked = createClaudeCodeAdapter(db, new TmuxBackend({ runner, sendKeysDelayMs: 0 }), {
+			launchCommandOverride: () => "sleep 60",
+			hooks: {
+				fire(event: string, env: Record<string, string>) {
+					fired.push({ event, env });
+				},
+			} as never,
+		});
+
+		const result = await hooked.submit({
+			spec: { agent_kind: "claude-code", objective: "x" },
+			session_id: "s1",
+		});
+
+		expect(result.ok).toBe(true);
+		expect(fired).toHaveLength(1);
+		expect(fired[0]?.event).toBe("on_task_start");
+		expect(fired[0]?.env.CUEKIT_STATUS).toBe("running");
+	});
+
 	it("generates a child reporting token, stores only its hash, and injects raw env", async () => {
 		const result = await adapter.submit({
 			spec: { agent_kind: "claude-code", objective: "Add reporting" },
@@ -177,9 +199,18 @@ describe("submit", () => {
 		expect(task?.status).toBe("running");
 	});
 
-	it("marks the task failed and returns submit_failed when tmux spawn fails", async () => {
+	it("marks the task failed, fires fail hook, and returns submit_failed when tmux spawn fails", async () => {
+		const fired: Array<{ event: string; env: Record<string, string> }> = [];
+		const hooked = createClaudeCodeAdapter(db, new TmuxBackend({ runner, sendKeysDelayMs: 0 }), {
+			launchCommandOverride: () => "sleep 60",
+			hooks: {
+				fire(event: string, env: Record<string, string>) {
+					fired.push({ event, env });
+				},
+			} as never,
+		});
 		runner.queueResponse({ stdout: "", stderr: "tmux: boom", exitCode: 1 });
-		const result = await adapter.submit({
+		const result = await hooked.submit({
 			spec: { agent_kind: "claude-code", objective: "x" },
 			session_id: "s1",
 		});
@@ -187,6 +218,9 @@ describe("submit", () => {
 		if (!result.ok) {
 			expect(result.error.code).toBe("submit_failed");
 		}
+		expect(fired).toHaveLength(1);
+		expect(fired[0]?.event).toBe("on_task_fail");
+		expect(fired[0]?.env.CUEKIT_STATUS).toBe("failed");
 	});
 
 	it("cleans up the orphan .cuekit/tasks/<id>/ dir on spawn failure (P2-6)", async () => {
@@ -397,6 +431,29 @@ describe("cancel", () => {
 		const task = getTaskById(db, result.value.task_id);
 		expect(task?.status).toBe("cancelled");
 		expect(task?.completed_at).not.toBeNull();
+	});
+
+	it("fires the configured cancel hook event name", async () => {
+		const fired: Array<{ event: string; env: Record<string, string> }> = [];
+		const hooked = createClaudeCodeAdapter(db, new TmuxBackend({ runner, sendKeysDelayMs: 0 }), {
+			launchCommandOverride: () => "sleep 60",
+			hooks: {
+				fire(event: string, env: Record<string, string>) {
+					fired.push({ event, env });
+				},
+			} as never,
+		});
+		const result = await hooked.submit({
+			spec: { agent_kind: "claude-code", objective: "x" },
+			session_id: "s1",
+		});
+		if (!result.ok) throw new Error("setup failed");
+
+		await hooked.cancel(result.value.task_id);
+
+		expect(fired.map((hook) => hook.event)).toEqual(["on_task_start", "on_task_cancel"]);
+		expect(fired[1]?.env.CUEKIT_EVENT).toBe("on_task_cancel");
+		expect(fired[1]?.env.CUEKIT_STATUS).toBe("cancelled");
 	});
 
 	it("returns invalid_state if already terminal", async () => {

@@ -204,6 +204,24 @@ describe("CuekitProjectConfigSchema", () => {
 			expect(parsed.hooks?.on_task_complete).toEqual({ command: "echo done", timeout: 10 });
 		});
 
+		it("accepts all documented hook event keys", () => {
+			const parsed = CuekitProjectConfigSchema.parse({
+				hooks: {
+					on_task_start: { command: "echo start" },
+					on_task_complete: { command: "echo complete" },
+					on_task_fail: { command: "echo fail" },
+					on_task_cancel: { command: "echo cancel" },
+					on_task_timeout: { command: "echo timeout" },
+					on_task_block: { command: "echo block" },
+					on_team_start: { command: "echo team-start" },
+					on_team_complete: { command: "echo team-complete" },
+				},
+			});
+			expect(parsed.hooks?.on_task_start).toEqual({ command: "echo start" });
+			expect(parsed.hooks?.on_task_block).toEqual({ command: "echo block" });
+			expect(parsed.hooks?.on_team_start).toEqual({ command: "echo team-start" });
+		});
+
 		it("accepts an array of hook definitions", () => {
 			const parsed = CuekitProjectConfigSchema.parse({
 				hooks: {

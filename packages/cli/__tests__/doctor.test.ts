@@ -161,6 +161,48 @@ describe("cuekit doctor", () => {
 		expect(result.stdout).toContain("  cuekit update");
 	});
 
+	it("warns about invalid task rows and suggests doctor --fix", async () => {
+		const result = await runDoctor({
+			cwd: "/repo",
+			env: {},
+			exec: okExec,
+			checkWritableState: async () => ({ ok: true, path: "~/.cuekit/state.db" }),
+			checkStateDbTaskRows: async () => ({
+				level: "warn",
+				label: "state db task rows",
+				detail: "1 invalid task row (run cuekit doctor --fix)",
+			}),
+			loadProjectConfig: () => ({ ok: true, source: "config", path: "/repo/.cuekit.yaml" }),
+			getCurrentVersion: () => "v0.1.0",
+			getLatestRelease: async () => ({ ok: false, reason: "offline" }),
+		});
+
+		expect(result.exitCode).toBe(0);
+		expect(result.stdout).toContain(
+			"! state db task rows: 1 invalid task row (run cuekit doctor --fix)",
+		);
+	});
+
+	it("reports repaired task rows when doctor --fix is enabled", async () => {
+		const result = await runDoctor({
+			cwd: "/repo",
+			env: {},
+			fix: true,
+			exec: okExec,
+			checkWritableState: async () => ({ ok: true, path: "~/.cuekit/state.db" }),
+			checkStateDbTaskRows: async (_env, fix) => ({
+				level: "ok",
+				label: "state db task rows",
+				detail: fix ? "repaired 1 SQLite timestamp" : "healthy",
+			}),
+			loadProjectConfig: () => ({ ok: true, source: "config", path: "/repo/.cuekit.yaml" }),
+			getCurrentVersion: () => "v0.1.0",
+			getLatestRelease: async () => ({ ok: false, reason: "offline" }),
+		});
+
+		expect(result.stdout).toContain("✓ state db task rows: repaired 1 SQLite timestamp");
+	});
+
 	it("reports structured herdr strict probe failure without fallback", async () => {
 		const cwd = mkdtempSync(join(tmpdir(), "cuekit-doctor-"));
 		writeFileSync(

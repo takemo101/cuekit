@@ -135,7 +135,7 @@ export async function runCuekitCliBin(): Promise<void> {
 			process.stdout.write(printDoctorHelp());
 			return;
 		}
-		const result = await runDoctor();
+		const result = await runDoctor({ fix: argv.includes("--fix") });
 		process.stdout.write(result.stdout);
 		if (result.stderr) process.stderr.write(result.stderr);
 		process.exit(result.exitCode);

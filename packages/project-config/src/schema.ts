@@ -64,10 +64,12 @@ const HookEntrySchema = z.union([HookDefinitionSchema, z.array(HookDefinitionSch
 
 export const HooksConfigSchema = z
 	.object({
+		on_task_start: HookEntrySchema.optional(),
 		on_task_complete: HookEntrySchema.optional(),
 		on_task_fail: HookEntrySchema.optional(),
 		on_task_cancel: HookEntrySchema.optional(),
 		on_task_timeout: HookEntrySchema.optional(),
+		on_task_block: HookEntrySchema.optional(),
 		on_team_start: HookEntrySchema.optional(),
 		on_team_complete: HookEntrySchema.optional(),
 	})

@@ -1,4 +1,4 @@
-import type { HooksConfig, Logger } from "@cuekit/core";
+import type { HooksConfig, Logger, TaskStatus } from "@cuekit/core";
 import type { Task } from "@cuekit/store";
 
 const DEFAULT_HOOK_TIMEOUT_MS = 30_000;
@@ -27,10 +27,13 @@ export class HookDispatcher {
 	}
 
 	private expandEnvVars(command: string, env: Record<string, string>): string {
-		return command.replace(/\$([A-Za-z_][A-Za-z0-9_]*)|\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (match, var1, var2) => {
-			const key = var1 || var2;
-			return env[key] ?? process.env[key] ?? match;
-		});
+		return command.replace(
+			/\$([A-Za-z_][A-Za-z0-9_]*)|\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g,
+			(match, var1, var2) => {
+				const key = var1 || var2;
+				return env[key] ?? process.env[key] ?? match;
+			},
+		);
 	}
 
 	private fireOne(
@@ -59,14 +62,16 @@ export class HookDispatcher {
 			}, timeoutMs);
 
 			proc.exited.then(
-				(exitCode) => {
+				async (exitCode) => {
 					clearTimeout(timeoutId);
 					const duration = Date.now() - startTime;
 					if (exitCode !== 0) {
+						const stderrText = await new Response(proc.stderr).text();
 						this.logger?.warn("hook exited with non-zero code", {
 							event,
 							exitCode,
 							duration_ms: duration,
+							stderr: stderrText,
 						});
 					}
 				},
@@ -85,6 +90,40 @@ export class HookDispatcher {
 				reason: error instanceof Error ? error.message : String(error),
 			});
 		}
+	}
+
+	/** Canonical hook event names use config keys, not raw task statuses. */
+	static taskEventName(status: TaskStatus): keyof HooksConfig | undefined {
+		if (status === "running") return "on_task_start";
+		if (status === "completed") return "on_task_complete";
+		if (status === "failed") return "on_task_fail";
+		if (status === "cancelled") return "on_task_cancel";
+		if (status === "timed_out") return "on_task_timeout";
+		if (status === "blocked") return "on_task_block";
+		return undefined;
+	}
+
+	static teamEnv(team: {
+		id: string;
+		session_id: string;
+		title: string;
+		objective: string | null;
+		metadata_json: string | null;
+		created_at: string;
+		updated_at: string;
+	}): Record<string, string> {
+		const env: Record<string, string> = {
+			CUEKIT_EVENT: "",
+			CUEKIT_TEAM_ID: team.id,
+			CUEKIT_SESSION_ID: team.session_id,
+			CUEKIT_OBJECTIVE: truncate(team.objective ?? team.title, 500),
+		};
+		const strategy = parseStrategyFromMetadata(team.metadata_json);
+		if (strategy) env.CUEKIT_STRATEGY = strategy;
+		const start = new Date(team.created_at).getTime();
+		const end = new Date(team.updated_at).getTime();
+		if (!Number.isNaN(start) && !Number.isNaN(end)) env.CUEKIT_DURATION_MS = String(end - start);
+		return env;
 	}
 
 	/** Build environment variables from a terminal task. */
@@ -113,7 +152,7 @@ export class HookDispatcher {
 
 function truncate(value: string, max: number): string {
 	if (value.length <= max) return value;
-	return value.slice(0, max - 3) + "...";
+	return `${value.slice(0, max - 3)}...`;
 }
 
 function parseStrategyFromSpec(specJson: string | null): string | undefined {
@@ -121,6 +160,17 @@ function parseStrategyFromSpec(specJson: string | null): string | undefined {
 	try {
 		const spec = JSON.parse(specJson) as Record<string, unknown>;
 		const strategy = spec.strategy;
+		return typeof strategy === "string" && strategy.length > 0 ? strategy : undefined;
+	} catch {
+		return undefined;
+	}
+}
+
+function parseStrategyFromMetadata(metadataJson: string | null): string | undefined {
+	if (!metadataJson) return undefined;
+	try {
+		const metadata = JSON.parse(metadataJson) as Record<string, unknown>;
+		const strategy = metadata.strategy;
 		return typeof strategy === "string" && strategy.length > 0 ? strategy : undefined;
 	} catch {
 		return undefined;

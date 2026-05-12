@@ -217,7 +217,7 @@ multiplexer:
   strict: false
 ```
 
-Herdr uses **workspaces** instead of sessions. Solo tasks get one workspace each; team tasks share one workspace with **named tabs per position** (coordinator, worker, reviewer). Attach uses `herdr --session <name>`.
+Herdr uses **workspaces** instead of sessions. Solo tasks get one workspace each; team tasks share one workspace with **named tabs per position** (for example, coordinator, worker, reviewer). Attach uses `herdr --session <name>`.
 
 Key differences:
 - **Team model**: one workspace per team with position-named tabs; same position shares a tab, different positions get separate tabs.

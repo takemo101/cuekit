@@ -10,10 +10,12 @@ import {
 	createTask,
 	DEFAULT_LIST_TASKS_LIMIT,
 	deleteTask,
+	findInvalidTaskRows,
 	getTaskById,
 	listTaskEvents,
 	listTasks,
 	listTasksBySession,
+	repairTaskSqliteTimestamps,
 	updateTaskChildTokenHash,
 	updateTaskNativeRef,
 	updateTaskRefs,
@@ -663,6 +665,50 @@ describe("listTasks (cross-session filter + keyset pagination)", () => {
 		const updatedAts = rows.map((t) => t.updated_at);
 		const sorted = [...updatedAts].sort((a, b) => b.localeCompare(a));
 		expect(updatedAts).toEqual(sorted);
+	});
+
+	it("skips corrupt rows instead of failing the whole list", async () => {
+		await seed(2);
+		db.prepare("update tasks set updated_at = '2026-05-12 13:53:07' where id = ?").run("s1-pi-0");
+
+		const rows = listTasks(db, { limit: 10 });
+
+		expect(rows.map((row) => row.id)).toEqual(["s1-pi-1"]);
+		expect(() => getTaskById(db, "s1-pi-0")).toThrow(/Invalid ISO datetime/);
+	});
+
+	it("continues past corrupt rows until the requested list page has valid rows", async () => {
+		await seed(3);
+		db.prepare("update tasks set updated_at = '2099-05-12 13:53:07' where id = ?").run("s1-pi-2");
+
+		const rows = listTasks(db, { limit: 1 });
+
+		expect(rows.map((row) => row.id)).toEqual(["s1-pi-1"]);
+	});
+
+	it("detects and repairs SQLite-formatted task timestamps", async () => {
+		await seed(1);
+		db.prepare(
+			"update tasks set created_at = '2026-05-12 13:53:06.123', updated_at = '2026-05-12 13:53:07', started_at = '2026-05-12 13:53:08', completed_at = '2026-05-12 13:53:09' where id = ?",
+		).run("s1-pi-0");
+
+		expect(findInvalidTaskRows(db).map((row) => row.id)).toEqual(["s1-pi-0"]);
+		expect(repairTaskSqliteTimestamps(db)).toBe(4);
+
+		const repaired = getTaskById(db, "s1-pi-0");
+		expect(findInvalidTaskRows(db)).toEqual([]);
+		expect(repaired?.created_at).toBe("2026-05-12T13:53:06.123Z");
+		expect(repaired?.updated_at).toBe("2026-05-12T13:53:07.000Z");
+		expect(repaired?.started_at).toBe("2026-05-12T13:53:08.000Z");
+		expect(repaired?.completed_at).toBe("2026-05-12T13:53:09.000Z");
+	});
+
+	it("does not repair impossible SQLite-shaped timestamps", async () => {
+		await seed(1);
+		db.prepare("update tasks set updated_at = '2026-99-99 99:99:99' where id = ?").run("s1-pi-0");
+
+		expect(repairTaskSqliteTimestamps(db)).toBe(0);
+		expect(findInvalidTaskRows(db).map((row) => row.id)).toEqual(["s1-pi-0"]);
 	});
 
 	it("filters by status and still paginates", async () => {

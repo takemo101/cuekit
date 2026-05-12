@@ -368,6 +368,40 @@ describe("submit-team-tasks", () => {
 		expect(getTaskById(db, result.accepted[0]?.task_id ?? "")?.team_id).toBe("tm_1");
 	});
 
+	it("fires on_team_start once when the first team tasks are accepted", async () => {
+		createSession(db, {
+			id: "s_team_hook_start",
+			project_root: "/p",
+			worktree_path: "/w",
+			parent_agent_kind: "pi",
+		});
+		createTaskTeam(db, {
+			id: "tm_hook_start",
+			session_id: "s_team_hook_start",
+			title: "Team",
+			metadata: { strategy: "bugfix" },
+		});
+		const fired: Array<{ event: string; env: Record<string, string> }> = [];
+		ctx.hooks = {
+			fire(event: string, env: Record<string, string>) {
+				fired.push({ event, env });
+			},
+		} as never;
+
+		await runSubmitTeamTasks(ctx, {
+			team_id: "tm_hook_start",
+			tasks: [{ objective: "Work", agent_kind: "claude-code", position: "worker" }],
+		});
+		await runSubmitTeamTasks(ctx, {
+			team_id: "tm_hook_start",
+			tasks: [{ objective: "Review", agent_kind: "claude-code", position: "reviewer" }],
+		});
+
+		expect(fired.map((hook) => hook.event)).toEqual(["on_team_start"]);
+		expect(fired[0]?.env.CUEKIT_TEAM_ID).toBe("tm_hook_start");
+		expect(fired[0]?.env.CUEKIT_STRATEGY).toBe("bugfix");
+	});
+
 	it("team defaults: applies submit agent and model when team task omits them", async () => {
 		const root = mkdtempSync(join(tmpdir(), "cuekit-team-submit-defaults-"));
 		try {
@@ -860,6 +894,79 @@ describe("wait-team and cleanup-team", () => {
 		});
 		expect(result.cleanup_hint).toContain("cuekit_cleanup");
 		expect(result.cleanup_hint).toContain("tm_1");
+	});
+
+	it("fires on_team_complete once when all team tasks are terminal", async () => {
+		createSession(db, {
+			id: "s_team_hook_complete",
+			project_root: "/p",
+			worktree_path: "/w",
+			parent_agent_kind: "pi",
+		});
+		createTaskTeam(db, {
+			id: "tm_hook_complete",
+			session_id: "s_team_hook_complete",
+			title: "Team",
+			metadata: { strategy: "bugfix" },
+		});
+		createTask(db, {
+			id: "t_hook_complete",
+			session_id: "s_team_hook_complete",
+			agent_kind: "claude-code",
+			team_id: "tm_hook_complete",
+			objective: "done",
+			status: "completed",
+		});
+		const fired: Array<{ event: string; env: Record<string, string> }> = [];
+		ctx.hooks = {
+			fire(event: string, env: Record<string, string>) {
+				fired.push({ event, env });
+			},
+		} as never;
+
+		await runWaitTeam(ctx, { team_id: "tm_hook_complete", timeout_ms: 0 });
+		await runWaitTeam(ctx, { team_id: "tm_hook_complete", timeout_ms: 0 });
+
+		expect(fired.map((hook) => hook.event)).toEqual(["on_team_complete"]);
+		expect(fired[0]?.env.CUEKIT_TEAM_ID).toBe("tm_hook_complete");
+		expect(fired[0]?.env.CUEKIT_STRATEGY).toBe("bugfix");
+	});
+
+	it("fires on_team_complete during cleanup before deleting terminal task rows", async () => {
+		createSession(db, {
+			id: "s_team_hook_cleanup_complete",
+			project_root: "/p",
+			worktree_path: "/w",
+			parent_agent_kind: "pi",
+		});
+		createTaskTeam(db, {
+			id: "tm_hook_cleanup_complete",
+			session_id: "s_team_hook_cleanup_complete",
+			title: "Team",
+			metadata: { strategy: "cleanup" },
+		});
+		createTask(db, {
+			id: "t_hook_cleanup_complete",
+			session_id: "s_team_hook_cleanup_complete",
+			agent_kind: "claude-code",
+			team_id: "tm_hook_cleanup_complete",
+			objective: "done",
+			status: "completed",
+		});
+		const fired: Array<{ event: string; env: Record<string, string> }> = [];
+		ctx.hooks = {
+			fire(event: string, env: Record<string, string>) {
+				fired.push({ event, env });
+			},
+		} as never;
+
+		const result = await runCleanupTeam(ctx, { team_id: "tm_hook_cleanup_complete" });
+
+		expect("error" in result).toBe(false);
+		expect(fired.map((hook) => hook.event)).toEqual(["on_team_complete"]);
+		expect(fired[0]?.env.CUEKIT_TEAM_ID).toBe("tm_hook_cleanup_complete");
+		expect(fired[0]?.env.CUEKIT_STRATEGY).toBe("cleanup");
+		expect(getTaskById(db, "t_hook_cleanup_complete")).toBeNull();
 	});
 
 	it("team defaults: wait-team uses configured wait defaults and explicit input wins", async () => {
@@ -1696,6 +1803,46 @@ describe("submit-task", () => {
 		expect(listed.tasks[0]?.position).toBe("worker");
 	});
 
+	it("fires on_team_start for direct submit-task calls with team_id", async () => {
+		createSession(db, {
+			id: "s_direct_team_hook_start",
+			project_root: "/team",
+			worktree_path: "/team",
+			parent_agent_kind: "pi",
+		});
+		createTaskTeam(db, {
+			id: "tm_direct_hook_start",
+			session_id: "s_direct_team_hook_start",
+			title: "Team",
+			metadata: { strategy: "direct" },
+		});
+		const fired: Array<{ event: string; env: Record<string, string> }> = [];
+		ctx.hooks = {
+			fire(event: string, env: Record<string, string>) {
+				fired.push({ event, env });
+			},
+		} as never;
+
+		await runSubmitTask(ctx, {
+			objective: "Do team work",
+			agent_kind: "claude-code",
+			session_id: "s_direct_team_hook_start",
+			team_id: "tm_direct_hook_start",
+			position: "worker",
+		});
+		await runSubmitTask(ctx, {
+			objective: "Do more team work",
+			agent_kind: "claude-code",
+			session_id: "s_direct_team_hook_start",
+			team_id: "tm_direct_hook_start",
+			position: "reviewer",
+		});
+
+		expect(fired.map((hook) => hook.event)).toEqual(["on_team_start"]);
+		expect(fired[0]?.env.CUEKIT_TEAM_ID).toBe("tm_direct_hook_start");
+		expect(fired[0]?.env.CUEKIT_STRATEGY).toBe("direct");
+	});
+
 	it("rejects position without team_id", async () => {
 		const result = await runSubmitTask(ctx, {
 			objective: "Do team work",
@@ -2370,8 +2517,14 @@ describe("report-task-event", () => {
 		}
 	});
 
-	it("terminal reports update task status without waiting for process exit", async () => {
+	it("terminal reports update task status and fire the configured complete hook", async () => {
 		const task_id = await submitWithChildToken();
+		const fired: Array<{ event: string; env: Record<string, string> }> = [];
+		ctx.hooks = {
+			fire(event: string, env: Record<string, string>) {
+				fired.push({ event, env });
+			},
+		} as never;
 		const result = await runReportTaskEvent(ctx, {
 			task_id,
 			child_token: "data",
@@ -2382,10 +2535,20 @@ describe("report-task-event", () => {
 		expect(result.ok).toBe(true);
 		expect(getTaskById(db, task_id)?.status).toBe("completed");
 		expect(listTaskEvents(db, task_id).map((event) => event.type)).toEqual(["completed"]);
+		expect(fired).toHaveLength(1);
+		expect(fired[0]?.event).toBe("on_task_complete");
+		expect(fired[0]?.env.CUEKIT_EVENT).toBe("on_task_complete");
+		expect(fired[0]?.env.CUEKIT_STATUS).toBe("completed");
 	});
 
-	it("failed reports set the child-declared failed status", async () => {
+	it("failed reports set the child-declared failed status and fire fail hook", async () => {
 		const task_id = await submitWithChildToken();
+		const fired: Array<{ event: string; env: Record<string, string> }> = [];
+		ctx.hooks = {
+			fire(event: string, env: Record<string, string>) {
+				fired.push({ event, env });
+			},
+		} as never;
 		const result = await runReportTaskEvent(ctx, {
 			task_id,
 			child_token: "data",
@@ -2395,10 +2558,69 @@ describe("report-task-event", () => {
 
 		expect(result.ok).toBe(true);
 		expect(getTaskById(db, task_id)?.status).toBe("failed");
+		expect(fired).toHaveLength(1);
+		expect(fired[0]?.event).toBe("on_task_fail");
 	});
 
-	it("blocked reports set the child-declared blocked status", async () => {
+	it("terminal team self-reports fire team complete when the last member finishes", async () => {
+		createSession(db, {
+			id: "s_report_team_complete",
+			project_root: "/team",
+			worktree_path: "/team",
+			parent_agent_kind: "pi",
+		});
+		createTaskTeam(db, {
+			id: "tm_report_complete",
+			session_id: "s_report_team_complete",
+			title: "Team",
+			metadata: { strategy: "report" },
+		});
+		const submit = await runSubmitTask(ctx, {
+			objective: "team work",
+			agent_kind: "claude-code",
+			session_id: "s_report_team_complete",
+			team_id: "tm_report_complete",
+			position: "worker",
+		});
+		if (!submit.accepted) throw new Error("setup failed");
+		updateTaskChildTokenHash(
+			db,
+			submit.task_id,
+			"sha256:3a6eb0790f39ac87c94f3856b2dd2c5d110e6811602261a9a923d3bb23adc8b7",
+		);
+		const fired: Array<{ event: string; env: Record<string, string> }> = [];
+		ctx.hooks = {
+			fire(event: string, env: Record<string, string>) {
+				fired.push({ event, env });
+			},
+		} as never;
+
+		await runReportTaskEvent(ctx, {
+			task_id: submit.task_id,
+			child_token: "data",
+			type: "completed",
+			message: "Done",
+		});
+		await runReportTaskEvent(ctx, {
+			task_id: submit.task_id,
+			child_token: "data",
+			type: "completed",
+			message: "Done again",
+		});
+
+		expect(fired.map((hook) => hook.event)).toEqual(["on_task_complete", "on_team_complete"]);
+		expect(fired[1]?.env.CUEKIT_TEAM_ID).toBe("tm_report_complete");
+		expect(fired[1]?.env.CUEKIT_STRATEGY).toBe("report");
+	});
+
+	it("blocked reports set the child-declared blocked status and fire block hook", async () => {
 		const task_id = await submitWithChildToken();
+		const fired: Array<{ event: string; env: Record<string, string> }> = [];
+		ctx.hooks = {
+			fire(event: string, env: Record<string, string>) {
+				fired.push({ event, env });
+			},
+		} as never;
 		const result = await runReportTaskEvent(ctx, {
 			task_id,
 			child_token: "data",
@@ -2408,6 +2630,37 @@ describe("report-task-event", () => {
 
 		expect(result.ok).toBe(true);
 		expect(getTaskById(db, task_id)?.status).toBe("blocked");
+		expect(fired).toHaveLength(1);
+		expect(fired[0]?.event).toBe("on_task_block");
+	});
+
+	it("duplicate terminal reports do not fire hooks twice", async () => {
+		const task_id = await submitWithChildToken();
+		const fired: Array<{ event: string; env: Record<string, string> }> = [];
+		ctx.hooks = {
+			fire(event: string, env: Record<string, string>) {
+				fired.push({ event, env });
+			},
+		} as never;
+
+		await runReportTaskEvent(ctx, {
+			task_id,
+			child_token: "data",
+			type: "completed",
+			message: "Done",
+		});
+		await runReportTaskEvent(ctx, {
+			task_id,
+			child_token: "data",
+			type: "completed",
+			message: "Done again",
+		});
+
+		expect(fired.map((hook) => hook.event)).toEqual(["on_task_complete"]);
+		expect(listTaskEvents(db, task_id).map((event) => event.type)).toEqual([
+			"completed",
+			"completed",
+		]);
 	});
 
 	it("accepts non-terminal help_requested and log report types", async () => {

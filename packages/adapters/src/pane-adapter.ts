@@ -3,7 +3,6 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
-import { HookDispatcher } from "./hook-dispatcher.ts";
 import {
 	type AdapterCapabilities,
 	canCancelTask,
@@ -44,6 +43,7 @@ import {
 	supportsSteeringForMode,
 } from "./adapter-options.ts";
 import { type AdapterSubmitInput, type AgentAdapter, generateTaskId } from "./agent-adapter.ts";
+import { HookDispatcher } from "./hook-dispatcher.ts";
 import type { MultiplexerBackend } from "./multiplexer-backend.ts";
 import { normalizeTaskResult } from "./result-normalizer.ts";
 import {
@@ -558,7 +558,13 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 				if (transcriptPath) {
 					updateTaskRefs(db, task_id, { transcript_ref: transcriptPath });
 				}
-				updateTaskStatus(db, task_id, "running");
+				const running = updateTaskStatus(db, task_id, "running");
+				const event = running ? HookDispatcher.taskEventName(running.status) : undefined;
+				if (running && event) {
+					const env = HookDispatcher.taskEnv(running);
+					env.CUEKIT_EVENT = event;
+					hooks?.fire(event, env);
+				}
 				return { ok: true as const, value: { task_id } };
 			};
 
@@ -574,7 +580,13 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 				) {
 					clearTaskTeamMultiplexerMetadata(db, input.team_id, panes.kind);
 				}
-				updateTaskStatus(db, task_id, "failed");
+				const failed = updateTaskStatus(db, task_id, "failed");
+				const event = failed ? HookDispatcher.taskEventName(failed.status) : undefined;
+				if (failed && event) {
+					const env = HookDispatcher.taskEnv(failed);
+					env.CUEKIT_EVENT = event;
+					hooks?.fire(event, env);
+				}
 				// Spawn failed before the child ever ran, so any
 				// `.cuekit/tasks/<id>/` dir we created above is
 				// guaranteed-empty (no transcript flushed, no sentinel
@@ -671,9 +683,12 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 						live = completed;
 						await markTerminalPane(completed);
 						if (config.onTerminal) config.onTerminal(completed, db);
-						const env = HookDispatcher.taskEnv(completed);
-						env.CUEKIT_EVENT = `on_task_${completed.status}`;
-						hooks?.fire(env.CUEKIT_EVENT, env);
+						const event = HookDispatcher.taskEventName(completed.status);
+						if (event) {
+							const env = HookDispatcher.taskEnv(completed);
+							env.CUEKIT_EVENT = event;
+							hooks?.fire(event, env);
+						}
 					}
 				};
 
@@ -726,9 +741,12 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 									live = completed;
 									await markTerminalPane(completed);
 									if (config.onTerminal) config.onTerminal(completed, db);
-									const env = HookDispatcher.taskEnv(completed);
-									env.CUEKIT_EVENT = `on_task_${completed.status}`;
-									hooks?.fire(env.CUEKIT_EVENT, env);
+									const event = HookDispatcher.taskEventName(completed.status);
+									if (event) {
+										const env = HookDispatcher.taskEnv(completed);
+										env.CUEKIT_EVENT = event;
+										hooks?.fire(event, env);
+									}
 								}
 							}
 						}
@@ -759,9 +777,12 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 								live = completed;
 								await markTerminalPane(completed);
 								if (config.onTerminal) config.onTerminal(completed, db);
-								const env = HookDispatcher.taskEnv(completed);
-								env.CUEKIT_EVENT = "on_task_timed_out";
-								hooks?.fire("on_task_timed_out", env);
+								const event = HookDispatcher.taskEventName(completed.status);
+								if (event) {
+									const env = HookDispatcher.taskEnv(completed);
+									env.CUEKIT_EVENT = event;
+									hooks?.fire(event, env);
+								}
 							}
 						}
 					}
@@ -944,9 +965,12 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 				if (finalRow) config.onTerminal(finalRow, db);
 			}
 			if (completed) {
-				const env = HookDispatcher.taskEnv(completed);
-				env.CUEKIT_EVENT = "on_task_cancelled";
-				hooks?.fire("on_task_cancelled", env);
+				const event = HookDispatcher.taskEventName(completed.status);
+				if (event) {
+					const env = HookDispatcher.taskEnv(completed);
+					env.CUEKIT_EVENT = event;
+					hooks?.fire(event, env);
+				}
 			}
 			return { ok: true, message: "cancellation requested" };
 		},

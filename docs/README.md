@@ -1,6 +1,6 @@
 # cuekit Documentation
 
-Starting point for agents and humans working on cuekit. Each subdirectory has its own index — this page only routes you to the right one.
+A starting point for agents and humans working on cuekit. Each subdirectory has its own index — this page only routes you to the right one.
 
 ## Map
 
