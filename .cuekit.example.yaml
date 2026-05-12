@@ -89,6 +89,40 @@ adapters:
     # only controls whether `-y` (yolo) is added.
     permissions: prompt
 
+# Lifecycle hooks — fire-and-forget shell commands on task/team events.
+# Commands receive metadata via environment variables:
+#   CUEKIT_EVENT, CUEKIT_TASK_ID, CUEKIT_STATUS, CUEKIT_AGENT_KIND,
+#   CUEKIT_AGENT_MODEL, CUEKIT_OBJECTIVE, CUEKIT_TEAM_ID, CUEKIT_POSITION,
+#   CUEKIT_STRATEGY, CUEKIT_SESSION_ID, CUEKIT_DURATION_MS
+# Hooks run asynchronously and never block the main workflow.
+#
+# macOS Notification Center example:
+# hooks:
+#   on_task_complete:
+#     command: "osascript -e 'display notification \"Done: $CUEKIT_OBJECTIVE\" with title \"cuekit\"'"
+#     timeout: 10
+#   on_task_fail:
+#     command: "osascript -e 'display notification \"Failed: $CUEKIT_OBJECTIVE\" with title \"cuekit\"'"
+#     timeout: 10
+#   on_task_cancel:
+#     command: "osascript -e 'display notification \"Cancelled: $CUEKIT_OBJECTIVE\" with title \"cuekit\"'"
+#     timeout: 10
+#   on_task_timeout:
+#     command: "osascript -e 'display notification \"Timed out: $CUEKIT_OBJECTIVE\" with title \"cuekit\"'"
+#     timeout: 10
+#   on_team_start:
+#     command: "osascript -e 'display notification \"Team started: $CUEKIT_TEAM_ID\" with title \"cuekit\"'"
+#     timeout: 10
+#   on_team_complete:
+#     command: "osascript -e 'display notification \"Team done: $CUEKIT_TEAM_ID\" with title \"cuekit\"'"
+#     timeout: 10
+#
+# Slack webhook example:
+# hooks:
+#   on_task_complete:
+#     command: 'curl -s -X POST -H "Content-Type: application/json" -d "{\"text\":\"Task $CUEKIT_TASK_ID completed\"}" https://hooks.slack.com/services/YOUR/WEBHOOK/URL'
+#     timeout: 10
+
 # Per-task adapter_options can opt into non-interactive batch mode:
 #   {"mode":"batch"}
 # Batch mode remains attachable for output/transcript inspection, but is not steerable.
