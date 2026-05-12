@@ -14,11 +14,15 @@ describe("HerdrBackend", () => {
 		});
 		expect(handle.backend_kind).toBe("herdr");
 		expect(handle.backend_session).toBe("ck-test");
-		expect(handle.backend_pane_id?.split("/")).toHaveLength(3);
+		expect(handle.backend_pane_id!.split("/")).toHaveLength(3);
 		expect(
-			parseHerdrNativeTaskRef(`herdr:${handle.backend_session}/${handle.backend_pane_id}`),
+			parseHerdrNativeTaskRef(`herdr:${handle.backend_session}/${handle.backend_pane_id!}`),
 		).not.toBeNull();
-		expect(backend.attachCommand("t_abc")).toEqual({ argv: ["herdr", "--session", "ck-test"] });
+		const attach1 = backend.attachCommand("t_abc");
+		expect(attach1).not.toBeNull();
+		expect(attach1!.argv[0]).toBe("sh");
+		expect(attach1!.argv[2]).toContain("workspace focus");
+		expect(attach1!.argv[2]).toContain("tab focus");
 		await expect(backend.capturePane("t_abc", { scrollbackLines: 20 })).resolves.toContain(
 			"echo hello",
 		);
@@ -47,7 +51,12 @@ describe("HerdrBackend", () => {
 
 		expect(await restored.isAlive("t_abc")).toBe(true);
 		expect(restored.sessionNameFor("t_abc")).toBe("ck-old");
-		expect(restored.attachCommand("t_abc")).toEqual({ argv: ["herdr", "--session", "ck-old"] });
+		expect(restored.sessionNameFor("t_abc")).toBe("ck-old");
+		const attach2 = restored.attachCommand("t_abc");
+		expect(attach2).not.toBeNull();
+		expect(attach2!.argv[0]).toBe("sh");
+		expect(attach2!.argv[2]).toContain("workspace focus");
+		expect(attach2!.argv[2]).toContain("tab focus");
 	});
 
 	test("restored handle validates workspace and tab before operating", async () => {
@@ -66,6 +75,14 @@ describe("HerdrBackend", () => {
 		await expect(restored.sendKeys("t_abc", "must not land")).rejects.toThrow(
 			/mismatch|not alive/i,
 		);
+	});
+
+	test("attachCommand falls back to session-only when handle is unknown", () => {
+		const runner = new FakeHerdrRunner();
+		const backend = new HerdrBackend({ runner, sessionName: "ck-test" });
+		expect(backend.attachCommand("t_unknown")).toEqual({
+			argv: ["herdr", "--session", "ck-test"],
+		});
 	});
 
 	test("team positions use named tabs inside one workspace", async () => {
