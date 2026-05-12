@@ -206,7 +206,15 @@ export class HerdrBackend implements MultiplexerBackend {
 	}
 
 	attachCommand(task_id: string): { argv: string[] } | null {
-		return { argv: ["herdr", "--session", this.sessionNameFor(task_id)] };
+		const handle = this.taskHandles.get(task_id);
+		if (!handle) {
+			return { argv: ["herdr", "--session", this.sessionNameFor(task_id)] };
+		}
+		const session = shellQuote(handle.session);
+		const workspaceId = shellQuote(handle.workspaceId);
+		const tabId = shellQuote(handle.tabId);
+		const script = `herdr --session ${session} workspace focus ${workspaceId} && herdr --session ${session} tab focus ${tabId} && exec herdr --session ${session}`;
+		return { argv: ["sh", "-c", script] };
 	}
 
 	async killTeamSession(team_id: string): Promise<void> {
