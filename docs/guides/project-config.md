@@ -303,3 +303,78 @@ Top-level keys are strict: unknown top-level keys are rejected.
 - `strategies.<name>.autonomy.allow_parallel_reviewers`: optional boolean
 - `strategies.<name>.autonomy.require_reviewer`: optional boolean
 - `strategies.<name>.autonomy.allow_skip_checks`: optional boolean
+
+## Hooks
+
+`hooks` configures fire-and-forget shell commands that run when tasks or teams reach lifecycle milestones. Hooks are executed asynchronously and never block the main workflow. Hook failures are logged as warnings but never affect the task or team operation.
+
+Supported events:
+
+- `on_task_complete` — task reaches terminal status `completed`
+- `on_task_fail` — task reaches terminal status `failed`
+- `on_task_cancel` — task is cancelled
+- `on_task_timeout` — task reaches terminal status `timed_out`
+- `on_team_start` — team starts (coordinator task submitted)
+- `on_team_complete` — all team tasks reach a terminal status
+
+Each hook is an object with:
+
+- `command` (required): shell command executed via `/bin/sh -c`
+- `timeout` (optional): maximum seconds to wait before killing the hook process (default: 30)
+
+### Environment variables
+
+Hooks receive event metadata via environment variables:
+
+| Variable | Description |
+|----------|-------------|
+| `CUEKIT_EVENT` | Event name, e.g. `on_task_complete` |
+| `CUEKIT_TASK_ID` | Task ID |
+| `CUEKIT_STATUS` | Terminal status: `completed`, `failed`, `cancelled`, `timed_out` |
+| `CUEKIT_AGENT_KIND` | Agent kind, e.g. `claude-code`, `pi` |
+| `CUEKIT_AGENT_MODEL` | Model identifier (if known) |
+| `CUEKIT_OBJECTIVE` | Task objective (truncated to 500 chars) |
+| `CUEKIT_TEAM_ID` | Team ID (if task belongs to a team) |
+| `CUEKIT_POSITION` | Team position, e.g. `coordinator`, `worker` |
+| `CUEKIT_STRATEGY` | Team strategy name (if applicable) |
+| `CUEKIT_SESSION_ID` | Session ID |
+| `CUEKIT_DURATION_MS` | Task duration in milliseconds |
+
+### Example: macOS Notification Center
+
+```yaml
+hooks:
+  on_task_complete:
+    command: "osascript -e 'display notification \"Done: $CUEKIT_OBJECTIVE\" with title \"cuekit\"'"
+    timeout: 10
+  on_task_fail:
+    command: "osascript -e 'display notification \"Failed: $CUEKIT_OBJECTIVE\" with title \"cuekit\"'"
+    timeout: 10
+  on_task_cancel:
+    command: "osascript -e 'display notification \"Cancelled: $CUEKIT_OBJECTIVE\" with title \"cuekit\"'"
+    timeout: 10
+  on_task_timeout:
+    command: "osascript -e 'display notification \"Timed out: $CUEKIT_OBJECTIVE\" with title \"cuekit\"'"
+    timeout: 10
+```
+
+### Example: Slack webhook
+
+```yaml
+hooks:
+  on_task_complete:
+    command: 'curl -s -X POST -H "Content-Type: application/json" -d "{\"text\":\"Task $CUEKIT_TASK_ID completed\"}" https://hooks.slack.com/services/YOUR/WEBHOOK/URL'
+    timeout: 10
+```
+
+### Example: sound notification
+
+```yaml
+hooks:
+  on_task_complete:
+    command: "afplay /System/Library/Sounds/Glass.aiff"
+    timeout: 5
+  on_task_fail:
+    command: "afplay /System/Library/Sounds/Sosumi.aiff"
+    timeout: 5
+```
