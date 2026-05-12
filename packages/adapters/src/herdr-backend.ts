@@ -190,13 +190,17 @@ export class HerdrBackend implements MultiplexerBackend {
 	async killPane(task_id: string): Promise<void> {
 		const handle = this.taskHandles.get(task_id);
 		if (!handle) return;
-		if (handle.cuekitOwnedWorkspace && !handle.teamId) {
-			await this.runner.closeWorkspace({
-				session: handle.session,
-				workspaceId: handle.workspaceId,
-			});
-		} else {
-			await this.closeTeamPane(handle);
+		try {
+			if (handle.cuekitOwnedWorkspace && !handle.teamId) {
+				await this.runner.closeWorkspace({
+					session: handle.session,
+					workspaceId: handle.workspaceId,
+				});
+			} else {
+				await this.closeTeamPane(handle);
+			}
+		} catch (error) {
+			if (!this.isNotFoundError(error)) throw error;
 		}
 		this.taskHandles.delete(task_id);
 	}
@@ -209,14 +213,23 @@ export class HerdrBackend implements MultiplexerBackend {
 		const workspace =
 			this.teamWorkspaces.get(team_id) ?? this.restoreTeamWorkspaceFromHandles(team_id);
 		if (!workspace) return;
-		await this.runner.closeWorkspace({
-			session: workspace.session,
-			workspaceId: workspace.workspaceId,
-		});
+		try {
+			await this.runner.closeWorkspace({
+				session: workspace.session,
+				workspaceId: workspace.workspaceId,
+			});
+		} catch (error) {
+			if (!this.isNotFoundError(error)) throw error;
+		}
 		this.teamWorkspaces.delete(team_id);
 		for (const [taskId, handle] of this.taskHandles.entries()) {
 			if (handle.teamId === team_id) this.taskHandles.delete(taskId);
 		}
+	}
+
+	private isNotFoundError(error: unknown): boolean {
+		const message = error instanceof Error ? error.message : String(error);
+		return /workspace_not_found|pane_not_found|tab_not_found|session_not_found/i.test(message);
 	}
 
 	private async withTeamSpawnLock<T>(teamId: string, operation: () => Promise<T>): Promise<T> {
