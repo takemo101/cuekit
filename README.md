@@ -15,14 +15,14 @@ cuekit is **not a workflow engine**. The parent agent stays the decision-maker; 
 ## Requirements
 
 - [Bun](https://bun.sh) ≥ 1.2
-- A terminal multiplexer on `PATH`. By default cuekit uses **tmux** (with `new-session -e` support); children run in tmux sessions you can `tmux attach` into. Alternatively, cuekit can use **[zellij](https://github.com/zellij-org/zellij)** ≥ 0.43 by setting `multiplexer.backend: zellij` in `.cuekit.yaml` — see [Multiplexer](#multiplexer) below.
+- A terminal multiplexer on `PATH`. By default cuekit uses **tmux** (with `new-session -e` support); children run in tmux sessions you can `tmux attach` into. Alternatively, cuekit can use **[zellij](https://github.com/zellij-org/zellij)** ≥ 0.43 or **[herdr](https://herdr.dev)** ≥ 0.5 by setting `multiplexer.backend: zellij` or `multiplexer.backend: herdr` in `.cuekit.yaml` — see [Multiplexer](#multiplexer) below.
 
 ## Install
 
 Pinned to a specific release tag (recommended):
 
 ```sh
-bun install -g github:takemo101/cuekit#v0.0.5
+bun install -g github:takemo101/cuekit#v0.0.7
 cuekit doctor
 cuekit mcp config   # prints the snippet to register cuekit with your MCP client
 ```
@@ -76,7 +76,8 @@ cuekit task submit \
 # → { task_id: "t_abc...", attach_hint: "tmux attach-session -t cuekit-task-t_abc..." }
 
 # Watch the child live in another terminal:
-tmux attach-session -t cuekit-task-t_abc...
+cuekit task status --task_id t_abc... --format json | jq -r '.attach_hint'
+# → use the printed attach command (tmux/zellij/herdr attach)
 
 # Steer it without attaching:
 cuekit task steer --task_id t_abc... --message "also cover exponential backoff"
@@ -133,7 +134,7 @@ c           cancel selected    d  delete terminal task / empty team
 q / Esc     quit
 ```
 
-The task detail panel's `LIVE OUTPUT` section sources from the running task's tmux pane (`tmux capture-pane`) so the rendered screen matches what `tmux attach` would show — useful for TUI children (Gemini CLI, opencode TUI) whose output gets buried by redraws in the persisted transcript. Terminal tasks fall back to the file-tail. The header indicates which source is active. See [`docs/designs/cuekit-tui-live-pane-transcript-design.md`](docs/designs/cuekit-tui-live-pane-transcript-design.md).
+The task detail panel's `LIVE OUTPUT` section sources from the running task's multiplexer pane (e.g. `tmux capture-pane`) so the rendered screen matches what `tmux attach` would show — useful for TUI children (Gemini CLI, opencode TUI) whose output gets buried by redraws in the persisted transcript. Terminal tasks fall back to the file-tail. The header indicates which source is active. See [`docs/designs/cuekit-tui-live-pane-transcript-design.md`](docs/designs/cuekit-tui-live-pane-transcript-design.md).
 
 ## MCP
 
@@ -206,13 +207,33 @@ Behavioural differences when `multiplexer.backend: zellij` is active:
 
 See [`docs/designs/cuekit-multiplexer-backend-design.md`](docs/designs/cuekit-multiplexer-backend-design.md) for the full design and the zellij team-dashboard work tracked under Phase 4.
 
+#### Herdr backend
+
+Projects can also opt into **[herdr](https://herdr.dev)** ≥ 0.5 as the multiplexer:
+
+```yaml
+multiplexer:
+  backend: herdr
+  strict: false
+```
+
+Herdr uses **workspaces** instead of sessions. Solo tasks get one workspace each; team tasks share one workspace with **named tabs per position** (coordinator, worker, reviewer). Attach uses `herdr --session <name>`.
+
+Key differences:
+- **Team model**: one workspace per team with position-named tabs; same position shares a tab, different positions get separate tabs.
+- **Pane IDs**: compacted on close (IDs may shift), so cuekit uses transcript identity verification to avoid closing the wrong pane.
+- **Cross-process persistence**: team workspace handles are persisted in `task_teams.metadata_json` so coordinator-spawned members reuse the same workspace even across process restarts.
+- **Fallback**: when herdr is missing and `strict: false`, cuekit falls back to tmux with a logged warning.
+
+See [`docs/designs/cuekit-herdr-multiplexer-backend-design.md`](docs/designs/cuekit-herdr-multiplexer-backend-design.md) for the full design.
+
 ## State
 
 | Where | What |
 |---|---|
 | `~/.cuekit/state.db` | global SQLite index — `sessions`, `tasks`, `schema_migrations`. WAL mode, `foreign_keys = ON`, one connection per process. |
 | `<worktree>/.cuekit/tasks/<task_id>/` | per-task artifacts: `transcript.txt`, runtime-emitted `result.json`, anything else the adapter drops. Stored as `transcript_ref` / `result_ref` on the task row. |
-| `cuekit-task-<id>` | one tmux session per task. Killed on terminal transition or explicit cancel. |
+| `cuekit-task-<id>` | one multiplexer session/workspace per task. Killed on terminal transition or explicit cancel. |
 
 ## Packages
 
@@ -220,7 +241,7 @@ See [`docs/designs/cuekit-multiplexer-backend-design.md`](docs/designs/cuekit-mu
 |---|---|
 | `@cuekit/core` | Protocol types, Zod schemas, lifecycle helpers. No runtime deps. |
 | `@cuekit/store` | SQLite persistence at `~/.cuekit/state.db` with migrations. |
-| `@cuekit/adapters` | Runtime bindings. v0 ships a tmux-pane backend with adapters for claude-code, pi, opencode (stub), `jcode repl`, and gemini. |
+| `@cuekit/adapters` | Runtime bindings. Ships tmux, zellij, and herdr pane backends with adapters for claude-code, pi, opencode (stub), `jcode repl`, and gemini. |
 | `@cuekit/agent-profiles` | Role-based child-agent profiles. |
 | `@cuekit/project-config` | `.cuekit.yaml` loading, validation, and defaults. |
 | `@cuekit/mcp` | MCP server and protocol/control command projection. |
@@ -251,7 +272,7 @@ bun run check       # Biome lint + format check
 bun run fix         # Biome auto-fix
 ```
 
-Tests use `FakeTmuxRunner` (exported from `@cuekit/adapters`) so the default run does not require `tmux`. A small integration suite in `@cuekit/adapters` exercises real tmux when available and skips otherwise.
+Tests use `FakeTmuxRunner` and `FakeHerdrRunner` (exported from `@cuekit/adapters`) so the default run does not require `tmux` or `herdr`. A small integration suite in `@cuekit/adapters` exercises real tmux when available and skips otherwise.
 
 ### Manual smoke tests
 
@@ -259,7 +280,7 @@ Adapter end-to-end checks against real runtimes are documented per adapter:
 
 - [jcode adapter smoke test](docs/guides/jcode-adapter.md)
 - [gemini adapter smoke test](docs/guides/gemini-adapter.md)
-- Real `claude` CLI: `just install`, then submit a task with `--agent_kind claude-code` and `tmux attach-session -t cuekit-task-<id>`. The transcript persists at `<cwd>/.cuekit/tasks/<task_id>/transcript.txt` after the session is killed.
+- Real `claude` CLI: `just install`, then submit a task with `--agent_kind claude-code` and attach via the hint from `cuekit task status --task_id <id>`. The transcript persists at `<cwd>/.cuekit/tasks/<task_id>/transcript.txt` after the session is killed.
 
 ### Cutting a release
 
@@ -285,7 +306,7 @@ bun run release:check
 | `submit_task` / `get_status` / `get_task_result` / `wait` / `cancel_tasks` | Workflow engine, kanban, swarm OS |
 | Grouped `list` / `cleanup` / `delete` MCP tools | Distributed worker pools, DAG scheduling |
 | `steer_task` (best-effort, adapter-dependent) | Remote tenancy / auth model |
-| tmux attach for every running task | Cost accounting, long-term memory |
+| tmux / zellij / herdr attach for every running task | Cost accounting, long-term memory |
 
 Full v0 protocol: [`docs/specs/README.md`](docs/specs/README.md).
 
@@ -306,8 +327,11 @@ rm -rf ~/.cuekit
 find . -name '.cuekit' -type d -prune -exec rm -rf {} +
 rm -f ./.cuekit.yaml          # if `cuekit init` was run
 
-# 4. Kill any remaining tmux sessions
+# 4. Kill any remaining multiplexer sessions
+# tmux:
 tmux ls 2>/dev/null | grep cuekit-task | cut -d: -f1 | xargs -I {} tmux kill-session -t {}
+# herdr:
+herdr workspace list 2>/dev/null | jq -r '.result.workspaces[].workspace_id' | xargs -I {} herdr workspace close {}
 
 # 5. Remove the cuekit entry from MCP client configs
 #    Claude Code: `~/.claude.json` → `mcpServers.cuekit`
@@ -321,7 +345,8 @@ Verify the removal:
 ```sh
 which cuekit            # should report nothing
 ls ~/.cuekit            # should be "No such file"
-tmux ls | grep cuekit-  # should be empty
+tmux ls 2>/dev/null | grep cuekit-  # should be empty
+herdr workspace list 2>/dev/null | grep cuekit  # should be empty
 ```
 
 Step 1 is enough for most cases. Steps 2 and 3 are destructive — back up `transcript.txt` files first if you need them for review or postmortem.
