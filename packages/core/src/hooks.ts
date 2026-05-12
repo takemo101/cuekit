@@ -13,20 +13,14 @@ export interface HookDefinition {
 	timeout?: number;
 }
 
-/** Configurable hook events */
+/** Configurable hook events. Each event accepts a single definition or an array. */
 export interface HooksConfig {
-	/** Fired after a task reaches terminal status `completed` */
-	on_task_complete?: HookDefinition;
-	/** Fired after a task reaches terminal status `failed` */
-	on_task_fail?: HookDefinition;
-	/** Fired after a task is cancelled */
-	on_task_cancel?: HookDefinition;
-	/** Fired after a task reaches terminal status `timed_out` */
-	on_task_timeout?: HookDefinition;
-	/** Fired after a team starts (coordinator submitted) */
-	on_team_start?: HookDefinition;
-	/** Fired after all team tasks reach a terminal status */
-	on_team_complete?: HookDefinition;
+	on_task_complete?: HookDefinition | HookDefinition[];
+	on_task_fail?: HookDefinition | HookDefinition[];
+	on_task_cancel?: HookDefinition | HookDefinition[];
+	on_task_timeout?: HookDefinition | HookDefinition[];
+	on_team_start?: HookDefinition | HookDefinition[];
+	on_team_complete?: HookDefinition | HookDefinition[];
 }
 
 /** Environment variables passed to every hook invocation */

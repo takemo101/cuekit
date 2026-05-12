@@ -3,6 +3,7 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import { HookDispatcher } from "./hook-dispatcher.ts";
 import {
 	type AdapterCapabilities,
 	canCancelTask,
@@ -96,17 +97,9 @@ export interface PaneAdapterConfig {
 export interface PaneAdapterDeps {
 	db: Database;
 	panes: MultiplexerBackend;
-	// Optional sink for warnings (e.g. "transcript capture disabled"). Tests
-	// default to the silent logger so submit failures on read-only cwds
-	// don't pollute test output; the `cuekit` binary injects an stderr
-	// logger so operators actually see warnings.
 	logger?: Logger;
-	// Cuekit's global directory (default `~/.cuekit/`). Used as the
-	// fallback location for the exit-code sentinel when the worktree-local
-	// `.cuekit/tasks/<id>/` is unwritable — without this fallback, every
-	// clean exit on a read-only worktree would surface as `failed`. Tests
-	// override with a tmpdir to avoid touching the operator's real home.
 	cuekitHomeDir?: string;
+	hooks?: HookDispatcher;
 }
 
 // Reads the exit-code sentinel written by the wrapped launch command.

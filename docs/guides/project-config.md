@@ -317,10 +317,23 @@ Supported events:
 - `on_team_start` — team starts (coordinator task submitted)
 - `on_team_complete` — all team tasks reach a terminal status
 
-Each hook is an object with:
+Each event accepts either a single hook definition or an array of definitions. When an array is provided, all hooks run concurrently (fire-and-forget) and independently.
+
+Each hook definition is an object with:
 
 - `command` (required): shell command executed via `/bin/sh -c`
 - `timeout` (optional): maximum seconds to wait before killing the hook process (default: 30)
+
+### Multiple hooks per event
+
+```yaml
+hooks:
+  on_task_complete:
+    - command: "osascript -e 'display notification \"Done: $CUEKIT_OBJECTIVE\" with title \"cuekit\"'"
+      timeout: 10
+    - command: "echo '$CUEKIT_TASK_ID completed' >> ~/cuekit.log"
+      timeout: 5
+```
 
 ### Environment variables
 

@@ -60,14 +60,16 @@ export const HookDefinitionSchema = z
 	})
 	.strict();
 
+const HookEntrySchema = z.union([HookDefinitionSchema, z.array(HookDefinitionSchema)]);
+
 export const HooksConfigSchema = z
 	.object({
-		on_task_complete: HookDefinitionSchema.optional(),
-		on_task_fail: HookDefinitionSchema.optional(),
-		on_task_cancel: HookDefinitionSchema.optional(),
-		on_task_timeout: HookDefinitionSchema.optional(),
-		on_team_start: HookDefinitionSchema.optional(),
-		on_team_complete: HookDefinitionSchema.optional(),
+		on_task_complete: HookEntrySchema.optional(),
+		on_task_fail: HookEntrySchema.optional(),
+		on_task_cancel: HookEntrySchema.optional(),
+		on_task_timeout: HookEntrySchema.optional(),
+		on_team_start: HookEntrySchema.optional(),
+		on_team_complete: HookEntrySchema.optional(),
 	})
 	.strict()
 	.optional();
