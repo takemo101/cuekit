@@ -36,6 +36,7 @@ adapters:
     permissions: bypass
 
 # Lifecycle hooks — fire-and-forget shell commands on task/team events.
+# Each event accepts a single definition or an array (run in parallel).
 # Commands receive metadata via environment variables:
 #   CUEKIT_EVENT, CUEKIT_TASK_ID, CUEKIT_STATUS, CUEKIT_AGENT_KIND,
 #   CUEKIT_AGENT_MODEL, CUEKIT_OBJECTIVE, CUEKIT_TEAM_ID, CUEKIT_POSITION,

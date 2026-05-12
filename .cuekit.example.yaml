@@ -90,6 +90,7 @@ adapters:
     permissions: prompt
 
 # Lifecycle hooks — fire-and-forget shell commands on task/team events.
+# Each event accepts a single definition or an array (run in parallel).
 # Commands receive metadata via environment variables:
 #   CUEKIT_EVENT, CUEKIT_TASK_ID, CUEKIT_STATUS, CUEKIT_AGENT_KIND,
 #   CUEKIT_AGENT_MODEL, CUEKIT_OBJECTIVE, CUEKIT_TEAM_ID, CUEKIT_POSITION,
@@ -116,6 +117,14 @@ adapters:
 #   on_team_complete:
 #     command: "osascript -e 'display notification \"Team done: $CUEKIT_TEAM_ID\" with title \"cuekit\"'"
 #     timeout: 10
+#
+# Multiple hooks per event (run in parallel):
+# hooks:
+#   on_task_complete:
+#     - command: "osascript -e 'display notification \"Done\" with title \"cuekit\"'"
+#       timeout: 10
+#     - command: "echo '$CUEKIT_TASK_ID completed' >> ~/cuekit.log"
+#       timeout: 5
 #
 # Slack webhook example:
 # hooks:

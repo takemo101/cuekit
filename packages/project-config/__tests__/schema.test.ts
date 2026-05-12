@@ -193,4 +193,34 @@ describe("CuekitProjectConfigSchema", () => {
 			).toBe(true);
 		});
 	});
+
+	describe("hooks", () => {
+		it("accepts a single hook definition", () => {
+			const parsed = CuekitProjectConfigSchema.parse({
+				hooks: {
+					on_task_complete: { command: "echo done", timeout: 10 },
+				},
+			});
+			expect(parsed.hooks?.on_task_complete).toEqual({ command: "echo done", timeout: 10 });
+		});
+
+		it("accepts an array of hook definitions", () => {
+			const parsed = CuekitProjectConfigSchema.parse({
+				hooks: {
+					on_task_complete: [
+						{ command: "echo done", timeout: 10 },
+						{ command: "curl webhook", timeout: 5 },
+					],
+				},
+			});
+			expect(Array.isArray(parsed.hooks?.on_task_complete)).toBe(true);
+			expect((parsed.hooks?.on_task_complete as unknown[]).length).toBe(2);
+		});
+
+		it("rejects a hook without command", () => {
+			expect(() =>
+				CuekitProjectConfigSchema.parse({ hooks: { on_task_complete: { timeout: 10 } } }),
+			).toThrow();
+		});
+	});
 });

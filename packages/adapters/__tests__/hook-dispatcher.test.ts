@@ -1,7 +1,35 @@
 import { describe, expect, test } from "bun:test";
 import { HookDispatcher } from "../src/hook-dispatcher.ts";
+import type { Task } from "@cuekit/store";
 
 describe("HookDispatcher", () => {
+	test("fire runs multiple hooks in parallel for an array definition", async () => {
+		const hooks = new HookDispatcher(
+			{
+				on_task_complete: [
+					{ command: "echo hook1 > /tmp/cuekit-hook-test-1.txt" },
+					{ command: "echo hook2 > /tmp/cuekit-hook-test-2.txt" },
+				],
+			},
+			undefined,
+		);
+
+		hooks.fire("on_task_complete", {
+			CUEKIT_EVENT: "on_task_complete",
+			CUEKIT_TASK_ID: "t_test",
+			CUEKIT_STATUS: "completed",
+			CUEKIT_AGENT_KIND: "pi",
+			CUEKIT_SESSION_ID: "s_1",
+		});
+
+		await Bun.sleep(500);
+
+		const content1 = await Bun.file("/tmp/cuekit-hook-test-1.txt").text();
+		const content2 = await Bun.file("/tmp/cuekit-hook-test-2.txt").text();
+		expect(content1.trim()).toBe("hook1");
+		expect(content2.trim()).toBe("hook2");
+	});
+
 	test("fire runs command asynchronously with env vars", async () => {
 		const hooks = new HookDispatcher(
 			{
@@ -55,7 +83,7 @@ describe("HookDispatcher", () => {
 			summary: null,
 			result_ref: null,
 			transcript_ref: null,
-		};
+		} as Task;
 
 		const env = HookDispatcher.taskEnv(task);
 
@@ -95,7 +123,7 @@ describe("HookDispatcher", () => {
 			summary: null,
 			result_ref: null,
 			transcript_ref: null,
-		};
+		} as Task;
 
 		const env = HookDispatcher.taskEnv(task);
 		expect(env.CUEKIT_OBJECTIVE).toHaveLength(500);

@@ -15,11 +15,22 @@ export class HookDispatcher {
 		private readonly logger: Logger | undefined,
 	) {}
 
-	/** Fire a hook for the given event if one is configured. */
+	/** Fire hook(s) for the given event if configured. Runs in parallel. */
 	fire(event: string, env: Record<string, string>): void {
-		const definition = this.hooks?.[event as keyof HooksConfig];
-		if (!definition) return;
+		const raw = this.hooks?.[event as keyof HooksConfig];
+		if (!raw) return;
+		const definitions = Array.isArray(raw) ? raw : [raw];
+		// Spawn all hooks concurrently; each is fire-and-forget.
+		for (const definition of definitions) {
+			this.fireOne(event, definition, env);
+		}
+	}
 
+	private fireOne(
+		event: string,
+		definition: { command: string; timeout?: number },
+		env: Record<string, string>,
+	): void {
 		const timeoutMs = definition.timeout ? definition.timeout * 1000 : DEFAULT_HOOK_TIMEOUT_MS;
 		const startTime = Date.now();
 
