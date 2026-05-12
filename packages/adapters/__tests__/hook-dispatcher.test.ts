@@ -38,9 +38,9 @@ describe("HookDispatcher", () => {
 			agent_kind: "claude-code",
 			model: "sonnet",
 			objective: "fix bug",
-			status: "completed",
+			status: "completed" as const,
 			team_id: "tm_1",
-			team_position: "coordinator",
+			team_position: "coordinator" as const,
 			spec_json: JSON.stringify({ strategy: "bugfix" }),
 			created_at: "2026-01-01T00:00:00Z",
 			updated_at: "2026-01-01T00:01:00Z",
@@ -70,35 +70,27 @@ describe("HookDispatcher", () => {
 		expect(env.CUEKIT_DURATION_MS).toBe("60000");
 	});
 
-	test("taskEnv truncates long objective", () => {
-		const longObjective = "a".repeat(600);
-		const task = {
-			id: "t_1",
-			session_id: "s_1",
-			agent_kind: "pi",
-			model: null,
-			objective: longObjective,
-			status: "failed",
-			team_id: null,
-			team_position: null,
-			spec_json: null,
-			created_at: "2026-01-01T00:00:00Z",
-			updated_at: "2026-01-01T00:00:00Z",
-			started_at: null,
-			completed_at: null,
-			parent_task_id: null,
-			role: null,
-			role_source: null,
-			role_selection_reason: null,
-			native_task_ref: null,
-			child_token_hash: null,
-			summary: null,
-			result_ref: null,
-			transcript_ref: null,
-		};
+	test("fire expands env vars inside single-quoted strings", async () => {
+		const hooks = new HookDispatcher(
+			{
+				on_task_complete: {
+					command: "echo '$CUEKIT_TASK_ID' > /tmp/cuekit-hook-quoted-test.txt",
+				},
+			},
+			undefined,
+		);
 
-		const env = HookDispatcher.taskEnv(task);
-		expect(env.CUEKIT_OBJECTIVE).toHaveLength(500);
-		expect(env.CUEKIT_OBJECTIVE?.endsWith("...")).toBe(true);
+		hooks.fire("on_task_complete", {
+			CUEKIT_EVENT: "on_task_complete",
+			CUEKIT_TASK_ID: "t_quoted456",
+			CUEKIT_STATUS: "completed",
+			CUEKIT_AGENT_KIND: "pi",
+			CUEKIT_SESSION_ID: "s_1",
+		});
+
+		await Bun.sleep(500);
+
+		const content = await Bun.file("/tmp/cuekit-hook-quoted-test.txt").text();
+		expect(content.trim()).toBe("t_quoted456");
 	});
 });

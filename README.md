@@ -37,7 +37,7 @@ bun install -g github:takemo101/cuekit#$(gh release view --repo takemo101/cuekit
 bun install -g github:takemo101/cuekit#$(curl -s https://api.github.com/repos/takemo101/cuekit/releases/latest | jq -r .tag_name)
 ```
 
-Bun has no `#latest` shorthand for GitHub installs, so the one-liners above resolve the tag at command-execution time and pin the install to that exact version. After install, `cuekit update` is the advisory-only command that prints the next install command when a newer release exists.
+Bun has no `#latest` shorthand for GitHub installs, so the one-liners above resolve the tag at command-execution time and pin the install to that exact version. After installation, `cuekit update` is the advisory-only command that prints the next install command when a newer release exists.
 
 Use an immutable release tag for normal installs. Avoid floating `#main` outside development — Bun's caching semantics for branches are less explicit. After installing a newer tag, restart MCP clients.
 

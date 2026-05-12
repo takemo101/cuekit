@@ -3,6 +3,7 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import { HookDispatcher } from "./hook-dispatcher.ts";
 import {
 	type AdapterCapabilities,
 	canCancelTask,
@@ -107,6 +108,8 @@ export interface PaneAdapterDeps {
 	// clean exit on a read-only worktree would surface as `failed`. Tests
 	// override with a tmpdir to avoid touching the operator's real home.
 	cuekitHomeDir?: string;
+	// Optional lifecycle hook dispatcher for task/team events.
+	hooks?: HookDispatcher;
 }
 
 // Reads the exit-code sentinel written by the wrapped launch command.
