@@ -26,6 +26,13 @@ export class HookDispatcher {
 		}
 	}
 
+	private expandEnvVars(command: string, env: Record<string, string>): string {
+		return command.replace(/\$([A-Za-z_][A-Za-z0-9_]*)|\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (match, var1, var2) => {
+			const key = var1 || var2;
+			return env[key] ?? process.env[key] ?? match;
+		});
+	}
+
 	private fireOne(
 		event: string,
 		definition: { command: string; timeout?: number },
@@ -33,9 +40,10 @@ export class HookDispatcher {
 	): void {
 		const timeoutMs = definition.timeout ? definition.timeout * 1000 : DEFAULT_HOOK_TIMEOUT_MS;
 		const startTime = Date.now();
+		const expandedCommand = this.expandEnvVars(definition.command, env);
 
 		try {
-			const proc = Bun.spawn(["/bin/sh", "-c", definition.command], {
+			const proc = Bun.spawn(["/bin/sh", "-c", expandedCommand], {
 				env: { ...process.env, ...env },
 				stdout: "pipe",
 				stderr: "pipe",
