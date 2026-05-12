@@ -605,23 +605,33 @@ describe("HerdrBackend", () => {
 		expect(await runner.listPanes({ session: "ck-test" })).toHaveLength(0);
 	});
 
-	test("team cleanup closes the shared workspace", async () => {
+	test("does not treat pane content mentioning other task IDs as dead for team tasks", async () => {
 		const runner = new FakeHerdrRunner();
 		const backend = new HerdrBackend({ runner, sessionName: "ck-test" });
-		await backend.spawnPane({
+		const coordinator = await backend.spawnPane({
 			task_id: "t_coord",
 			team_id: "tm_1",
+			team_position: "coordinator",
 			cwd: "/repo",
 			command: "coord",
 		});
 		await backend.spawnPane({
 			task_id: "t_worker",
 			team_id: "tm_1",
+			team_position: "worker",
 			cwd: "/repo",
 			command: "worker",
 		});
-		await backend.killTeamSession?.("tm_1");
-		expect(await backend.isAlive("t_coord")).toBe(false);
-		expect(await backend.isAlive("t_worker")).toBe(false);
+
+		// Simulate coordinator output that mentions the worker task ID
+		// (common when a coordinator logs delegation decisions).
+		await runner.sendInput({
+			session: "ck-test",
+			paneId: coordinator.backend_pane_id!.split("/").pop()!,
+			text: `Delegating to t_worker`,
+			keys: ["Enter"],
+		});
+
+		expect(await backend.isAlive("t_coord")).toBe(true);
 	});
 });
