@@ -178,6 +178,29 @@ describe.each(CASES)("AgentAdapter contract — $kind", (testCase) => {
 		expect(getTaskById(db, task_id)?.status).toBe("running");
 	});
 
+	it("status preserves running for parent sessions even when pane dies", async () => {
+		const result = await adapter.submit({
+			spec: {
+				agent_kind: testCase.kind,
+				objective: "parent session",
+				metadata: { run_kind: "parent_session", long_lived: true },
+			},
+			session_id: "s1",
+		});
+		if (!result.ok) throw new Error(`submit failed: ${result.error.message}`);
+		const task_id = result.value.task_id;
+		const artifactDir = mkdtempSync(join(tmpdir(), "cuekit-parent-session-"));
+		updateTaskRefs(db, task_id, { transcript_ref: join(artifactDir, "transcript.txt") });
+		writeFileSync(join(artifactDir, "exit-code"), "cuekit_exit=0\n");
+		await panes.killPane(task_id);
+
+		const view = await adapter.status(task_id);
+
+		expect(view.status).toBe("running");
+		expect(getTaskById(db, task_id)?.status).toBe("running");
+		expect(panes.terminalMarks).not.toContainEqual({ task_id, status: "completed" });
+	});
+
 	it("status completes from an exit-code sentinel even when the pane session still exists", async () => {
 		const result = await adapter.submit({
 			spec: { agent_kind: testCase.kind, objective: "sentinel while alive" },
