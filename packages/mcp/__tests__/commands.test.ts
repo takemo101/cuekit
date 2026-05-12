@@ -4278,3 +4278,201 @@ describe("list-agent-profiles", () => {
 		}
 	});
 });
+describe("mixed-backend task safety", () => {
+	it("rejects operations on tasks owned by a different backend", async () => {
+		// Active backend: tmux (ctx default)
+		createSession(db, {
+			id: "s_mixed",
+			project_root: "/p",
+			worktree_path: "/w",
+			parent_agent_kind: "pi",
+		});
+
+		// Create a herdr task directly in DB (simulates task created when backend was herdr)
+		createTask(db, {
+			id: "t_herdr_mixed",
+			session_id: "s_mixed",
+			agent_kind: "claude-code",
+			objective: "herdr task",
+			status: "running",
+			native_task_ref: "herdr:ck-cuekit/w1/w1:1/w1-1",
+		});
+
+		// Create a tmux task normally
+		const tmuxSubmit = await runSubmitTask(ctx, {
+			objective: "tmux task",
+			agent_kind: "claude-code",
+			session_id: "s_mixed",
+		});
+		expect(tmuxSubmit.accepted).toBe(true);
+		if (!tmuxSubmit.accepted) throw new Error("setup failed");
+		const tmuxTaskId = tmuxSubmit.task_id;
+
+		// 1. steer on herdr task through tmux backend → rejected
+		const steer = await runSteerTask(ctx, {
+			task_id: "t_herdr_mixed",
+			message: "hello",
+		});
+		expect(steer.ok).toBe(false);
+		if (!steer.ok) {
+			expect(steer.error.code).toBe("invalid_state");
+			expect(steer.error.details).toMatchObject({ pane_backend_kind: "herdr" });
+		}
+
+		// 2. cancel on herdr task through tmux backend → rejected
+		const cancel = await runCancelTasks(ctx, { task_ids: ["t_herdr_mixed"] });
+		expect(cancel.ok).toBe(false);
+		if (!cancel.ok) {
+			expect(cancel.error.code).toBe("invalid_state");
+		}
+		expect(getTaskById(db, "t_herdr_mixed")?.status).toBe("running");
+
+		// 3. status shows backend mismatch metadata but preserves attach
+		const status = await runGetTaskStatus(ctx, { task_id: "t_herdr_mixed" });
+		expect(status.status).toBe("running");
+		expect(status.attach_command).toEqual({ argv: ["herdr", "--session", "ck-cuekit"] });
+		expect(status.metadata?.pane_backend_kind).toBe("herdr");
+		expect(status.metadata?.pane_backend_mismatch).toBe(true);
+
+		// 4. delete on herdr task through tmux backend → rejected, row preserved
+		const del = await runDeleteTasks(ctx, { task_ids: ["t_herdr_mixed"] });
+		expect(del.ok).toBe(false);
+		expect(getTaskById(db, "t_herdr_mixed")).not.toBeNull();
+
+		// 5. tmux task operations still work normally
+		const tmuxCancel = await runCancelTasks(ctx, { task_ids: [tmuxTaskId] });
+		expect(tmuxCancel.ok).toBe(true);
+		const tmuxDelete = await runDeleteTasks(ctx, { task_ids: [tmuxTaskId] });
+		expect(tmuxDelete.ok).toBe(true);
+		expect(getTaskById(db, tmuxTaskId)).toBeNull();
+	});
+
+	it("rejects operations on tmux tasks when herdr is the active backend", async () => {
+		// Switch to herdr backend
+		const herdrRunner = new FakeHerdrRunner();
+		const herdrPanes = new HerdrBackend({ runner: herdrRunner, sessionName: "ck-test" });
+		const herdrRegistry = new AdapterRegistry();
+		herdrRegistry.register(
+			createClaudeCodeAdapter(db, herdrPanes, {
+				launchCommandOverride: () => "sleep 60",
+			}),
+		);
+		const herdrCtx: CommandContext = { db, registry: herdrRegistry, panes: herdrPanes };
+
+		createSession(db, {
+			id: "s_mixed2",
+			project_root: "/p",
+			worktree_path: "/w",
+			parent_agent_kind: "pi",
+		});
+
+		// Create a tmux task directly in DB (simulates task created when backend was tmux)
+		createTask(db, {
+			id: "t_tmux_mixed",
+			session_id: "s_mixed2",
+			agent_kind: "claude-code",
+			objective: "tmux task",
+			status: "running",
+			native_task_ref: "tmux:ct-t_tmux_mixed/pane",
+		});
+
+		// Create a herdr task through herdr backend
+		const herdrSubmit = await runSubmitTask(herdrCtx, {
+			objective: "herdr task",
+			agent_kind: "claude-code",
+			session_id: "s_mixed2",
+		});
+		expect(herdrSubmit.accepted).toBe(true);
+		if (!herdrSubmit.accepted) throw new Error("setup failed");
+		const herdrTaskId = herdrSubmit.task_id;
+
+		// 1. steer on tmux task through herdr backend → rejected
+		const steer = await runSteerTask(herdrCtx, {
+			task_id: "t_tmux_mixed",
+			message: "hello",
+		});
+		expect(steer.ok).toBe(false);
+		if (!steer.ok) {
+			expect(steer.error.code).toBe("invalid_state");
+			expect(steer.error.details).toMatchObject({ pane_backend_kind: "tmux" });
+		}
+
+		// 2. cancel on tmux task through herdr backend → rejected
+		const cancel = await runCancelTasks(herdrCtx, { task_ids: ["t_tmux_mixed"] });
+		expect(cancel.ok).toBe(false);
+		expect(getTaskById(db, "t_tmux_mixed")?.status).toBe("running");
+
+		// 3. status shows tmux attach command even through herdr backend
+		const status = await runGetTaskStatus(herdrCtx, { task_id: "t_tmux_mixed" });
+		expect(status.status).toBe("running");
+		expect(status.attach_command).toEqual({
+			argv: ["tmux", "attach-session", "-t", "cuekit-task-t_tmux_mixed"],
+		});
+		expect(status.metadata?.pane_backend_kind).toBe("tmux");
+		expect(status.metadata?.pane_backend_mismatch).toBe(true);
+
+		// 4. delete on tmux task through herdr backend → rejected, row preserved
+		const del = await runDeleteTasks(herdrCtx, { task_ids: ["t_tmux_mixed"] });
+		expect(del.ok).toBe(false);
+		expect(getTaskById(db, "t_tmux_mixed")).not.toBeNull();
+
+		// 5. herdr task operations still work normally
+		const herdrCancel = await runCancelTasks(herdrCtx, { task_ids: [herdrTaskId] });
+		expect(herdrCancel.ok).toBe(true);
+		const herdrDelete = await runDeleteTasks(herdrCtx, { task_ids: [herdrTaskId] });
+		expect(herdrDelete.ok).toBe(true);
+		expect(getTaskById(db, herdrTaskId)).toBeNull();
+	});
+
+	it("lists tasks from all backends without cross-backend leaks", async () => {
+		createSession(db, {
+			id: "s_list",
+			project_root: "/p",
+			worktree_path: "/w",
+			parent_agent_kind: "pi",
+		});
+
+		// Create herdr task directly
+		createTask(db, {
+			id: "t_herdr_list",
+			session_id: "s_list",
+			agent_kind: "claude-code",
+			objective: "herdr",
+			status: "running",
+			native_task_ref: "herdr:ck-cuekit/w1/w1:1/w1-1",
+		});
+
+		// Create tmux task directly
+		createTask(db, {
+			id: "t_tmux_list",
+			session_id: "s_list",
+			agent_kind: "pi",
+			objective: "tmux",
+			status: "running",
+			native_task_ref: "tmux:cuekit-task-t_tmux_list/pane",
+		});
+
+		// List through tmux backend → should show both (store-level query)
+		const tmuxList = await runListTasks(ctx, { session_id: "s_list", refresh_status: false });
+		if ("error" in tmuxList) throw new Error("tmux list failed");
+		expect(tmuxList.tasks).toHaveLength(2);
+		expect(tmuxList.tasks.map((t: { task_id: string }) => t.task_id).sort()).toEqual([
+			"t_herdr_list",
+			"t_tmux_list",
+		]);
+
+		// List through herdr backend → should also show both
+		const herdrRunner = new FakeHerdrRunner();
+		const herdrPanes = new HerdrBackend({ runner: herdrRunner, sessionName: "ck-test" });
+		const herdrRegistry = new AdapterRegistry();
+		herdrRegistry.register(
+			createClaudeCodeAdapter(db, herdrPanes, {
+				launchCommandOverride: () => "sleep 60",
+			}),
+		);
+		const herdrCtx: CommandContext = { db, registry: herdrRegistry, panes: herdrPanes };
+		const herdrList = await runListTasks(herdrCtx, { session_id: "s_list", refresh_status: false });
+		if ("error" in herdrList) throw new Error("herdr list failed");
+		expect(herdrList.tasks).toHaveLength(2);
+	});
+});
