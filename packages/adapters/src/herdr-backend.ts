@@ -563,7 +563,10 @@ export class HerdrBackend implements MultiplexerBackend {
 				const panesInTab = panes.filter((candidate) => candidate.tab_id === handle.tabId);
 				const verified = await this.findVerifiedPaneForTask(handle, panesInTab);
 				if (verified.pane) return verified.pane.pane_id === pane.pane_id ? handle : null;
-				if (verified.foundOtherKnownTask) return null;
+				// getPane succeeded and workspace/tab match — don't treat
+				// foundOtherKnownTask as dead. The pane content may mention
+				// other task IDs (e.g. a coordinator listing worker IDs),
+				// which is normal and not a mismatch.
 			}
 			return handle;
 		} catch {

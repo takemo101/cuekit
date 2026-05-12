@@ -3,8 +3,7 @@ project:
   name: cuekit
 
 multiplexer:
-  backend: zellij
-  strict: true
+  backend: herdr
 
 # Scope TUI views to this project by default.
 tui:
@@ -44,22 +43,22 @@ adapters:
 # Hooks run asynchronously and never block the main workflow.
 hooks:
   on_task_complete:
-    command: "osascript -e 'display notification \"Task completed: $CUEKIT_OBJECTIVE\" with title \"cuekit ✅\"'"
+    command: 'osascript -e ''display notification "Task completed: $CUEKIT_OBJECTIVE" with title "cuekit ✅"'''
     timeout: 10
   on_task_fail:
-    command: "osascript -e 'display notification \"Task failed: $CUEKIT_OBJECTIVE\" with title \"cuekit ❌\"'"
+    command: 'osascript -e ''display notification "Task failed: $CUEKIT_OBJECTIVE" with title "cuekit ❌"'''
     timeout: 10
   on_task_cancel:
-    command: "osascript -e 'display notification \"Task cancelled: $CUEKIT_OBJECTIVE\" with title \"cuekit 🚫\"'"
+    command: 'osascript -e ''display notification "Task cancelled: $CUEKIT_OBJECTIVE" with title "cuekit 🚫"'''
     timeout: 10
   on_task_timeout:
-    command: "osascript -e 'display notification \"Task timed out: $CUEKIT_OBJECTIVE\" with title \"cuekit ⏱\"'"
+    command: 'osascript -e ''display notification "Task timed out: $CUEKIT_OBJECTIVE" with title "cuekit ⏱"'''
     timeout: 10
   on_team_start:
-    command: "osascript -e 'display notification \"Team started: $CUEKIT_TEAM_ID\" with title \"cuekit 👥\"'"
+    command: 'osascript -e ''display notification "Team started: $CUEKIT_TEAM_ID" with title "cuekit 👥"'''
     timeout: 10
   on_team_complete:
-    command: "osascript -e 'display notification \"Team done: $CUEKIT_TEAM_ID\" with title \"cuekit ✅\"'"
+    command: 'osascript -e ''display notification "Team done: $CUEKIT_TEAM_ID" with title "cuekit ✅"'''
     timeout: 10
 
 strategies:
