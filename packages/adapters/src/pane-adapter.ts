@@ -351,6 +351,7 @@ const defaultOnPaneDisappeared = (ctx: PaneDisappearedContext): PaneDisappearedD
 export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDeps): AgentAdapter {
 	const { db, panes } = deps;
 	const logger = deps.logger ?? silentLogger;
+	const hooks = deps.hooks;
 	const onPaneDisappeared = config.onPaneDisappeared ?? defaultOnPaneDisappeared;
 	const cuekitHomeDir = deps.cuekitHomeDir ?? join(homedir(), ".cuekit");
 	const defaultCapabilities: AdapterCapabilities = {
@@ -670,6 +671,9 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 						live = completed;
 						await markTerminalPane(completed);
 						if (config.onTerminal) config.onTerminal(completed, db);
+						const env = HookDispatcher.taskEnv(completed);
+						env.CUEKIT_EVENT = `on_task_${completed.status}`;
+						hooks?.fire(env.CUEKIT_EVENT, env);
 					}
 				};
 
@@ -722,6 +726,9 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 									live = completed;
 									await markTerminalPane(completed);
 									if (config.onTerminal) config.onTerminal(completed, db);
+									const env = HookDispatcher.taskEnv(completed);
+									env.CUEKIT_EVENT = `on_task_${completed.status}`;
+									hooks?.fire(env.CUEKIT_EVENT, env);
 								}
 							}
 						}
@@ -752,6 +759,9 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 								live = completed;
 								await markTerminalPane(completed);
 								if (config.onTerminal) config.onTerminal(completed, db);
+								const env = HookDispatcher.taskEnv(completed);
+								env.CUEKIT_EVENT = "on_task_timed_out";
+								hooks?.fire("on_task_timed_out", env);
 							}
 						}
 					}
@@ -932,6 +942,11 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 			if (config.onTerminal) {
 				const finalRow = getTaskById(db, task_id);
 				if (finalRow) config.onTerminal(finalRow, db);
+			}
+			if (completed) {
+				const env = HookDispatcher.taskEnv(completed);
+				env.CUEKIT_EVENT = "on_task_cancelled";
+				hooks?.fire("on_task_cancelled", env);
 			}
 			return { ok: true, message: "cancellation requested" };
 		},
