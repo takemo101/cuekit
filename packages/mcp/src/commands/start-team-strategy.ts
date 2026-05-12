@@ -9,6 +9,7 @@ import {
 	CoordinatorBatchModeWarningSchema,
 	coordinatorBatchModeWarnings,
 } from "../coordinator-batch-warning.ts";
+import { fireTeamStartHookOnce } from "../team-hooks.ts";
 import { renderTeamStrategyPrompt, resolveTeamStrategy } from "../team-strategy.ts";
 import { runCreateTeam } from "./create-team.ts";
 import { runSubmitTask } from "./submit-task.ts";
@@ -170,6 +171,7 @@ export async function runStartTeamStrategy(
 		position: "coordinator",
 		adapter_options,
 	});
+	fireTeamStartHookOnce(ctx, team.team_id);
 
 	return {
 		accepted: true,

@@ -19,6 +19,7 @@ import { getSessionById, getTaskTeamById } from "@cuekit/store";
 import { z } from "incur";
 import type { CommandContext } from "../command-context.ts";
 import { resolveSessionId } from "../session-helpers.ts";
+import { fireTeamStartHookOnce } from "../team-hooks.ts";
 
 const AdapterOptionsSchema = z.record(z.string(), z.unknown());
 
@@ -322,6 +323,7 @@ export async function runSubmitTask(
 	if (!result.ok) {
 		return { accepted: false, error: result.error };
 	}
+	if (team_id) fireTeamStartHookOnce(ctx, team_id);
 	return {
 		accepted: true,
 		task_id: result.value.task_id,

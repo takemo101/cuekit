@@ -110,12 +110,15 @@ export async function runCuekitMcpBin(): Promise<void> {
 		const built = await buildMultiplexerBackend(projectConfigSlice, { logger });
 		const panes = built.backend;
 		const registry = buildAdapterRegistry(db, panes, { logger, hooks: projectConfigSlice?.hooks });
+		const dispatcher = projectConfigSlice?.hooks
+			? new (await import("@cuekit/adapters")).HookDispatcher(projectConfigSlice.hooks, logger)
+			: undefined;
 
 		installSignalHandlers(db);
 
 		const isMcpServer = process.argv.includes("--mcp");
 		const isMcpConfig = process.argv[2] === "mcp" && process.argv[3] === "config";
-		const commandContext = { db, registry, panes };
+		const commandContext = { db, registry, panes, hooks: dispatcher };
 		const cli = isMcpServer
 			? createMcpCli(commandContext)
 			: isMcpConfig

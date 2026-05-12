@@ -1,6 +1,7 @@
 import type { Database } from "bun:sqlite";
 import { decodeTaskListCursor } from "@cuekit/core";
-import { type Task, TaskSchema } from "./task.ts";
+import type { Task } from "./task.ts";
+import { parseTaskRowsForList } from "./task-store.ts";
 import { type TaskTeamRow, TaskTeamRowSchema } from "./task-team.ts";
 
 export interface CreateTaskTeamInput {
@@ -118,7 +119,7 @@ export function listTasksByTeam(db: Database, team_id: string): Task[] {
 	const rows = db
 		.prepare("select * from tasks where team_id = ? order by created_at asc")
 		.all(team_id);
-	return rows.map((row) => TaskSchema.parse(row));
+	return parseTaskRowsForList(rows);
 }
 
 export function getTaskTeamMetadata(db: Database, id: string): Record<string, unknown> | null {

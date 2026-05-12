@@ -62,6 +62,7 @@ export function printDoctorHelp(): string {
 		"",
 		"Options:",
 		"  -h, --help  Show this help message",
+		"  --fix       Repair safe state DB issues such as SQLite-formatted task timestamps",
 		"",
 		"Checks:",
 		"  cuekit version, bun, tmux, state db, project config, MCP config helper, update",

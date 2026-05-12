@@ -99,7 +99,7 @@ export function listTasksBySession(db: Database, session_id: string): Task[] {
 	const rows = db
 		.prepare("select * from tasks where session_id = ? order by created_at asc")
 		.all(session_id);
-	return rows.map((r) => TaskSchema.parse(r));
+	return parseTaskRowsForList(rows);
 }
 
 // Default page size when a caller doesn't specify one. 100 is
@@ -181,30 +181,143 @@ export function listTasks(db: Database, filter: TaskListFilter = {}): Task[] {
 		bindings[":project_id"] = filter.project_id;
 	}
 
+	let cursor: { updated_at: string; id: string } | undefined;
 	// Keyset predicate: rows that come after the cursor in the
 	// (updated_at desc, id asc) ordering. A new row whose updated_at falls
 	// between the cursor row and the current page simply shows up on a
 	// future fetch — it cannot shift the walk.
 	if (filter.cursor !== undefined) {
-		const { updated_at, id } = decodeTaskListCursor(filter.cursor);
-		conditions.push(
-			"(t.updated_at < :cursor_u or (t.updated_at = :cursor_u and t.id > :cursor_i))",
-		);
-		bindings[":cursor_u"] = updated_at;
-		bindings[":cursor_i"] = id;
+		cursor = decodeTaskListCursor(filter.cursor);
 	}
 
-	const where = conditions.length > 0 ? `where ${conditions.join(" and ")}` : "";
 	const join = joinSession ? "join sessions s on s.id = t.session_id" : "";
+	const limit = filter.limit ?? DEFAULT_LIST_TASKS_LIMIT;
+	const validRows: Task[] = [];
+	const batchLimit = Math.max(limit, 50);
 
-	bindings[":limit"] = filter.limit ?? DEFAULT_LIST_TASKS_LIMIT;
+	while (validRows.length < limit) {
+		const pageConditions = [...conditions];
+		const pageBindings: Record<string, string | number> = { ...bindings, ":limit": batchLimit };
+		if (cursor !== undefined) {
+			pageConditions.push(
+				"(t.updated_at < :cursor_u or (t.updated_at = :cursor_u and t.id > :cursor_i))",
+			);
+			pageBindings[":cursor_u"] = cursor.updated_at;
+			pageBindings[":cursor_i"] = cursor.id;
+		}
+		const where = pageConditions.length > 0 ? `where ${pageConditions.join(" and ")}` : "";
+		const rows = db
+			.prepare(
+				`select t.* from tasks t ${join} ${where} order by t.updated_at desc, t.id asc limit :limit`,
+			)
+			.all(pageBindings);
+		if (rows.length === 0) break;
+		validRows.push(...parseTaskRowsForList(rows).slice(0, limit - validRows.length));
+		const last = rows[rows.length - 1] as { updated_at?: unknown; id?: unknown } | undefined;
+		if (
+			rows.length < batchLimit ||
+			typeof last?.updated_at !== "string" ||
+			typeof last.id !== "string"
+		) {
+			break;
+		}
+		cursor = { updated_at: last.updated_at, id: last.id };
+	}
+	return validRows;
+}
 
+export function parseTaskRowsForList(rows: unknown[]): Task[] {
+	const parsed: Task[] = [];
+	for (const row of rows) {
+		const result = TaskSchema.safeParse(row);
+		if (!result.success) {
+			// List-style reads power TUI/MCP overviews; one corrupted row should
+			// not make every task invisible. Single-row reads remain strict via
+			// getTaskById(), and doctor reports/repairs these rows explicitly.
+			continue;
+		}
+		parsed.push(result.data);
+	}
+	return parsed;
+}
+
+export interface InvalidTaskRow {
+	id: string;
+	issues: string[];
+}
+
+export function findInvalidTaskRows(db: Database, limit = 50): InvalidTaskRow[] {
+	const rows = db.prepare("select * from tasks order by updated_at desc, id asc").all();
+	const invalid: InvalidTaskRow[] = [];
+	for (const row of rows) {
+		const result = TaskSchema.safeParse(row);
+		if (result.success) continue;
+		const raw = row as { id?: unknown };
+		invalid.push({
+			id: typeof raw.id === "string" && raw.id.length > 0 ? raw.id : "<unknown>",
+			issues: result.error.issues.map((issue) =>
+				issue.path.length > 0 ? `${issue.path.join(".")}: ${issue.message}` : issue.message,
+			),
+		});
+		if (invalid.length >= limit) break;
+	}
+	return invalid;
+}
+
+const SQLITE_TIMESTAMP_PATTERN = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?$/;
+
+function normalizeSqliteTimestamp(value: unknown): string | null {
+	if (typeof value !== "string") return null;
+	const match = value.match(SQLITE_TIMESTAMP_PATTERN);
+	if (!match) return null;
+	const [, yearRaw, monthRaw, dayRaw, hourRaw, minuteRaw, secondRaw, fractionRaw] = match;
+	if (!yearRaw || !monthRaw || !dayRaw || !hourRaw || !minuteRaw || !secondRaw) return null;
+	const year = Number(yearRaw);
+	const month = Number(monthRaw);
+	const day = Number(dayRaw);
+	const hour = Number(hourRaw);
+	const minute = Number(minuteRaw);
+	const second = Number(secondRaw);
+	const millisecond = Number((fractionRaw ?? "").slice(0, 3).padEnd(3, "0"));
+	const timestamp = Date.UTC(year, month - 1, day, hour, minute, second, millisecond);
+	if (!Number.isFinite(timestamp)) return null;
+	const date = new Date(timestamp);
+	if (
+		date.getUTCFullYear() !== year ||
+		date.getUTCMonth() !== month - 1 ||
+		date.getUTCDate() !== day ||
+		date.getUTCHours() !== hour ||
+		date.getUTCMinutes() !== minute ||
+		date.getUTCSeconds() !== second
+	) {
+		return null;
+	}
+	return date.toISOString();
+}
+
+export function repairTaskSqliteTimestamps(db: Database): number {
+	const columns = ["created_at", "updated_at", "started_at", "completed_at"] as const;
 	const rows = db
-		.prepare(
-			`select t.* from tasks t ${join} ${where} order by t.updated_at desc, t.id asc limit :limit`,
-		)
-		.all(bindings);
-	return rows.map((r) => TaskSchema.parse(r));
+		.prepare("select id, created_at, updated_at, started_at, completed_at from tasks")
+		.all();
+	let repaired = 0;
+	for (const row of rows) {
+		const raw = row as Record<string, unknown> & { id?: unknown };
+		if (typeof raw.id !== "string" || raw.id.length === 0) continue;
+		const assignments: string[] = [];
+		const params: string[] = [];
+		for (const column of columns) {
+			const normalized = normalizeSqliteTimestamp(raw[column]);
+			if (!normalized) continue;
+			assignments.push(`${column} = ?`);
+			params.push(normalized);
+		}
+		if (assignments.length === 0) continue;
+		params.push(raw.id);
+		db.prepare(`update tasks set ${assignments.join(", ")} where id = ?`).run(...params);
+		repaired += assignments.length;
+	}
+	return repaired;
 }
 
 // Updates only the status. Enforces the state machine via

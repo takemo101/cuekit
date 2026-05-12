@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { HookDispatcher } from "../src/hook-dispatcher.ts";
 import type { Task } from "@cuekit/store";
+import { HookDispatcher } from "../src/hook-dispatcher.ts";
 
 describe("HookDispatcher", () => {
 	test("fire runs multiple hooks in parallel for an array definition", async () => {
@@ -57,6 +57,15 @@ describe("HookDispatcher", () => {
 		const hooks = new HookDispatcher({}, undefined);
 		// Should not throw
 		hooks.fire("on_task_complete", { CUEKIT_EVENT: "on_task_complete", CUEKIT_TASK_ID: "t_1" });
+	});
+
+	test("taskEventName maps terminal statuses to configured hook keys", () => {
+		expect(HookDispatcher.taskEventName("running")).toBe("on_task_start");
+		expect(HookDispatcher.taskEventName("completed")).toBe("on_task_complete");
+		expect(HookDispatcher.taskEventName("failed")).toBe("on_task_fail");
+		expect(HookDispatcher.taskEventName("cancelled")).toBe("on_task_cancel");
+		expect(HookDispatcher.taskEventName("timed_out")).toBe("on_task_timeout");
+		expect(HookDispatcher.taskEventName("blocked")).toBe("on_task_block");
 	});
 
 	test("taskEnv builds env from task", () => {

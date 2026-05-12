@@ -8,6 +8,7 @@ import {
 import { getSessionById, getTaskById, getTaskTeamById } from "@cuekit/store";
 import { z } from "incur";
 import type { CommandContext } from "../command-context.ts";
+import { fireTeamStartHookOnce } from "../team-hooks.ts";
 import { TeamTaskWarningSchema, teamTaskWarnings } from "../team-task-warnings.ts";
 import { runSubmitTask, SubmitTaskInputSchema } from "./submit-task.ts";
 
@@ -180,5 +181,6 @@ export async function runSubmitTeamTasks(
 			rejected.push({ index, error: result.error });
 		}
 	}
+	if (accepted.length > 0) fireTeamStartHookOnce(ctx, team.id);
 	return { team_id: team.id, accepted, rejected };
 }

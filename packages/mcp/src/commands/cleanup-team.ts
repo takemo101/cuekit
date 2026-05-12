@@ -14,6 +14,7 @@ import {
 import { z } from "incur";
 import { cleanupAdapterTask } from "../adapter-cleanup.ts";
 import type { CommandContext } from "../command-context.ts";
+import { fireTeamCompleteHookIfDone } from "../team-hooks.ts";
 import { countTeamTasks } from "../team-status.ts";
 
 export const CleanupTeamInputSchema = z.object({
@@ -58,7 +59,8 @@ export async function runCleanupTeam(
 	const tasks = listTasksByTeam(ctx.db, team.id);
 	const terminalTasks = tasks.filter((task) => isTerminalTaskStatus(task.status));
 	if (!dryRun) {
-		const removesLastTeamTasks = terminalTasks.length === tasks.length;
+		const removesLastTeamTasks = tasks.length > 0 && terminalTasks.length === tasks.length;
+		if (removesLastTeamTasks) fireTeamCompleteHookIfDone(ctx, team.id);
 		for (const task of terminalTasks) {
 			const cleanup = await cleanupAdapterTask(ctx, task);
 			if (!cleanup.ok) return { error: cleanup.error };

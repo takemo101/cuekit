@@ -28,6 +28,10 @@ Proposed design.
 
 ```yaml
 hooks:
+  on_task_start:
+    command: "osascript -e 'display notification \"Started: $CUEKIT_OBJECTIVE\"'"
+    timeout: 10
+
   on_task_complete:
     command: "osascript -e 'display notification \"Done: $CUEKIT_OBJECTIVE\"'"
     timeout: 10
@@ -38,6 +42,12 @@ hooks:
 
   on_task_cancel:
     command: "echo '$CUEKIT_TASK_ID cancelled' >> ~/cuekit.log"
+
+  on_task_block:
+    command: "osascript -e 'display notification \"Blocked: $CUEKIT_OBJECTIVE\"'"
+
+  on_team_start:
+    command: "osascript -e 'display notification \"Team $CUEKIT_TEAM_ID started\"'"
 
   on_team_complete:
     command: "osascript -e 'display notification \"Team $CUEKIT_TEAM_ID done\"'"
@@ -52,13 +62,15 @@ interface HookDefinition {
 }
 
 interface HooksConfig {
-  [event: string]: HookDefinition | undefined;
-  on_task_complete?: HookDefinition;
-  on_task_fail?: HookDefinition;
-  on_task_cancel?: HookDefinition;
-  on_task_timeout?: HookDefinition;
-  on_team_start?: HookDefinition;
-  on_team_complete?: HookDefinition;
+  [event: string]: HookDefinition | HookDefinition[] | undefined;
+  on_task_start?: HookDefinition | HookDefinition[];
+  on_task_complete?: HookDefinition | HookDefinition[];
+  on_task_fail?: HookDefinition | HookDefinition[];
+  on_task_cancel?: HookDefinition | HookDefinition[];
+  on_task_timeout?: HookDefinition | HookDefinition[];
+  on_task_block?: HookDefinition | HookDefinition[];
+  on_team_start?: HookDefinition | HookDefinition[];
+  on_team_complete?: HookDefinition | HookDefinition[];
 }
 ```
 
@@ -72,7 +84,7 @@ interface HooksConfig {
 | `CUEKIT_EVENT` | Event name, e.g. `on_task_complete` |
 | `CUEKIT_TASK_ID` | Task ID |
 | `CUEKIT_TEAM_ID` | Team ID (if task belongs to a team) |
-| `CUEKIT_STATUS` | Terminal status: `completed`, `failed`, `cancelled`, `timed_out` |
+| `CUEKIT_STATUS` | Task status: `running`, `completed`, `failed`, `cancelled`, `timed_out`, `blocked` |
 | `CUEKIT_AGENT_KIND` | Agent kind, e.g. `claude-code`, `pi` |
 | `CUEKIT_AGENT_MODEL` | Model identifier (if known) |
 | `CUEKIT_OBJECTIVE` | Task objective (truncated to 500 chars) |
@@ -124,19 +136,21 @@ Fired from `pane-adapter.ts` inside `onTerminal` callback or equivalent terminal
 
 | Event | When |
 |-------|------|
-| `on_task_complete` | After `completeTask` sets status to `completed` |
-| `on_task_fail` | After `completeTask` sets status to `failed` |
+| `on_task_start` | After a task is submitted, pane spawned, and status becomes `running` |
+| `on_task_complete` | After task status becomes `completed` |
+| `on_task_fail` | After task status becomes `failed` |
 | `on_task_cancel` | After `cancel` successfully kills pane and updates DB |
-| `on_task_timeout` | After `completeTask` sets status to `timed_out` |
+| `on_task_timeout` | After task status becomes `timed_out` |
+| `on_task_block` | After child self-report sets status to `blocked` |
 
 ### Team lifecycle hooks
 
-Fired from team commands (`start_team`, `cleanup_team`):
+Fired from team lifecycle command paths (`start_team`, `submit_team_tasks`, direct `submit_task` with `team_id`, `wait_team`, `get_team_result`, `cleanup_team`, and terminal team member self-reports):
 
 | Event | When |
 |-------|------|
-| `on_team_start` | After coordinator task is submitted successfully |
-| `on_team_complete` | After all team tasks reach a terminal status |
+| `on_team_start` | Once, after the first task is accepted for a team, regardless of submit path or position |
+| `on_team_complete` | Once, after all non-empty team tasks reach a terminal status |
 
 ## Implementation plan
 
@@ -144,9 +158,8 @@ Fired from team commands (`start_team`, `cleanup_team`):
 2. **Project config** (`@cuekit/project-config`): Add `hooks` field to `CuekitProjectConfigSchema`.
 3. **Hook executor** (`@cuekit/adapters` or new `@cuekit/hooks`): Create `HookDispatcher` class.
 4. **Adapter wiring**: Pass `hooksConfig` through `buildAdapterRegistry` → adapter factories → `createPaneAdapter`. Fire hooks inside `onTerminal`.
-5. **MCP commands**: Fire `on_team_start` from `start_team`, `on_team_complete` from `cleanup_team` / `wait_team` when appropriate.
+5. **MCP commands**: Fire `on_team_start` from the first accepted team task; fire `on_team_complete` from cleanup/result/wait/self-report paths when the non-empty team is fully terminal.
 
 ## Open questions
 
-- Should we add `on_task_start` (pane spawned)? Maybe later — start events are noisy.
 - Should we add `on_steering_received`? Probably not for v0.

@@ -1,5 +1,5 @@
 import type { Database } from "bun:sqlite";
-import type { AdapterRegistry, MultiplexerBackend } from "@cuekit/adapters";
+import type { AdapterRegistry, HookDispatcher, MultiplexerBackend } from "@cuekit/adapters";
 
 // Minimum shared state commands need. Adapters close over their backend
 // inside the registry, but the TUI needs a separate reference for direct
@@ -9,4 +9,5 @@ export interface CommandContext {
 	db: Database;
 	registry: AdapterRegistry;
 	panes?: MultiplexerBackend;
+	hooks?: HookDispatcher;
 }
