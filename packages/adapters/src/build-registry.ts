@@ -1,9 +1,10 @@
 import type { Database } from "bun:sqlite";
-import type { Logger } from "@cuekit/core";
+import type { HooksConfig, Logger } from "@cuekit/core";
 import { AdapterRegistry } from "./adapter-registry.ts";
 import { createClaudeCodeAdapter } from "./claude-code-adapter.ts";
 import { createGeminiAdapter } from "./gemini-adapter.ts";
 import { createJcodeAdapter } from "./jcode-adapter.ts";
+import { HookDispatcher } from "./hook-dispatcher.ts";
 import type { MultiplexerBackend } from "./multiplexer-backend.ts";
 import { createOpenCodeAdapter } from "./opencode-adapter.ts";
 import { createPiAdapter } from "./pi-adapter.ts";
@@ -22,6 +23,7 @@ import { createPiAdapter } from "./pi-adapter.ts";
 // build per-binary registries only if a real divergent need appears.
 export interface BuildAdapterRegistryOptions {
 	logger?: Logger;
+	hooks?: HooksConfig;
 }
 
 export function buildAdapterRegistry(
@@ -29,12 +31,13 @@ export function buildAdapterRegistry(
 	panes: MultiplexerBackend,
 	options: BuildAdapterRegistryOptions = {},
 ): AdapterRegistry {
-	const { logger } = options;
+	const { logger, hooks } = options;
+	const dispatcher = hooks ? new HookDispatcher(hooks, logger) : undefined;
 	const registry = new AdapterRegistry();
-	registry.register(createClaudeCodeAdapter(db, panes, { logger }));
-	registry.register(createPiAdapter(db, panes, { logger }));
-	registry.register(createOpenCodeAdapter(db, panes, { logger }));
-	registry.register(createJcodeAdapter(db, panes, { logger }));
-	registry.register(createGeminiAdapter(db, panes, { logger }));
+	registry.register(createClaudeCodeAdapter(db, panes, { logger, hooks: dispatcher }));
+	registry.register(createPiAdapter(db, panes, { logger, hooks: dispatcher }));
+	registry.register(createOpenCodeAdapter(db, panes, { logger, hooks: dispatcher }));
+	registry.register(createJcodeAdapter(db, panes, { logger, hooks: dispatcher }));
+	registry.register(createGeminiAdapter(db, panes, { logger, hooks: dispatcher }));
 	return registry;
 }

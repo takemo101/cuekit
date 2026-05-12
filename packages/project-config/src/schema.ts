@@ -53,6 +53,25 @@ export const TeamStrategySchema = z
 	})
 	.strict();
 
+export const HookDefinitionSchema = z
+	.object({
+		command: z.string().min(1),
+		timeout: z.number().int().positive().optional(),
+	})
+	.strict();
+
+export const HooksConfigSchema = z
+	.object({
+		on_task_complete: HookDefinitionSchema.optional(),
+		on_task_fail: HookDefinitionSchema.optional(),
+		on_task_cancel: HookDefinitionSchema.optional(),
+		on_task_timeout: HookDefinitionSchema.optional(),
+		on_team_start: HookDefinitionSchema.optional(),
+		on_team_complete: HookDefinitionSchema.optional(),
+	})
+	.strict()
+	.optional();
+
 export const CuekitProjectConfigSchema = z
 	.object({
 		project: z
@@ -117,6 +136,7 @@ export const CuekitProjectConfigSchema = z
 		// backend probe fails, cuekit hard-fails at startup instead of
 		// silently falling back to tmux.
 		multiplexer_strict: z.boolean().optional(),
+		hooks: HooksConfigSchema.optional(),
 	})
 	.strict();
 
@@ -131,3 +151,5 @@ export type TeamStrategySlot = z.infer<typeof TeamStrategySlotSchema>;
 export type SubmitDefaults = NonNullable<CuekitProjectConfig["submit"]>;
 export type TeamDefaults = NonNullable<CuekitProjectConfig["teams"]>;
 export type AdapterPermissionDefaults = NonNullable<CuekitProjectConfig["adapters"]>;
+export type HookDefinition = z.infer<typeof HookDefinitionSchema>;
+export type HooksConfig = z.infer<typeof HooksConfigSchema>;

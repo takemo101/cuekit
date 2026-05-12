@@ -109,7 +109,7 @@ export async function runCuekitMcpBin(): Promise<void> {
 		const projectConfigSlice = projectConfig.ok ? projectConfig.config : undefined;
 		const built = await buildMultiplexerBackend(projectConfigSlice, { logger });
 		const panes = built.backend;
-		const registry = buildAdapterRegistry(db, panes, { logger });
+		const registry = buildAdapterRegistry(db, panes, { logger, hooks: projectConfigSlice?.hooks });
 
 		installSignalHandlers(db);
 

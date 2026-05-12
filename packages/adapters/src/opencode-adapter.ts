@@ -2,6 +2,7 @@ import type { Database } from "bun:sqlite";
 import type { Logger, TaskSpec } from "@cuekit/core";
 import { adapterRunModeFor, shouldDangerouslySkipPermissions } from "./adapter-options.ts";
 import type { AgentAdapter } from "./agent-adapter.ts";
+import { HookDispatcher } from "./hook-dispatcher.ts";
 import type { MultiplexerBackend } from "./multiplexer-backend.ts";
 import { createPaneAdapter } from "./pane-adapter.ts";
 import { shellQuote } from "./shell-quote.ts";
@@ -15,6 +16,7 @@ export interface OpenCodeAdapterOptions {
 	openCodeBin?: string;
 	logger?: Logger;
 	cuekitHomeDir?: string;
+	hooks?: HookDispatcher;
 }
 
 export function buildOpenCodeLaunchCommand(spec: TaskSpec, openCodeBin = "opencode"): string {
@@ -67,6 +69,12 @@ export function createOpenCodeAdapter(
 			buildLaunchCommand:
 				options.launchCommandOverride ?? ((spec) => buildOpenCodeLaunchCommand(spec, bin)),
 		},
-		{ db, panes, logger: options.logger, cuekitHomeDir: options.cuekitHomeDir },
+		{
+			db,
+			panes,
+			logger: options.logger,
+			cuekitHomeDir: options.cuekitHomeDir,
+			hooks: options.hooks,
+		},
 	);
 }
