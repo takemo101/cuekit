@@ -2,6 +2,7 @@ import type { Database } from "bun:sqlite";
 import type { Logger, TaskSpec } from "@cuekit/core";
 import { adapterRunModeFor } from "./adapter-options.ts";
 import type { AgentAdapter } from "./agent-adapter.ts";
+import { HookDispatcher } from "./hook-dispatcher.ts";
 import type { MultiplexerBackend } from "./multiplexer-backend.ts";
 import { createPaneAdapter } from "./pane-adapter.ts";
 import { shellQuote } from "./shell-quote.ts";
@@ -15,6 +16,7 @@ export interface PiAdapterOptions {
 	piBin?: string;
 	logger?: Logger;
 	cuekitHomeDir?: string;
+	hooks?: HookDispatcher;
 }
 
 const PI_REPORTING_GUIDANCE = `Pi adapter guidance:
@@ -54,6 +56,12 @@ export function createPiAdapter(
 			buildLaunchCommand:
 				options.launchCommandOverride ?? ((spec) => buildPiLaunchCommand(spec, piBin)),
 		},
-		{ db, panes, logger: options.logger, cuekitHomeDir: options.cuekitHomeDir },
+		{
+			db,
+			panes,
+			logger: options.logger,
+			cuekitHomeDir: options.cuekitHomeDir,
+			hooks: options.hooks,
+		},
 	);
 }

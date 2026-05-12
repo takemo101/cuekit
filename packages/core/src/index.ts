@@ -2,6 +2,7 @@ export * from "./ack.ts";
 export * from "./adapter-capabilities.ts";
 export * from "./artifact-ref.ts";
 export * from "./expected-output.ts";
+export * from "./hooks.ts";
 export * from "./input-ref.ts";
 export * from "./job-error.ts";
 export * from "./logger.ts";

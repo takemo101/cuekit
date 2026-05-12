@@ -7,6 +7,7 @@ export * from "./gemini-adapter.ts";
 export * from "./herdr-backend.ts";
 export * from "./herdr-coordinate.ts";
 export * from "./herdr-runner.ts";
+export * from "./hook-dispatcher.ts";
 export * from "./jcode-adapter.ts";
 export * from "./multiplexer-backend.ts";
 export * from "./opencode-adapter.ts";

@@ -2,24 +2,19 @@ import type { Database } from "bun:sqlite";
 import type { Logger, TaskSpec } from "@cuekit/core";
 import { adapterRunModeFor, shouldDangerouslySkipPermissions } from "./adapter-options.ts";
 import type { AgentAdapter } from "./agent-adapter.ts";
+import { HookDispatcher } from "./hook-dispatcher.ts";
 import type { MultiplexerBackend } from "./multiplexer-backend.ts";
 import { createPaneAdapter } from "./pane-adapter.ts";
 import { shellQuote } from "./shell-quote.ts";
 import { renderTaskSpecPrompt } from "./task-spec-prompt.ts";
 
 export interface GeminiAdapterOptions {
-	// For tests / sandboxing: replace the launch command builder entirely.
 	launchCommandOverride?: (spec: TaskSpec) => string;
-	// Override the binary used by the default builder.
 	geminiBin?: string;
-	// Advertised models. Defaults to Google's current code-targeted set.
 	availableModels?: string[];
-	// Optional logger forwarded to the shared pane adapter. Defaults silent.
 	logger?: Logger;
-	// Override cuekit's home dir (default `~/.cuekit/`). Used as the
-	// fallback location for the exit-code sentinel when the worktree is
-	// unwritable. Tests set this to a tmpdir.
 	cuekitHomeDir?: string;
+	hooks?: HookDispatcher;
 }
 
 export interface BuildGeminiLaunchCommandOptions {
@@ -121,6 +116,12 @@ export function createGeminiAdapter(
 			},
 			buildLaunchCommand: builder,
 		},
-		{ db, panes, logger: options.logger, cuekitHomeDir: options.cuekitHomeDir },
+		{
+			db,
+			panes,
+			logger: options.logger,
+			cuekitHomeDir: options.cuekitHomeDir,
+			hooks: options.hooks,
+		},
 	);
 }
