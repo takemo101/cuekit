@@ -144,6 +144,11 @@ function timeoutMsFor(task: Task): number | null {
 	return spec?.timeout_ms ?? null;
 }
 
+function isParentSession(task: Task): boolean {
+	const spec = taskSpecFor(task);
+	return (spec?.metadata as Record<string, unknown> | undefined)?.run_kind === "parent_session";
+}
+
 function hasTimedOut(task: Task, nowMs = Date.now()): { timedOut: true; timeoutMs: number } | null {
 	const timeoutMs = timeoutMsFor(task);
 	if (timeoutMs === null) return null;
@@ -632,6 +637,7 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 				panes.restorePaneHandle(persistedHandle);
 			}
 			if (!isTerminalTaskStatus(live.status) && !backendMismatch) {
+				const isParent = isParentSession(live);
 				const readTaskExitCode = () => {
 					let exitCode: number | null = null;
 					if (live.transcript_ref) {
@@ -677,7 +683,9 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 				const alreadyExited = readTaskExitCode();
 				if (alreadyExited !== null) {
 					paneAliveForAttach = await panes.isAlive(task_id);
-					await completeFromExitCode(alreadyExited);
+					if (!isParent) {
+						await completeFromExitCode(alreadyExited);
+					}
 				} else {
 					const alive = await panes.isAlive(task_id);
 					paneAliveForAttach = alive;
@@ -695,33 +703,38 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 						// on read-only worktrees: without transcript_ref the
 						// only place a sentinel could exist is the global
 						// dir.
-						let exitCode: number | null = readTaskExitCode();
-						if (exitCode === null) {
-							for (let attempt = 0; attempt < 10 && exitCode === null; attempt += 1) {
-								await Bun.sleep(250);
-								exitCode = readTaskExitCode();
+						if (!isParent) {
+							let exitCode: number | null = readTaskExitCode();
+							if (exitCode === null) {
+								for (let attempt = 0; attempt < 10 && exitCode === null; attempt += 1) {
+									await Bun.sleep(250);
+									exitCode = readTaskExitCode();
+								}
+							}
+							if (exitCode === null && shouldDeferMissingSentinel(live, db)) {
+								deferredDeadPane = true;
+							}
+							if (!deferredDeadPane) {
+								const decision = onPaneDisappeared({
+									task: live,
+									exitCode,
+									transcriptPath: live.transcript_ref ?? undefined,
+								});
+								const completed = completeTask(db, {
+									id: task_id,
+									status: decision.status,
+									summary: decision.summary ?? live.summary ?? undefined,
+								});
+								if (completed) {
+									live = completed;
+									await markTerminalPane(completed);
+									if (config.onTerminal) config.onTerminal(completed, db);
+								}
 							}
 						}
-						if (exitCode === null && shouldDeferMissingSentinel(live, db)) {
-							deferredDeadPane = true;
-						}
-						if (!deferredDeadPane) {
-							const decision = onPaneDisappeared({
-								task: live,
-								exitCode,
-								transcriptPath: live.transcript_ref ?? undefined,
-							});
-							const completed = completeTask(db, {
-								id: task_id,
-								status: decision.status,
-								summary: decision.summary ?? live.summary ?? undefined,
-							});
-							if (completed) {
-								live = completed;
-								await markTerminalPane(completed);
-								if (config.onTerminal) config.onTerminal(completed, db);
-							}
-						}
+						// Parent sessions: leave the task running even when the pane
+						// dies. The human operator must explicitly cancel or report
+						// completion.
 					} else {
 						const timeout = hasTimedOut(live);
 						if (timeout) {
