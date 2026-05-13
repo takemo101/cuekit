@@ -161,7 +161,7 @@ describe("TaskDetail contextHeight", () => {
 					attention_sequence: 7,
 					task_id: "t_worker",
 					position: "worker",
-					tool: "steer_task",
+					tool: "steer",
 					suggested_message: "Please continue",
 					rationale: "Manual helper only",
 				},

@@ -21,7 +21,7 @@ export const ManualSteerHintSchema = z.object({
 		kind: z.literal("task"),
 		task_id: z.string(),
 	}),
-	tool: z.literal("steer_task"),
+	tool: z.literal("steer"),
 	suggested_message: z.string(),
 	rationale: z.string(),
 });
@@ -105,10 +105,10 @@ export function buildManualSteerHintsFromAttentionItems(
 				task_id: item.task_id,
 				...(item.position ? { position: item.position } : {}),
 				target: { kind: "task" as const, task_id: item.task_id },
-				tool: "steer_task" as const,
+				tool: "steer" as const,
 				suggested_message: `Please respond to this ${item.type} attention item.${quoted} If you need parent input, report help_requested with one precise question; otherwise continue and report progress or a terminal result.`,
 				rationale:
-					"Manual helper only: inspect the attention item and decide whether to send this with steer_task; cuekit will not auto-steer or track delivery/read state.",
+					"Manual helper only: inspect the attention item and decide whether to send this with grouped steer; cuekit will not auto-steer or track delivery/read state.",
 			};
 		});
 }
