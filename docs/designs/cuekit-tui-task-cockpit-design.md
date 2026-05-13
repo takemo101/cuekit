@@ -143,6 +143,112 @@ Team detail should prioritize:
 5. member tasks,
 6. latest/final summary and cleanup hint when available.
 
+### Detail pane information architecture
+
+As the cockpit grows, the detail pane must not keep adding always-visible
+sections. Swarm-lite added high-value team context (`attention_items`, blockers,
+handoffs, blackboard events, and manual steering hints), and rendering all of it
+in one vertical stack makes both task and team details hard to scan.
+
+Use **detail-pane tabs** to keep the top-level TUI modes stable while organizing
+the selected item's context by operator intent. The global modes remain the existing cockpit modes:
+
+- Tasks mode
+- Parent Sessions mode (`parents`): a filtered task-list view for long-lived parent-session tasks, not a separate session dashboard
+- Teams mode
+
+This tabbed-detail design does not add a broader session dashboard, session deletion UI, or adapter/session management surface.
+
+Within the right-side detail pane, expose a compact tab bar and render only the
+active detail category. This keeps list navigation, attach/cancel/delete flows,
+and mode switching unchanged while giving dense detail a clearer structure.
+
+Recommended keys:
+
+| Key | Action |
+| --- | --- |
+| `[` / `]` | previous / next detail tab |
+| `1`–`5` | jump to a detail tab by index |
+| `?` | later: show a help overlay with mode + tab keys |
+
+The footer should show the active tab set, for example:
+
+```text
+Teams | Detail: [1] Overview  [2] Members  [3] Attention  [4] Knowledge
+```
+
+#### Team detail tabs
+
+Teams mode is the first place to apply tabs because Swarm-lite made the team
+detail pane the highest-density surface.
+
+Recommended v1 team tabs:
+
+| Tab | Purpose | Content |
+| --- | --- | --- |
+| `Overview` | Decide what to do next at a glance. | team id/title/objective, aggregate status, task counts, attention/blocker/handoff/blackboard counts, one suggested next action when available |
+| `Members` | Understand and operate on team membership. | lanes by position, member list, selected member marker, attach/delete/cleanup eligibility context |
+| `Attention` | Decide whether manual intervention is needed. | blockers first, help requests, attention items, manual steer hints, compact rationale |
+| `Knowledge` | Read shared team context. | recent blackboard events, latest handoffs, decisions/findings/review results |
+
+`Timeline` can be added later if the operator needs a dedicated chronological
+view. For the first slice, keep timeline-like data out of the default surface
+unless it feeds `Overview` counts or `Attention`/`Knowledge` rows.
+
+Team Overview should be a small dashboard rather than a full detail dump:
+
+```text
+● running  tm_abc  Swarm-lite review
+Tasks: 2 running / 1 blocked / 3 completed
+Attention: 2   Blockers: 1   Handoffs: 1   Blackboard: 4
+
+Next: Inspect blocked worker t_abc before waiting again.
+```
+
+#### Task detail tabs
+
+After the team detail is tabbed, apply the same pattern to task detail.
+
+Recommended task tabs:
+
+| Tab | Purpose | Content |
+| --- | --- | --- |
+| `Overview` | Scan the selected task state. | status, role/model/mode, team/position, summary/result, attach/backend/transcript metadata |
+| `Events` | Inspect task-level state changes. | recent task events, terminal report, help/block/completed/failed highlights |
+| `Output` | Read the live pane or transcript. | current live-pane capture or transcript tail, with the existing scrollbox behavior |
+| `Context` | Understand surrounding team context. | team attention snippets, manual steer hints, latest handoffs, relevant team snapshot/blackboard snippets |
+
+The existing transcript scrollbox should move into `Output`; it should no longer
+compete for space with metadata and team context in the default view.
+
+#### Empty and noisy states
+
+Tabs should avoid noisy placeholder sections. If a tab has no relevant data,
+show one compact line such as:
+
+```text
+No blockers.
+No blackboard events.
+No recent handoffs.
+```
+
+Avoid rendering multiple empty section headers in the same view. Counts in
+`Overview` are enough to tell the operator where details exist.
+
+#### Incremental implementation order
+
+Implement this in small slices:
+
+1. Team detail tabs (`Overview`, `Members`, `Attention`, `Knowledge`) while
+   preserving existing Teams mode actions and fallback data loading.
+2. Task detail tabs (`Overview`, `Events`, `Output`, `Context`) using the same
+   tab state and keybinding pattern.
+3. Polish: footer hints, help overlay, selected-member context, and optional
+   timeline tab if real workflows need it.
+
+This keeps the cockpit read-only for team context in the first slice; no chat UI,
+ack/read state, scheduler controls, or automatic actions are introduced.
+
 ## Data model
 
 TUI state should derive from command-layer snapshots, not direct ad-hoc SQL where avoidable.
@@ -150,7 +256,7 @@ TUI state should derive from command-layer snapshots, not direct ad-hoc SQL wher
 Suggested internal state:
 
 ```ts
-type TuiMode = "tasks" | "teams";
+type TuiMode = "tasks" | "teams" | "parents";
 type TeamFocus = "list" | "members";
 
 type TuiState = {
@@ -264,7 +370,7 @@ type TuiExit =
       kind: "attach";
       args: string[];
       returnState?: {
-        mode: "tasks" | "teams";
+        mode: TuiMode; // "tasks" | "teams" | "parents"
         selected_task_id?: string;
         selected_team_id?: string;
         selected_member_task_id?: string;
