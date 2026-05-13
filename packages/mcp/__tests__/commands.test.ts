@@ -4066,7 +4066,15 @@ describe("steer-task", () => {
 		).toBe(false);
 		expect(steer.options.safeParse({ kind: "task", task_id: "t1" }).success).toBe(false);
 		expect(
+			steer.options.safeParse({ kind: "task", task_id: "t1", team_id: "tm_1", message: "a" })
+				.success,
+		).toBe(false);
+		expect(
 			steer.options.safeParse({ kind: "team", team_id: "tm_1", message: "a", message_file: "b" })
+				.success,
+		).toBe(false);
+		expect(
+			steer.options.safeParse({ kind: "team", team_id: "tm_1", task_id: "t1", message: "a" })
 				.success,
 		).toBe(false);
 		expect(
@@ -4075,6 +4083,51 @@ describe("steer-task", () => {
 				team_id: "tm_1",
 				message: "a",
 				event_type: "handoff",
+			}).success,
+		).toBe(false);
+		expect(
+			steer.options.safeParse({
+				kind: "team_position",
+				team_id: "tm_1",
+				position: "worker",
+				message: "a",
+			}).success,
+		).toBe(true);
+		expect(
+			steer.options.safeParse({
+				kind: "team_tasks",
+				team_id: "tm_1",
+				task_ids: ["t_1"],
+				message: "a",
+			}).success,
+		).toBe(true);
+		expect(
+			steer.options.safeParse({
+				kind: "team_tasks",
+				team_id: "tm_1",
+				message: "a",
+			}).success,
+		).toBe(false);
+		expect(
+			steer.options.safeParse({ kind: "team_position", position: "worker", message: "a" }).success,
+		).toBe(false);
+		expect(
+			steer.options.safeParse({ kind: "team_tasks", task_ids: ["t_1"], message: "a" }).success,
+		).toBe(false);
+		expect(
+			steer.options.safeParse({
+				kind: "team",
+				team_id: "tm_1",
+				position: "worker",
+				message: "a",
+			}).success,
+		).toBe(false);
+		expect(
+			steer.options.safeParse({
+				kind: "team",
+				team_id: "tm_1",
+				task_ids: ["t_1"],
+				message: "a",
 			}).success,
 		).toBe(false);
 	});
@@ -4145,6 +4198,147 @@ describe("steer-team", () => {
 		expect(ack.ok).toBe(false);
 		if (ack.ok) throw new Error("expected team steer to fail");
 		expect(ack.error.code).toBe("team_not_found");
+	});
+
+	it("steers only non-terminal steerable tasks in a requested team position", async () => {
+		createSession(db, {
+			id: "s_team_position_steer",
+			project_root: "/p",
+			worktree_path: "/w",
+			parent_agent_kind: "pi",
+		});
+		createTaskTeam(db, {
+			id: "tm_position_steer",
+			session_id: "s_team_position_steer",
+			title: "Team",
+		});
+		const worker = await runSubmitTask(ctx, {
+			objective: "worker",
+			agent_kind: "claude-code",
+			session_id: "s_team_position_steer",
+			team_id: "tm_position_steer",
+			position: "worker",
+		});
+		const reviewer = await runSubmitTask(ctx, {
+			objective: "reviewer",
+			agent_kind: "claude-code",
+			session_id: "s_team_position_steer",
+			team_id: "tm_position_steer",
+			position: "reviewer",
+		});
+		const terminalWorker = createTask(db, {
+			id: "t_terminal_position_worker",
+			session_id: "s_team_position_steer",
+			team_id: "tm_position_steer",
+			team_position: "worker",
+			agent_kind: "claude-code",
+			objective: "done",
+			status: "completed",
+			spec: { objective: "done", agent_kind: "claude-code" },
+		});
+		if (!worker.accepted || !reviewer.accepted) throw new Error("setup failed");
+
+		const before = runner.calls.length;
+		const ack = await runSteerTeam(ctx, {
+			team_id: "tm_position_steer",
+			position: "worker",
+			message: "Worker-only guidance.",
+		});
+
+		expect(ack.ok).toBe(true);
+		if (!ack.ok) throw new Error("expected position steer to succeed");
+		expect(ack.steered.map((item) => item.task_id)).toEqual([worker.task_id]);
+		expect(ack.skipped).toEqual([
+			{ task_id: terminalWorker.id, status: "completed", reason: "terminal" },
+		]);
+		expect(runner.calls.slice(before).filter((c) => c[0] === "send-keys")).toHaveLength(2);
+	});
+
+	it("steers only listed team members and rejects non-members deterministically", async () => {
+		createSession(db, {
+			id: "s_team_tasks_steer",
+			project_root: "/p",
+			worktree_path: "/w",
+			parent_agent_kind: "pi",
+		});
+		createTaskTeam(db, { id: "tm_tasks_steer", session_id: "s_team_tasks_steer", title: "Team" });
+		createTaskTeam(db, { id: "tm_other_steer", session_id: "s_team_tasks_steer", title: "Other" });
+		const target = await runSubmitTask(ctx, {
+			objective: "target",
+			agent_kind: "claude-code",
+			session_id: "s_team_tasks_steer",
+			team_id: "tm_tasks_steer",
+		});
+		const otherMember = await runSubmitTask(ctx, {
+			objective: "other member",
+			agent_kind: "claude-code",
+			session_id: "s_team_tasks_steer",
+			team_id: "tm_tasks_steer",
+		});
+		createTask(db, {
+			id: "t_other_team_steer",
+			session_id: "s_team_tasks_steer",
+			team_id: "tm_other_steer",
+			agent_kind: "claude-code",
+			objective: "other team",
+			status: "running",
+		});
+		if (!target.accepted || !otherMember.accepted) throw new Error("setup failed");
+
+		const rejected = await runSteerTeam(ctx, {
+			team_id: "tm_tasks_steer",
+			task_ids: [target.task_id, "t_other_team_steer"],
+			message: "Targeted guidance.",
+		});
+		expect(rejected.ok).toBe(false);
+		if (!rejected.ok) {
+			expect(rejected.error.code).toBe("invalid_input");
+			expect(rejected.error.message).toContain("not a member of team 'tm_tasks_steer'");
+		}
+
+		const before = runner.calls.length;
+		const ack = await runSteerTeam(ctx, {
+			team_id: "tm_tasks_steer",
+			task_ids: [target.task_id],
+			message: "Targeted guidance.",
+		});
+
+		expect(ack.ok).toBe(true);
+		if (!ack.ok) throw new Error("expected subset steer to succeed");
+		expect(ack.steered.map((item) => item.task_id)).toEqual([target.task_id]);
+		expect(ack.steered.some((item) => item.task_id === otherMember.task_id)).toBe(false);
+		expect(runner.calls.slice(before).filter((c) => c[0] === "send-keys")).toHaveLength(2);
+	});
+
+	it("skips non-terminal tasks that do not support steering", async () => {
+		createSession(db, {
+			id: "s_team_unsteerable",
+			project_root: "/p",
+			worktree_path: "/w",
+			parent_agent_kind: "pi",
+		});
+		createTaskTeam(db, { id: "tm_unsteerable", session_id: "s_team_unsteerable", title: "Team" });
+		const batch = await runSubmitTask(ctx, {
+			objective: "batch",
+			agent_kind: "claude-code",
+			session_id: "s_team_unsteerable",
+			team_id: "tm_unsteerable",
+			adapter_options: { mode: "batch" },
+		});
+		if (!batch.accepted) throw new Error("setup failed");
+
+		const ack = await runSteerTeam(ctx, {
+			team_id: "tm_unsteerable",
+			message: "Try steer.",
+		});
+
+		expect(ack.ok).toBe(true);
+		if (!ack.ok) throw new Error("expected unsupported steer to be skipped");
+		expect(ack.steered).toEqual([]);
+		expect(ack.failed).toEqual([]);
+		expect(ack.skipped).toEqual([
+			{ task_id: batch.task_id, status: "running", reason: "steering_unsupported" },
+		]);
 	});
 });
 
