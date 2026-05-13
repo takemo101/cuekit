@@ -103,6 +103,11 @@ import {
 	runReportTaskEvent,
 } from "./commands/report-task-event.ts";
 import {
+	ReportTeamEventInputSchema,
+	ReportTeamEventOutputSchema,
+	runReportTeamEvent,
+} from "./commands/report-team-event.ts";
+import {
 	runShowMcpConfig,
 	ShowMcpConfigInputSchema,
 	ShowMcpConfigOutputSchema,
@@ -378,6 +383,18 @@ async function runList(
 	}
 }
 
+const ReportInputSchema = ReportTeamEventInputSchema.extend({
+	kind: z.literal("team_event").describe("Report target type."),
+}).passthrough();
+const ReportOutputSchema = ReportTeamEventOutputSchema;
+
+async function runReport(
+	ctx: CommandContext,
+	input: z.infer<typeof ReportInputSchema>,
+): Promise<z.infer<typeof ReportOutputSchema>> {
+	return runReportTeamEvent(ctx, ReportTeamEventInputSchema.parse(input));
+}
+
 const CleanupInputSchema = z
 	.object({
 		kind: z.enum(["tasks", "team"]).describe("Cleanup target type."),
@@ -530,6 +547,15 @@ export const CUEKIT_MCP_OPERATIONS = [
 		run: runReportTaskEvent,
 	}),
 	defineMcpOperation({
+		mcpName: "report",
+		cliPath: ["report", "target"],
+		description:
+			"Report shared team context. Set kind to 'team_event' for Swarm-lite blackboard events; task self-reporting remains on report_task_event.",
+		options: ReportInputSchema,
+		output: ReportOutputSchema,
+		run: runReport,
+	}),
+	defineMcpOperation({
 		mcpName: "steer",
 		cliPath: ["steer", "target"],
 		description:
@@ -588,6 +614,13 @@ export const CUEKIT_CLI_OPERATIONS = [
 		options: SubmitTeamTasksInputSchema,
 		output: SubmitTeamTasksOutputSchema,
 		run: runSubmitTeamTasks,
+	}),
+	defineOperation({
+		cliPath: ["team", "report"],
+		description: "Append a Swarm-lite blackboard event to a task team.",
+		options: ReportTeamEventInputSchema,
+		output: ReportTeamEventOutputSchema,
+		run: runReportTeamEvent,
 	}),
 	defineOperation({
 		cliPath: ["team", "create"],

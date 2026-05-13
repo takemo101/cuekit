@@ -3,7 +3,14 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { createSession, createTask, runMigrations, updateTaskChildTokenHash } from "@cuekit/store";
+import {
+	createSession,
+	createTask,
+	createTaskTeam,
+	listTeamEvents,
+	runMigrations,
+	updateTaskChildTokenHash,
+} from "@cuekit/store";
 
 // Full stack test: spawn `bun packages/mcp/src/bin.ts --mcp` as a real child
 // process and speak the MCP JSON-RPC protocol to it over stdin/stdout. This
@@ -193,6 +200,24 @@ function seedReportableTask(path: string): void {
 	db.close();
 }
 
+function seedTeam(path: string): void {
+	const db = new Database(path);
+	db.exec("pragma foreign_keys = ON;");
+	runMigrations(db);
+	createSession(db, {
+		id: "s_team_mcp",
+		project_root: tmpRoot,
+		worktree_path: tmpRoot,
+		parent_agent_kind: "cuekit-cli",
+	});
+	createTaskTeam(db, {
+		id: "tm_mcp",
+		session_id: "s_team_mcp",
+		title: "MCP team",
+	});
+	db.close();
+}
+
 let tmpRoot: string;
 let dbPath: string;
 let server: SpawnedServer;
@@ -235,7 +260,9 @@ describe("cuekit --mcp (stdio integration)", () => {
 			"get_task_result",
 			"get_task_snapshot",
 			"get_team_result",
+			"get_team_snapshot",
 			"list",
+			"report",
 			"report_task_event",
 			"start_team_strategy",
 			"steer",
@@ -423,5 +450,51 @@ describe("cuekit --mcp (stdio integration)", () => {
 		const result = reply.result as ToolCallResult | undefined;
 		const hasToolError = result?.isError === true;
 		expect(hasJsonRpcError || hasToolError).toBe(true);
+	});
+
+	it("tools/call report kind=team_event persists a team blackboard event", async () => {
+		await server.shutdown();
+		seedTeam(dbPath);
+		server = await spawnServer(dbPath);
+		await initialize(server);
+
+		await server.send({
+			jsonrpc: "2.0",
+			id: 9,
+			method: "tools/call",
+			params: {
+				name: "report",
+				arguments: {
+					kind: "team_event",
+					team_id: "tm_mcp",
+					event_type: "decision",
+					message: "Use the grouped team event surface.",
+					payload: { source: "mcp-test" },
+				},
+			},
+		});
+		const reply = await server.readNext("report team_event reply");
+		const data = toolCallData(reply.result as ToolCallResult) as {
+			ok?: boolean;
+			team_id?: string;
+			event_id?: string;
+		};
+		expect(data.ok).toBe(true);
+		expect(data.team_id).toBe("tm_mcp");
+		expect(data.event_id).toMatch(/^te_/);
+
+		const db = new Database(dbPath);
+		try {
+			const events = listTeamEvents(db, "tm_mcp");
+			expect(events).toHaveLength(1);
+			expect(events[0]).toMatchObject({
+				team_id: "tm_mcp",
+				event_type: "decision",
+				message: "Use the grouped team event surface.",
+				payload_json: JSON.stringify({ source: "mcp-test" }),
+			});
+		} finally {
+			db.close();
+		}
 	});
 });
