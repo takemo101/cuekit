@@ -12,6 +12,7 @@ describe("cuekit update", () => {
 		expect(result.exitCode).toBe(0);
 		expect(result.stdout).toContain("Current: v0.1.0");
 		expect(result.stdout).toContain("Latest:  v0.1.1");
+		expect(result.stdout).toContain("bun remove -g cuekit-workspace");
 		expect(result.stdout).toContain("bun install -g github:takemo101/cuekit#v0.1.1");
 		expect(result.stdout).toContain("restart any MCP client");
 	});
@@ -25,10 +26,10 @@ describe("cuekit update", () => {
 		expect(result.exitCode).toBe(0);
 		expect(result.stdout).toContain("Current: unknown");
 		expect(result.stdout).toContain("Could not fetch the latest release tag: offline");
-		expect(result.stdout).toContain(
-			"Manual update pattern: bun install -g github:takemo101/cuekit#<release-tag>",
-		);
+		expect(result.stdout).toContain("Manual update pattern:");
+		expect(result.stdout).toContain("bun install -g github:takemo101/cuekit#<release-tag>");
 		expect(result.stdout).toContain("<release-tag> is a placeholder");
+		expect(result.stdout).toContain("bun remove -g cuekit-workspace");
 	});
 
 	it("shows fallback when GitHub API returns malformed response", async () => {
@@ -39,9 +40,8 @@ describe("cuekit update", () => {
 
 		expect(result.exitCode).toBe(0);
 		expect(result.stdout).toContain("Could not fetch the latest release tag: missing tag_name");
-		expect(result.stdout).toContain(
-			"Manual update pattern: bun install -g github:takemo101/cuekit#<release-tag>",
-		);
+		expect(result.stdout).toContain("Manual update pattern:");
+		expect(result.stdout).toContain("bun install -g github:takemo101/cuekit#<release-tag>");
 		expect(result.stdout).toContain("<release-tag> is a placeholder");
 		expect(result.stdout).not.toContain("bun install -g github:takemo101/cuekit#missing tag_name");
 	});
