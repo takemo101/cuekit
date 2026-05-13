@@ -689,6 +689,7 @@ export function App(props: {
 							<TaskDetail
 								task={selectedTask}
 								detail={detail}
+								activeTab={activeTaskTab}
 								loadingDetail={taskDetailLoading}
 								loadingFrame={loadingFrame}
 							/>

@@ -432,6 +432,82 @@ describe("TaskDetail contextHeight", () => {
 		).toContain("No blackboard events.");
 	});
 
+	it("renders task detail tabs with focused content", () => {
+		const task: TaskSummary = {
+			task_id: "t_tab",
+			agent_kind: "pi",
+			status: "running",
+			team_id: "tm_1",
+			updated_at: "2026-05-01T00:00:00.000Z",
+		};
+		const detail: TuiTaskDetail = {
+			status: {
+				task_id: "t_tab",
+				agent_kind: "pi",
+				status: "running",
+				team_id: "tm_1",
+				position: "worker",
+				created_at: "2026-05-01T00:00:00.000Z",
+				updated_at: "2026-05-01T00:00:00.000Z",
+				summary: "Working summary",
+			},
+			events: [
+				{
+					sequence: 1,
+					id: "e1",
+					task_id: "t_tab",
+					type: "progress",
+					message: "made progress",
+					payload: null,
+					created_at: "2026-05-01T00:00:00.000Z",
+				},
+			],
+			teamAttentionItems: [
+				{
+					sequence: 7,
+					task_id: "t_peer",
+					position: "reviewer",
+					type: "blocked",
+					message_preview: "needs review input",
+					created_at: "2026-05-01T00:00:01.000Z",
+				},
+			],
+			manualSteerHints: [
+				{
+					attention_sequence: 7,
+					task_id: "t_peer",
+					position: "reviewer",
+					tool: "steer" as const,
+					suggested_message: "Please review",
+					rationale: "Manual steer only",
+				},
+			],
+			transcriptTail: ["hello output"],
+			transcriptSource: "live",
+		};
+
+		const overview = JSON.stringify(TaskDetail({ task, detail, activeTab: "overview" }));
+		expect(overview).toContain("Working summary");
+		expect(overview).toContain("position");
+		expect(overview).not.toContain("LIVE OUTPUT");
+
+		const events = JSON.stringify(TaskDetail({ task, detail, activeTab: "events" }));
+		expect(events).toContain("EVENTS (1 shown)");
+		expect(events).toContain("made progress");
+		expect(events).not.toContain("hello output");
+
+		const output = JSON.stringify(TaskDetail({ task, detail, activeTab: "output" }));
+		expect(output).toContain("LIVE OUTPUT");
+		expect(output).toContain("hello output");
+		expect(output).not.toContain("EVENTS (1 shown)");
+
+		const context = JSON.stringify(TaskDetail({ task, detail, activeTab: "context" }));
+		expect(context).toContain("TEAM CONTEXT");
+		expect(context).toContain("needs review input");
+		expect(context).toContain("Please review");
+		expect(context).toContain("Handoff/blackboard snippets deferred.");
+	});
+
 	it("shows backend mismatch metadata with attach-only guidance", () => {
 		const task: TaskSummary = {
 			task_id: "t_1",

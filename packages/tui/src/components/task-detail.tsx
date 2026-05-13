@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import type { TuiTaskEvent } from "../context.ts";
 import { DEFAULT_TRANSCRIPT_LINES, type TuiTaskDetail } from "../data.ts";
 import { truncateEnd, truncateMiddle } from "../format.ts";
+import type { TaskDetailTab } from "../tui-state.ts";
 import { statusAccent, statusGlyph, theme } from "../theme.ts";
 
 function pathLabel(path: string | undefined): string {
@@ -15,13 +16,16 @@ function isOutputNoise(line: string): boolean {
 	const trimmed = line.trim();
 	const normalized = trimmed.toLowerCase().replaceAll(" ", "");
 	return (
-		/^[-─━]{8,}$/.test(trimmed) ||
-		/^\?\s*for\s+shortcuts/i.test(trimmed) ||
-		/^shift\+tab\s+to\s+cycle/i.test(trimmed) ||
-		/^ctrl\+[^\s]+\s+to\s+expand/i.test(trimmed) ||
-		normalized === "bypasspermissions" ||
-		normalized === "stophook" ||
-		/^tokens:\s*\d+/i.test(trimmed)
+		trimmed === "" ||
+		trimmed === "─" ||
+		/^[-─━═]+$/.test(trimmed) ||
+		normalized === "escnavigate" ||
+		normalized === "ctrl+oinput" ||
+		normalized === "shift+tabprev" ||
+		normalized === "tabnext" ||
+		normalized === "entersend" ||
+		normalized === "ctrl+jnewline" ||
+		normalized === "ctrl+ccancel"
 	);
 }
 
@@ -29,33 +33,8 @@ function outputLines(detail: TuiTaskDetail | undefined): string[] {
 	return (detail?.transcriptTail ?? []).filter((line) => !isOutputNoise(line));
 }
 
-// Visual marker placed at the top of the padding region so a user
-// who scrolls up sees a clear "no earlier content" anchor instead of
-// a silent blank region. Kept short and distinctive so it doesn't
-// compete with real content for attention. (See #383 for the UX
-// discussion.)
 const LIVE_OUTPUT_PADDING_HEAD = "── (no earlier pane content) ──";
 
-// LIVE OUTPUT scroll position is shared with OpenTUI's scrollbox sticky-
-// scroll machinery. The capture-pane source returns a variable number of
-// lines per refresh (anywhere from 0 to maxLines), which would shift the
-// scrollbox's total content height on every poll and clamp the user's
-// scroll offset back to the bottom — exactly the "scroll resets on
-// reload" symptom. Padding the rendered content with empty lines at the
-// **top** to a stable target height makes the scrollbox see a constant-
-// size canvas, so a user who scrolled up to read older content stays
-// where they were while live data continues to land at the bottom edge.
-//
-// The newest content keeps its position at the bottom of the canvas
-// because we pad only at the head; this matches `stickyStart="bottom"`.
-//
-// When the content is shorter than the target height, the very first
-// padded line is replaced with a marker (`LIVE_OUTPUT_PADDING_HEAD`)
-// so a user who scrolls up sees an anchor instead of an unexplained
-// blank canvas. The remaining padding stays as empty strings to keep
-// the visual weight light.
-//
-// Exported so the padding is unit-testable in isolation.
 export function padLinesForLiveOutput(lines: string[], targetHeight: number): string[] {
 	if (targetHeight <= 0) return lines;
 	if (lines.length >= targetHeight) return lines.slice(-targetHeight);
@@ -65,16 +44,13 @@ export function padLinesForLiveOutput(lines: string[], targetHeight: number): st
 	return [...padding, ...lines];
 }
 
-// Padding target tracks the data layer's max-lines so the rendered
-// canvas height matches what loadTaskDetail actually fetches. Both come
-// from `DEFAULT_TRANSCRIPT_LINES` to prevent drift if either default is
-// retuned later.
 const LIVE_OUTPUT_TARGET_HEIGHT = DEFAULT_TRANSCRIPT_LINES;
 
-function formatUpdatedAt(value: string): string {
+function formatUpdatedAt(value: string | undefined): string {
+	if (!value) return "unknown";
 	const date = new Date(value);
 	if (Number.isNaN(date.getTime())) return value;
-	return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+	return date.toLocaleTimeString();
 }
 
 function formatIdleMs(value: number | undefined): string | undefined {
@@ -150,9 +126,7 @@ export function metadataEntries(
 			color: theme.purple,
 		});
 	}
-	if (model) {
-		entries.push({ label: "model", value: model, color: theme.cyan });
-	}
+	if (model) entries.push({ label: "model", value: model, color: theme.cyan });
 	if (typeof adapterMode === "string" && adapterMode.length > 0) {
 		entries.push({
 			label: "mode",
@@ -160,41 +134,19 @@ export function metadataEntries(
 			color: adapterMode === "batch" ? theme.yellow : theme.cyan,
 		});
 	}
-	if (teamId) {
-		entries.push({ label: "team", value: teamId, color: theme.purple });
-	}
+	if (teamId) entries.push({ label: "team", value: teamId, color: theme.purple });
 	if (detail?.teamStatusError) {
-		entries.push({
-			label: "team status",
-			value: truncateEnd(detail.teamStatusError, 110),
-			color: theme.red,
-		});
+		entries.push({ label: "team status", value: truncateEnd(detail.teamStatusError, 110), color: theme.red });
 	}
-	if (position) {
-		entries.push({ label: "position", value: position, color: theme.purple });
-	}
+	if (position) entries.push({ label: "position", value: position, color: theme.purple });
 	entries.push({ label: "transcript", value: pathLabel(detail?.transcriptPath), color: theme.cyan });
-	if (detail?.status.last_event_at) {
-		entries.push({
-			label: "event",
-			value: formatUpdatedAt(detail.status.last_event_at),
-			color: theme.cyan,
-		});
-	}
-	if (detail?.status.last_transcript_at) {
-		entries.push({
-			label: "output",
-			value: formatUpdatedAt(detail.status.last_transcript_at),
-			color: theme.cyan,
-		});
-	}
+	if (detail?.status.last_event_at) entries.push({ label: "event", value: formatUpdatedAt(detail.status.last_event_at), color: theme.cyan });
+	if (detail?.status.last_transcript_at) entries.push({ label: "output", value: formatUpdatedAt(detail.status.last_transcript_at), color: theme.cyan });
 	const idleLabel = formatIdleMs(detail?.status.idle_ms);
 	if (idleLabel) {
 		entries.push({
 			label: "idle",
-			value: detail?.status.attention_hint
-				? `${idleLabel} — ${detail.status.attention_hint}`
-				: idleLabel,
+			value: detail?.status.attention_hint ? `${idleLabel} — ${detail.status.attention_hint}` : idleLabel,
 			color: detail?.status.attention_hint ? theme.yellow : theme.muted,
 		});
 	}
@@ -208,19 +160,9 @@ export function metadataEntries(
 		});
 	}
 	if (detail?.status.supports_attach === true && detail.status.attach_hint) {
-		entries.push({
-			label: "attach",
-			value: truncateMiddle(detail.status.attach_hint, 96),
-			color: theme.purple,
-		});
+		entries.push({ label: "attach", value: truncateMiddle(detail.status.attach_hint, 96), color: theme.purple });
 	}
-	if (detail?.status.summary) {
-		entries.push({
-			label: "summary",
-			value: truncateEnd(detail.status.summary, 110),
-			color: theme.green,
-		});
-	}
+	if (detail?.status.summary) entries.push({ label: "summary", value: truncateEnd(detail.status.summary, 110), color: theme.green });
 	return entries;
 }
 
@@ -305,42 +247,90 @@ function EventRow(props: { event: TuiTaskEvent }): ReactNode {
 	);
 }
 
-function ContextPanel(props: {
-	metadata: MetadataEntry[];
-	attention: AttentionEntry[];
-	events: TuiTaskEvent[];
-	error?: string;
-}): ReactNode {
+function MetadataPanel(props: { metadata: MetadataEntry[] }): ReactNode {
 	return (
-		<scrollbox
-			height={contextHeight(props.metadata, props.events, props.attention)}
-			flexShrink={1}
-			viewportCulling
-		>
-			{props.metadata.map((entry) => (
-				<MetadataRow key={entry.label} entry={entry} />
-			))}
-			{props.attention.length > 0 ? <AttentionHeader count={props.attention.length} /> : null}
-			{props.attention.map((entry) => (
-				<AttentionRow key={entry.sequence} entry={entry} />
-			))}
-			<EventHeader count={props.events.length} error={props.error} />
+		<scrollbox height={Math.min(12, Math.max(4, props.metadata.length + 1))} flexShrink={1} viewportCulling>
+			{props.metadata.map((entry) => MetadataRow({ entry }))}
+		</scrollbox>
+	);
+}
+
+function EventsPanel(props: { events: TuiTaskEvent[]; error?: string }): ReactNode {
+	return (
+		<scrollbox height={Math.min(12, Math.max(4, props.events.length + 2))} flexShrink={1} viewportCulling>
+			{EventHeader({ count: props.events.length, error: props.error })}
 			{props.error ? <text fg={theme.red}>{truncateEnd(props.error, 128)}</text> : null}
 			{props.events.length === 0 && !props.error ? <text fg={theme.muted}>No events yet.</text> : null}
-			{props.events.map((event) => (
-				<EventRow key={event.sequence} event={event} />
-			))}
+			{props.events.map((event) => EventRow({ event }))}
 		</scrollbox>
+	);
+}
+
+function ContextPanel(props: { attention: AttentionEntry[]; detail?: TuiTaskDetail; error?: string }): ReactNode {
+	const hints = props.detail?.manualSteerHints ?? [];
+	return (
+		<scrollbox height={Math.min(12, Math.max(4, props.attention.length + 4))} flexShrink={1} viewportCulling>
+			<box backgroundColor={theme.panelAlt} height={1}>
+				<text fg={theme.yellow}>TEAM CONTEXT</text>
+			</box>
+			{props.error ? <text fg={theme.red}>{truncateEnd(props.error, 128)}</text> : null}
+			{props.attention.length > 0 ? AttentionHeader({ count: props.attention.length }) : <text fg={theme.muted}>No team attention snippets.</text>}
+			{props.attention.map((entry) => AttentionRow({ entry }))}
+			<text fg={theme.cyan}>{`STEER HINTS ${hints.length}`}</text>
+			{hints.length === 0 ? (
+				<text fg={theme.muted}>No manual steer hints.</text>
+			) : (
+				hints.slice(0, 3).map((hint) => (
+					<text key={`${hint.attention_sequence}:${hint.task_id}`} fg={theme.muted}>
+						{truncateEnd(`${hint.position ?? "?"} ${hint.task_id}: ${hint.suggested_message}`, 110)}
+					</text>
+				))
+			)}
+			<text fg={theme.muted}>Handoff/blackboard snippets deferred.</text>
+		</scrollbox>
+	);
+}
+
+function OutputPanel(props: { detail?: TuiTaskDetail; status: TaskStatus; lines: string[] }): ReactNode {
+	const isTerminal = ["completed", "failed", "cancelled", "timed_out", "blocked"].includes(props.status);
+	return isTerminal ? (
+		<>
+			<box backgroundColor={theme.panelAlt} height={1} flexShrink={0}>
+				<text fg={theme.cyan}>RESULT</text>
+			</box>
+			<text flexShrink={0}>{resultBlock(props.detail, props.status)}</text>
+			<text flexShrink={0}> </text>
+			<box backgroundColor={theme.panelAlt} height={1} flexShrink={0}>
+				<text fg={theme.cyan}>{`TRANSCRIPT TAIL (${props.lines.length} line${props.lines.length === 1 ? "" : "s"})`}</text>
+			</box>
+			<scrollbox flexGrow={1} flexShrink={1} stickyScroll stickyStart="bottom" viewportCulling>
+				<text fg={theme.text}>{props.lines.length > 0 ? props.lines.map((line) => truncateEnd(line, 150)).join("\n") : "No transcript output available."}</text>
+			</scrollbox>
+		</>
+	) : (
+		<>
+			<box backgroundColor={theme.panelAlt} height={1} flexShrink={0}>
+				<text fg={theme.cyan}>
+					{`LIVE OUTPUT (${props.lines.length} line${props.lines.length === 1 ? "" : "s"}, ${
+						props.detail?.transcriptSource === "live" ? "live pane" : "transcript file"
+					})`}
+				</text>
+			</box>
+			<scrollbox flexGrow={1} flexShrink={1} stickyScroll stickyStart="bottom" viewportCulling>
+				<text fg={theme.text}>{props.lines.length > 0 ? padLinesForLiveOutput(props.lines, LIVE_OUTPUT_TARGET_HEIGHT).map((line) => truncateEnd(line, 150)).join("\n") : "No output available yet."}</text>
+			</scrollbox>
+		</>
 	);
 }
 
 export function TaskDetail(props: {
 	task?: TaskSummary;
 	detail?: TuiTaskDetail;
+	activeTab?: TaskDetailTab;
 	loadingDetail?: boolean;
 	loadingFrame?: string;
 }): ReactNode {
-	const { task, detail, loadingDetail, loadingFrame } = props;
+	const { task, detail, activeTab = "overview", loadingDetail, loadingFrame } = props;
 	if (!task) {
 		return (
 			<box title="Detail" borderStyle="single" borderColor={theme.border} backgroundColor={theme.panel} flexGrow={2} padding={1}>
@@ -350,9 +340,8 @@ export function TaskDetail(props: {
 	}
 
 	const status = detail?.status.status ?? task.status;
-	const events = detail?.events.slice(-2) ?? [];
+	const events = detail?.events.slice(-8) ?? [];
 	const lines = outputLines(detail);
-	const isTerminal = ["completed", "failed", "cancelled", "timed_out", "blocked"].includes(status);
 	const metadata = metadataEntries(task, detail);
 	const attention = attentionEntries(detail);
 
@@ -367,50 +356,10 @@ export function TaskDetail(props: {
 			flexDirection="column"
 		>
 			{loadingDetail ? <text fg={theme.yellow}>{`${loadingFrame ?? "⠋"} Loading detail…`}</text> : null}
-			<ContextPanel
-				metadata={metadata}
-				attention={attention}
-				events={events}
-				error={detail?.eventsError}
-			/>
-			{isTerminal ? (
-				<>
-					<box backgroundColor={theme.panelAlt} height={1} flexShrink={0}>
-						<text fg={theme.cyan}>RESULT</text>
-					</box>
-					<text flexShrink={0}>{resultBlock(detail, status)}</text>
-					<text flexShrink={0}> </text>
-					<box backgroundColor={theme.panelAlt} height={1} flexShrink={0}>
-						<text fg={theme.cyan}>{`TRANSCRIPT TAIL (${lines.length} line${lines.length === 1 ? "" : "s"})`}</text>
-					</box>
-					<scrollbox flexGrow={1} flexShrink={1} stickyScroll stickyStart="bottom" viewportCulling>
-						<text fg={theme.text}>{
-							lines.length > 0
-								? lines.map((line) => truncateEnd(line, 150)).join("\n")
-								: "No transcript output available."
-						}</text>
-					</scrollbox>
-				</>
-			) : (
-				<>
-					<box backgroundColor={theme.panelAlt} height={1} flexShrink={0}>
-						<text fg={theme.cyan}>
-							{`LIVE OUTPUT (${lines.length} line${lines.length === 1 ? "" : "s"}, ${
-								detail?.transcriptSource === "live" ? "live pane" : "transcript file"
-							})`}
-						</text>
-					</box>
-					<scrollbox flexGrow={1} flexShrink={1} stickyScroll stickyStart="bottom" viewportCulling>
-						<text fg={theme.text}>{
-							lines.length > 0
-								? padLinesForLiveOutput(lines, LIVE_OUTPUT_TARGET_HEIGHT)
-										.map((line) => truncateEnd(line, 150))
-										.join("\n")
-								: "No output available yet."
-						}</text>
-					</scrollbox>
-				</>
-			)}
+			{activeTab === "overview" ? MetadataPanel({ metadata }) : null}
+			{activeTab === "events" ? EventsPanel({ events, error: detail?.eventsError }) : null}
+			{activeTab === "output" ? OutputPanel({ detail, status, lines }) : null}
+			{activeTab === "context" ? ContextPanel({ attention, detail, error: detail?.teamStatusError }) : null}
 		</box>
 	);
 }
