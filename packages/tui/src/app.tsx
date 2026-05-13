@@ -9,6 +9,14 @@ import {
 	getPaneAttachCommand,
 } from "./attach.ts";
 import { ConfirmDialog } from "./components/confirm-dialog.tsx";
+import {
+	DetailTabs,
+	TASK_DETAIL_TABS,
+	TEAM_DETAIL_TABS,
+	detailTabByIndex,
+	nextDetailTab,
+	safeDetailTabForMode,
+} from "./components/detail-tabs.tsx";
 import { Footer } from "./components/footer.tsx";
 import { InputDialog } from "./components/input-dialog.tsx";
 import { TaskDetail } from "./components/task-detail.tsx";
@@ -36,7 +44,7 @@ import {
 	restoreIndexById,
 } from "./task-actions.ts";
 import { theme } from "./theme.ts";
-import type { TeamFocus, TuiExit, TuiMode, TuiReturnState } from "./tui-state.ts";
+import type { TaskDetailTab, TeamDetailTab, TeamFocus, TuiExit, TuiMode, TuiReturnState } from "./tui-state.ts";
 
 const AUTO_REFRESH_MS = 3000;
 const DEFAULT_DETAIL_LOAD_DEBOUNCE_MS = 30;
@@ -78,6 +86,12 @@ export function App(props: {
 	const [selectedTeamIndex, setSelectedTeamIndex] = useState(0);
 	const [selectedMemberIndex, setSelectedMemberIndex] = useState(0);
 	const [teamFocus, setTeamFocus] = useState<TeamFocus>(props.initialState?.team_focus ?? "list");
+	const [activeTaskTab, setActiveTaskTab] = useState<TaskDetailTab>(
+		safeDetailTabForMode(props.initialState?.mode ?? "tasks", props.initialState?.task_detail_tab) as TaskDetailTab,
+	);
+	const [activeTeamTab, setActiveTeamTab] = useState<TeamDetailTab>(
+		safeDetailTabForMode("teams", props.initialState?.team_detail_tab) as TeamDetailTab,
+	);
 	const [detail, setDetail] = useState<TuiTaskDetail | undefined>();
 	const [teamDetail, setTeamDetail] = useState<TuiTeamDetail | undefined>();
 	const [debouncedTaskDetailId, setDebouncedTaskDetailId] = useState<string | undefined>();
@@ -104,6 +118,8 @@ export function App(props: {
 		[teamDetail, selectedMemberIndex],
 	);
 	const selectedTeamCounts = selectedTeam?.task_counts ?? teamDetail?.status?.task_counts;
+	const activeTabs = mode === "teams" ? TEAM_DETAIL_TABS : TASK_DETAIL_TABS;
+	const activeDetailTab = mode === "teams" ? activeTeamTab : activeTaskTab;
 	const listRows = Math.max(1, terminal.height - 7);
 	const detailLoadDebounceMs = props.ctx.detailLoadDebounceMs ?? DEFAULT_DETAIL_LOAD_DEBOUNCE_MS;
 	const taskDetailLoading = Boolean(
@@ -357,11 +373,19 @@ export function App(props: {
 				setError("Selected team member does not expose an attach command.");
 				return;
 			}
-			exit(buildTuiTeamMemberAttachExit(command, selectedTeam.team_id, selectedMember.task_id, memberStatus));
+			exit(
+				buildTuiTeamMemberAttachExit(
+					command,
+					selectedTeam.team_id,
+					selectedMember.task_id,
+					memberStatus,
+					activeTeamTab,
+				),
+			);
 		} catch (err) {
 			setError(err instanceof Error ? err.message : String(err));
 		}
-	}, [exit, props.ctx, selectedMember, selectedTeam]);
+	}, [activeTeamTab, exit, props.ctx, selectedMember, selectedTeam]);
 
 	const attachSelectedTeam = useCallback(async () => {
 		if (!selectedTeam || !teamDetail?.members.length) {
@@ -374,7 +398,7 @@ export function App(props: {
 				if (!canAttach(memberStatus)) continue;
 				const command = getPaneAttachCommand(memberStatus);
 				if (command) {
-					exit(buildTuiTeamAttachExit(command, selectedTeam.team_id));
+					exit(buildTuiTeamAttachExit(command, selectedTeam.team_id, activeTeamTab));
 					return;
 				}
 			}
@@ -382,7 +406,7 @@ export function App(props: {
 		} catch (err) {
 			setError(err instanceof Error ? err.message : String(err));
 		}
-	}, [exit, props.ctx, selectedTeam, teamDetail]);
+	}, [activeTeamTab, exit, props.ctx, selectedTeam, teamDetail]);
 
 	useKeyboard((key) => {
 		if (steerInput !== null) {
@@ -430,6 +454,26 @@ export function App(props: {
 				return;
 			}
 			exit({ kind: "quit" });
+			return;
+		}
+		if (key.sequence === "[" || key.sequence === "]") {
+			if (mode === "teams") {
+				setActiveTeamTab((current) =>
+					nextDetailTab(current, TEAM_DETAIL_TABS, key.sequence === "]" ? 1 : -1),
+				);
+			} else {
+				setActiveTaskTab((current) =>
+					nextDetailTab(current, TASK_DETAIL_TABS, key.sequence === "]" ? 1 : -1),
+				);
+			}
+			return;
+		}
+		if (/^[1-5]$/.test(key.sequence)) {
+			if (mode === "teams") {
+				setActiveTeamTab((current) => detailTabByIndex(TEAM_DETAIL_TABS, key.sequence, current));
+			} else {
+				setActiveTaskTab((current) => detailTabByIndex(TASK_DETAIL_TABS, key.sequence, current));
+			}
 			return;
 		}
 		if (key.name === "t") {
@@ -487,7 +531,7 @@ export function App(props: {
 					const status = await props.ctx.getTaskStatus(result.task_id);
 					const command = canAttach(status) ? getPaneAttachCommand(status) : null;
 					if (command) {
-						exit(buildTuiTaskAttachExit(command, result.task_id, status, "parents"));
+						exit(buildTuiTaskAttachExit(command, result.task_id, status, "parents", activeTaskTab));
 						return;
 					}
 					setMessage(`Created parent session ${result.task_id}. Attach after refresh.`);
@@ -522,7 +566,7 @@ export function App(props: {
 				setError("Selected task does not expose an attach command.");
 				return;
 			}
-			exit(buildTuiTaskAttachExit(command, detail.status.task_id, detail.status, mode));
+			exit(buildTuiTaskAttachExit(command, detail.status.task_id, detail.status, mode, activeTaskTab));
 			return;
 		}
 		if (key.name === "c") {
@@ -614,24 +658,30 @@ export function App(props: {
 				{mode === "teams" ? (
 					<>
 						<TeamList teams={teams} selectedIndex={selectedTeamIndex} maxVisibleRows={listRows} />
-						<TeamDetail
-							team={selectedTeam}
-							detail={teamDetail}
-							selectedMemberIndex={selectedMemberIndex}
-							focus={teamFocus}
-							loadingDetail={teamDetailLoading}
-							loadingFrame={loadingFrame}
-						/>
+						<box flexDirection="column" flexGrow={1}>
+							<DetailTabs tabs={activeTabs} active={activeDetailTab} />
+							<TeamDetail
+								team={selectedTeam}
+								detail={teamDetail}
+								selectedMemberIndex={selectedMemberIndex}
+								focus={teamFocus}
+								loadingDetail={teamDetailLoading}
+								loadingFrame={loadingFrame}
+							/>
+						</box>
 					</>
 				) : (
 					<>
 						<TaskList tasks={tasks} selectedIndex={selectedIndex} maxVisibleRows={listRows} />
-						<TaskDetail
-							task={selectedTask}
-							detail={detail}
-							loadingDetail={taskDetailLoading}
-							loadingFrame={loadingFrame}
-						/>
+						<box flexDirection="column" flexGrow={1}>
+							<DetailTabs tabs={activeTabs} active={activeDetailTab} />
+							<TaskDetail
+								task={selectedTask}
+								detail={detail}
+								loadingDetail={taskDetailLoading}
+								loadingFrame={loadingFrame}
+							/>
+						</box>
 					</>
 				)}
 			</box>

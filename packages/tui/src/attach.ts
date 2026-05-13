@@ -1,5 +1,5 @@
 import type { TaskStatusView } from "@cuekit/core";
-import type { TuiExit } from "./tui-state.ts";
+import type { TaskDetailTab, TeamDetailTab, TuiExit } from "./tui-state.ts";
 
 const TMUX_ATTACH_HINT_RE = /^tmux\s+attach(?:-session)?\s+-t\s+([^\s]+)$/;
 const ZELLIJ_ATTACH_HINT_RE = /^zellij\s+attach\s+([^\s]+)$/;
@@ -95,13 +95,18 @@ export function buildTuiTaskAttachExit(
 	taskId: string,
 	view?: TaskStatusView,
 	returnMode: "tasks" | "parents" = "tasks",
+	activeTab?: TaskDetailTab,
 ): TuiExit {
 	const preAttachArgs = preAttachArgsForTask(view);
 	return {
 		kind: "attach",
 		...(preAttachArgs ? { preAttachArgs } : {}),
 		args: attachArgsForTui(command),
-		returnState: { mode: returnMode, selected_task_id: taskId },
+		returnState: {
+			mode: returnMode,
+			selected_task_id: taskId,
+			...(activeTab ? { task_detail_tab: activeTab } : {}),
+		},
 	};
 }
 
@@ -110,6 +115,7 @@ export function buildTuiTeamMemberAttachExit(
 	teamId: string,
 	taskId: string,
 	view?: TaskStatusView,
+	activeTab?: TeamDetailTab,
 ): TuiExit {
 	const preAttachArgs = preAttachArgsForTask(view);
 	return {
@@ -121,11 +127,16 @@ export function buildTuiTeamMemberAttachExit(
 			selected_team_id: teamId,
 			selected_member_task_id: taskId,
 			team_focus: "members",
+			...(activeTab ? { team_detail_tab: activeTab } : {}),
 		},
 	};
 }
 
-export function buildTuiTeamAttachExit(command: { argv: string[] }, teamId: string): TuiExit {
+export function buildTuiTeamAttachExit(
+	command: { argv: string[] },
+	teamId: string,
+	activeTab?: TeamDetailTab,
+): TuiExit {
 	return {
 		kind: "attach",
 		args: attachArgsForTui(command),
@@ -133,6 +144,7 @@ export function buildTuiTeamAttachExit(command: { argv: string[] }, teamId: stri
 			mode: "teams",
 			selected_team_id: teamId,
 			team_focus: "list",
+			...(activeTab ? { team_detail_tab: activeTab } : {}),
 		},
 	};
 }

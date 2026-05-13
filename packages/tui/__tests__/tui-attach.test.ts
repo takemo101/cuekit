@@ -87,11 +87,66 @@ describe("tui tmux attach helpers", () => {
 		});
 	});
 
+	it("preserves task detail tabs through task and parent attach exits", () => {
+		expect(
+			buildTuiTaskAttachExit(
+				{ argv: ["tmux", "attach-session", "-t", "cuekit-task-t_abc"] },
+				"t_abc",
+				undefined,
+				"tasks",
+				"output",
+			),
+		).toMatchObject({
+			returnState: { mode: "tasks", selected_task_id: "t_abc", task_detail_tab: "output" },
+		});
+		expect(
+			buildTuiTaskAttachExit(
+				{ argv: ["tmux", "attach-session", "-t", "cuekit-task-t_parent"] },
+				"t_parent",
+				undefined,
+				"parents",
+				"events",
+			),
+		).toMatchObject({
+			returnState: { mode: "parents", selected_task_id: "t_parent", task_detail_tab: "events" },
+		});
+	});
+
 	it("builds team attach exits with return state for attach-and-return", () => {
 		expect(buildTuiTeamAttachExit({ argv: ["zellij", "attach", "ctm-abcd"] }, "tm_abcd")).toEqual({
 			kind: "attach",
 			args: ["zellij", "attach", "ctm-abcd"],
 			returnState: { mode: "teams", selected_team_id: "tm_abcd", team_focus: "list" },
+		});
+	});
+
+	it("preserves team detail tabs through team and member attach exits", () => {
+		expect(
+			buildTuiTeamAttachExit({ argv: ["zellij", "attach", "ctm-abcd"] }, "tm_abcd", "knowledge"),
+		).toMatchObject({
+			returnState: {
+				mode: "teams",
+				selected_team_id: "tm_abcd",
+				team_focus: "list",
+				team_detail_tab: "knowledge",
+			},
+		});
+		expect(
+			buildTuiTeamMemberAttachExit(
+				{ argv: ["zellij", "attach", "ctm-abcd"] },
+				"tm_abcd",
+				"t_abc",
+				undefined,
+				"members",
+			),
+		).toMatchObject({
+			returnState: {
+				mode: "teams",
+				selected_team_id: "tm_abcd",
+				selected_member_task_id: "t_abc",
+				team_focus: "members",
+				team_detail_tab: "members",
+			},
 		});
 	});
 
