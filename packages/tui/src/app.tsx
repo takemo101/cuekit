@@ -458,9 +458,11 @@ export function App(props: {
 		}
 		if (key.sequence === "[" || key.sequence === "]") {
 			if (mode === "teams") {
-				setActiveTeamTab((current) =>
-					nextDetailTab(current, TEAM_DETAIL_TABS, key.sequence === "]" ? 1 : -1),
-				);
+				setActiveTeamTab((current) => {
+					const next = nextDetailTab(current, TEAM_DETAIL_TABS, key.sequence === "]" ? 1 : -1);
+					if (next !== "members") setTeamFocus("list");
+					return next;
+				});
 			} else {
 				setActiveTaskTab((current) =>
 					nextDetailTab(current, TASK_DETAIL_TABS, key.sequence === "]" ? 1 : -1),
@@ -470,7 +472,11 @@ export function App(props: {
 		}
 		if (/^[1-5]$/.test(key.sequence)) {
 			if (mode === "teams") {
-				setActiveTeamTab((current) => detailTabByIndex(TEAM_DETAIL_TABS, key.sequence, current));
+				setActiveTeamTab((current) => {
+					const next = detailTabByIndex(TEAM_DETAIL_TABS, key.sequence, current);
+					if (next !== "members") setTeamFocus("list");
+					return next;
+				});
 			} else {
 				setActiveTaskTab((current) => detailTabByIndex(TASK_DETAIL_TABS, key.sequence, current));
 			}
@@ -505,7 +511,11 @@ export function App(props: {
 			return;
 		}
 		if (key.name === "return" && mode === "teams") {
-			setTeamFocus((current) => resolveEnterTeamFocus(current, teamDetail?.members.length ?? 0));
+			setTeamFocus((current) => {
+				const next = resolveEnterTeamFocus(current, teamDetail?.members.length ?? 0);
+				if (next === "members") setActiveTeamTab("members");
+				return next;
+			});
 			return;
 		}
 		if (key.name === "r") {
@@ -550,7 +560,7 @@ export function App(props: {
 		}
 		if (key.name === "a") {
 			if (mode === "teams") {
-				if (teamFocus !== "members") {
+				if (teamFocus !== "members" || activeTeamTab !== "members") {
 					setError("Press Enter to choose a team member before attaching.");
 					return;
 				}
@@ -571,7 +581,7 @@ export function App(props: {
 		}
 		if (key.name === "c") {
 			if (mode === "teams") {
-				if (teamFocus === "members") {
+				if (teamFocus === "members" && activeTeamTab === "members") {
 					if (!selectedMember || !canCancel(selectedMember.status)) {
 						setError("Selected team member cannot be cancelled.");
 						return;
@@ -603,7 +613,7 @@ export function App(props: {
 		}
 		if (key.name === "d") {
 			if (mode === "teams") {
-				if (teamFocus === "members") {
+				if (teamFocus === "members" && activeTeamTab === "members") {
 					if (!selectedMember || !canDelete(selectedMember.status)) {
 						setError("Selected team member cannot be deleted until it is terminal.");
 						return;
@@ -635,7 +645,7 @@ export function App(props: {
 		}
 		if (key.name === "s") {
 			if (mode === "teams") {
-				if (teamFocus !== "members" || !selectedMember) {
+				if (teamFocus !== "members" || activeTeamTab !== "members" || !selectedMember) {
 					setError("Press Enter to choose a team member before steering.");
 					return;
 				}
@@ -665,6 +675,7 @@ export function App(props: {
 								detail={teamDetail}
 								selectedMemberIndex={selectedMemberIndex}
 								focus={teamFocus}
+								activeTab={activeTeamTab}
 								loadingDetail={teamDetailLoading}
 								loadingFrame={loadingFrame}
 							/>

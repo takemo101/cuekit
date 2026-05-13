@@ -161,7 +161,7 @@ describe("TaskDetail contextHeight", () => {
 					attention_sequence: 7,
 					task_id: "t_worker",
 					position: "worker",
-					tool: "steer",
+					tool: "steer" as const,
 					suggested_message: "Please continue",
 					rationale: "Manual helper only",
 				},
@@ -261,93 +261,175 @@ describe("TaskDetail contextHeight", () => {
 	});
 
 	it("renders compact team snapshot and blackboard sections", () => {
-		const source = TeamDetail({
-			team: {
-				team_id: "tm_1",
-				session_id: "s_1",
-				title: "Team",
-				status: "running",
-				task_counts: {
-					total: 1,
-					queued: 0,
-					running: 1,
-					input_required: 0,
-					completed: 0,
-					failed: 0,
-					cancelled: 0,
-					timed_out: 0,
-					blocked: 0,
-				},
-				created_at: "2026-05-01T00:00:00.000Z",
-				updated_at: "2026-05-01T00:00:00.000Z",
+		const team = {
+			team_id: "tm_1",
+			session_id: "s_1",
+			title: "Team",
+			status: "running" as const,
+			task_counts: {
+				total: 1,
+				queued: 0,
+				running: 1,
+				input_required: 0,
+				completed: 0,
+				failed: 0,
+				cancelled: 0,
+				timed_out: 0,
+				blocked: 0,
 			},
-			detail: {
-				team: {
-					team_id: "tm_1",
-					session_id: "s_1",
-					title: "Team",
-					status: "running",
-					task_counts: {
-						total: 1,
-						queued: 0,
-						running: 1,
-						input_required: 0,
-						completed: 0,
-						failed: 0,
-						cancelled: 0,
-						timed_out: 0,
-						blocked: 0,
-					},
+			created_at: "2026-05-01T00:00:00.000Z",
+			updated_at: "2026-05-01T00:00:00.000Z",
+		};
+		const detail = {
+			team,
+			members: [],
+			lanes: {},
+			attentionItems: [
+				{
+					sequence: 1,
+					task_id: "t_worker",
+					position: "worker",
+					type: "help_requested" as const,
+					message_preview: "Need API input",
 					created_at: "2026-05-01T00:00:00.000Z",
-					updated_at: "2026-05-01T00:00:00.000Z",
 				},
-				members: [],
-				lanes: {},
-				attentionItems: [
-					{
-						sequence: 1,
-						task_id: "t_worker",
-						position: "worker",
-						type: "help_requested",
-						message_preview: "Need API input",
-						created_at: "2026-05-01T00:00:00.000Z",
-					},
-				],
-				blockers: [{ task_id: "t_worker", position: "worker", message: "Waiting on API" }],
-				latestHandoffs: [
-					{
-						task_id: "t_worker",
-						position: "worker",
-						event_id: "e_1",
-						sequence: 2,
-						message_preview: "Continue from handoff",
-						created_at: "2026-05-01T00:00:00.000Z",
-					},
-				],
-				blackboardEvents: [
-					{
-						sequence: 3,
-						event_id: "te_1",
-						event_type: "finding",
-						position: "worker",
-						message: "Found shared constraint",
-						created_at: "2026-05-01T00:00:00.000Z",
-					},
-				],
+			],
+			manualSteerHints: [
+				{
+					attention_sequence: 1,
+					task_id: "t_worker",
+					position: "worker",
+					tool: "steer" as const,
+					suggested_message: "Please inspect API",
+					rationale: "Worker is blocked",
+				},
+			],
+			blockers: [{ task_id: "t_worker", position: "worker", message: "Waiting on API" }],
+			latestHandoffs: [
+				{
+					task_id: "t_worker",
+					position: "worker",
+					event_id: "e_1",
+					sequence: 2,
+					message_preview: "Continue from handoff",
+					created_at: "2026-05-01T00:00:00.000Z",
+				},
+			],
+			blackboardEvents: [
+				{
+					sequence: 3,
+					event_id: "te_1",
+					event_type: "finding" as const,
+					position: "worker",
+					message: "Found shared constraint",
+					created_at: "2026-05-01T00:00:00.000Z",
+				},
+			],
+		};
+		const overview = JSON.stringify(
+			TeamDetail({ team, detail, selectedMemberIndex: 0, focus: "list", activeTab: "overview" }),
+		);
+		expect(overview).toContain("Tasks: 1 running / 0 blocked / 0 completed");
+		expect(overview).toContain("Attention: 1");
+		expect(overview).toContain("Blockers: 1");
+		expect(overview).toContain("Handoffs: 1");
+		expect(overview).toContain("Blackboard: 1");
+		expect(overview).toContain("Next: inspect blocker t_worker");
+
+		const attention = JSON.stringify(
+			TeamDetail({ team, detail, selectedMemberIndex: 0, focus: "list", activeTab: "attention" }),
+		);
+		expect(attention).toContain("BLOCKERS 1");
+		expect(attention).toContain("Waiting on API");
+		expect(attention).toContain("ATTENTION 1");
+		expect(attention).toContain("Need API input");
+		expect(attention).toContain("STEER HINTS 1");
+		expect(attention).toContain("Please inspect API");
+
+		const knowledge = JSON.stringify(
+			TeamDetail({ team, detail, selectedMemberIndex: 0, focus: "list", activeTab: "knowledge" }),
+		);
+		expect(knowledge).toContain("HANDOFFS 1");
+		expect(knowledge).toContain("Continue from handoff");
+		expect(knowledge).toContain("BLACKBOARD 1");
+		expect(knowledge).toContain("finding");
+		expect(knowledge).toContain("Found shared constraint");
+	});
+
+	it("renders team members tab with lane and selected member context", () => {
+		const team = {
+			team_id: "tm_1",
+			session_id: "s_1",
+			title: "Team",
+			status: "running" as const,
+			task_counts: {
+				total: 1,
+				queued: 0,
+				running: 1,
+				input_required: 0,
+				completed: 0,
+				failed: 0,
+				cancelled: 0,
+				timed_out: 0,
+				blocked: 0,
 			},
+			created_at: "2026-05-01T00:00:00.000Z",
+			updated_at: "2026-05-01T00:00:00.000Z",
+		};
+		const member = {
+			task_id: "t_worker",
+			agent_kind: "claude-code" as const,
+			status: "running" as const,
+			position: "worker" as const,
+			role: "builder",
+			updated_at: "2026-05-01T00:00:00.000Z",
+		};
+		const source = TeamDetail({
+			team,
+			detail: { team, members: [member], lanes: { worker: [member] } },
 			selectedMemberIndex: 0,
 			focus: "members",
+			activeTab: "members",
 		});
-
 		const rendered = JSON.stringify(source);
-		expect(rendered).toContain("ATTENTION 1");
-		expect(rendered).toContain("BLOCKERS 1");
-		expect(rendered).toContain("Waiting on API");
-		expect(rendered).toContain("HANDOFFS 1");
-		expect(rendered).toContain("Continue from handoff");
-		expect(rendered).toContain("BLACKBOARD 1");
-		expect(rendered).toContain("finding");
-		expect(rendered).toContain("Found shared constraint");
+		expect(rendered).toContain("LANES");
+		expect(rendered).toContain("worker");
+		expect(rendered).toContain("MEMBERS");
+		expect(rendered).toContain("›");
+		expect(rendered).toContain("builder");
+	});
+
+	it("renders compact empty states for empty team tabs", () => {
+		const team = {
+			team_id: "tm_empty",
+			session_id: "s_1",
+			title: "Empty",
+			status: "running" as const,
+			task_counts: {
+				total: 0,
+				queued: 0,
+				running: 0,
+				input_required: 0,
+				completed: 0,
+				failed: 0,
+				cancelled: 0,
+				timed_out: 0,
+				blocked: 0,
+			},
+			created_at: "2026-05-01T00:00:00.000Z",
+			updated_at: "2026-05-01T00:00:00.000Z",
+		};
+		const detail = { team, members: [], lanes: {} };
+		expect(
+			JSON.stringify(
+				TeamDetail({ team, detail, selectedMemberIndex: 0, focus: "list", activeTab: "attention" }),
+			),
+		).toContain("No blockers.");
+		expect(
+			JSON.stringify(
+				TeamDetail({ team, detail, selectedMemberIndex: 0, focus: "list", activeTab: "knowledge" }),
+			),
+		).toContain("No blackboard events.");
 	});
 
 	it("shows backend mismatch metadata with attach-only guidance", () => {

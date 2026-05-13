@@ -62,6 +62,12 @@ describe("@cuekit/tui package smoke", () => {
 		expect(detail).toContain("function EventRow");
 	});
 
+	it("keeps team member actions visible by coupling member focus to the Members tab", async () => {
+		const app = await Bun.file(new URL("../src/app.tsx", import.meta.url)).text();
+		expect(app).toContain('setActiveTeamTab("members")');
+		expect(app).toContain('activeTeamTab !== "members"');
+	});
+
 	it("keeps footer and modal styling aligned with the shared theme", async () => {
 		const footer = await Bun.file(new URL("../src/components/footer.tsx", import.meta.url)).text();
 		const modal = await Bun.file(
