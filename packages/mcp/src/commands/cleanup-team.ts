@@ -61,11 +61,18 @@ export async function runCleanupTeam(
 	if (!dryRun) {
 		const removesLastTeamTasks = tasks.length > 0 && terminalTasks.length === tasks.length;
 		if (removesLastTeamTasks) fireTeamCompleteHookIfDone(ctx, team.id);
+		let shouldUseWholeTeamCleanup = false;
 		for (const task of terminalTasks) {
 			const cleanup = await cleanupAdapterTask(ctx, task);
-			if (!cleanup.ok) return { error: cleanup.error };
+			if (!cleanup.ok) {
+				if (removesLastTeamTasks && ctx.panes?.killTeamSession) {
+					shouldUseWholeTeamCleanup = true;
+					break;
+				}
+				return { error: cleanup.error };
+			}
 		}
-		if (removesLastTeamTasks && ctx.panes?.killTeamSession) {
+		if ((removesLastTeamTasks || shouldUseWholeTeamCleanup) && ctx.panes?.killTeamSession) {
 			try {
 				if (ctx.panes.restoreTeamWorkspaceHandle) {
 					const teamHandle = getTaskTeamMultiplexerMetadata(ctx.db, team.id, ctx.panes.kind);
