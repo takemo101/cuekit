@@ -23,6 +23,8 @@ import taskRoleMetadataSql from "./sql/008-task-role-metadata.sql" with { type: 
 import taskTeamsSql from "./sql/009-task-teams.sql" with { type: "text" };
 // @ts-expect-error Bun text loader imports SQL migration assets for bundled installs.
 import projectConfigIdentitySql from "./sql/010-project-config-identity.sql" with { type: "text" };
+// @ts-expect-error Bun text loader imports SQL migration assets for bundled installs.
+import teamEventsSql from "./sql/011-team-events.sql" with { type: "text" };
 
 const MIGRATIONS = [
 	["001-init.sql", initSql],
@@ -35,6 +37,7 @@ const MIGRATIONS = [
 	["008-task-role-metadata.sql", taskRoleMetadataSql],
 	["009-task-teams.sql", taskTeamsSql],
 	["010-project-config-identity.sql", projectConfigIdentitySql],
+	["011-team-events.sql", teamEventsSql],
 ] as const;
 
 // Bootstrap table created outside the migration files so it can be relied on

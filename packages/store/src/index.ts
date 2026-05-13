@@ -6,3 +6,5 @@ export * from "./task.ts";
 export * from "./task-store.ts";
 export * from "./task-team.ts";
 export * from "./task-team-store.ts";
+export * from "./team-event.ts";
+export * from "./team-event-store.ts";
