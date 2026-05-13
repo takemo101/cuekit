@@ -10,7 +10,6 @@ import {
 } from "./attach.ts";
 import { ConfirmDialog } from "./components/confirm-dialog.tsx";
 import {
-	DetailTabs,
 	TASK_DETAIL_TABS,
 	TEAM_DETAIL_TABS,
 	detailTabByIndex,
@@ -669,7 +668,6 @@ export function App(props: {
 					<>
 						<TeamList teams={teams} selectedIndex={selectedTeamIndex} maxVisibleRows={listRows} />
 						<box flexDirection="column" flexGrow={1}>
-							<DetailTabs tabs={activeTabs} active={activeDetailTab} />
 							<TeamDetail
 								team={selectedTeam}
 								detail={teamDetail}
@@ -685,7 +683,6 @@ export function App(props: {
 					<>
 						<TaskList tasks={tasks} selectedIndex={selectedIndex} maxVisibleRows={listRows} />
 						<box flexDirection="column" flexGrow={1}>
-							<DetailTabs tabs={activeTabs} active={activeDetailTab} />
 							<TaskDetail
 								task={selectedTask}
 								detail={detail}
@@ -714,6 +711,8 @@ export function App(props: {
 				attachable={selectedAttachable}
 				mode={mode}
 				teamFocus={teamFocus}
+				detailTabs={activeTabs.map((tab) => tab.label)}
+				activeDetailTab={activeDetailTab}
 			/>
 		</box>
 	);
