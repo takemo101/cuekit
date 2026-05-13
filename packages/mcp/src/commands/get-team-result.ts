@@ -4,7 +4,7 @@ import {
 	TeamStatusSchema,
 	TeamTaskCountsSchema,
 } from "@cuekit/core";
-import { getTaskTeamById, listTaskEvents, listTasksByTeam } from "@cuekit/store";
+import { getTaskTeamById, listTaskEvents, listTasksByTeam, listTeamEvents } from "@cuekit/store";
 import { z } from "incur";
 import { cleanupHintForTeam } from "../cleanup-hints.ts";
 import type { CommandContext } from "../command-context.ts";
@@ -14,6 +14,7 @@ import {
 	ManualSteerHintSchema,
 	TeamAttentionItemSchema,
 } from "../team-attention.ts";
+import { TeamBlackboardEventSchema, toTeamBlackboardEvent } from "../team-blackboard.ts";
 import { fireTeamCompleteHookIfDone } from "../team-hooks.ts";
 import { buildTeamSummary } from "../team-status.ts";
 
@@ -49,6 +50,7 @@ export const GetTeamResultOutputSchema = z.union([
 		task_counts: TeamTaskCountsSchema,
 		final_summary: z.string().optional(),
 		timeline: z.array(TeamResultTimelineEntrySchema),
+		blackboard_events: z.array(TeamBlackboardEventSchema),
 		attention_items: z.array(TeamAttentionItemSchema).optional(),
 		manual_steer_hints: z.array(ManualSteerHintSchema).optional(),
 		cleanup_hint: z.string().optional(),
@@ -79,6 +81,7 @@ export function runGetTeamResult(
 	const tasks = listTasksByTeam(ctx.db, team.id);
 	const taskEvents = tasks.map((task) => ({ task, events: listTaskEvents(ctx.db, task.id) }));
 	const tasksById = new Map(tasks.map((task) => [task.id, task]));
+	const blackboardEvents = listTeamEvents(ctx.db, team.id).map(toTeamBlackboardEvent);
 	const timeline = taskEvents
 		.flatMap(({ task, events }) =>
 			events
@@ -120,6 +123,7 @@ export function runGetTeamResult(
 		task_counts: summary.task_counts,
 		...(finalSummary ? { final_summary: finalSummary } : {}),
 		timeline,
+		blackboard_events: blackboardEvents,
 		...(attentionItems.length > 0 ? { attention_items: attentionItems } : {}),
 		...(manualSteerHints.length > 0 ? { manual_steer_hints: manualSteerHints } : {}),
 		...(cleanupHint ? { cleanup_hint: cleanupHint } : {}),
