@@ -14,15 +14,15 @@ describe("HerdrBackend", () => {
 		});
 		expect(handle.backend_kind).toBe("herdr");
 		expect(handle.backend_session).toBe("ck-test");
-		expect(handle.backend_pane_id!.split("/")).toHaveLength(3);
-		expect(
-			parseHerdrNativeTaskRef(`herdr:${handle.backend_session}/${handle.backend_pane_id!}`),
-		).not.toBeNull();
+		const paneId = handle.backend_pane_id;
+		if (!paneId) throw new Error("expected herdr pane id");
+		expect(paneId.split("/")).toHaveLength(3);
+		expect(parseHerdrNativeTaskRef(`herdr:${handle.backend_session}/${paneId}`)).not.toBeNull();
 		const attach1 = backend.attachCommand("t_abc");
-		expect(attach1).not.toBeNull();
-		expect(attach1!.argv[0]).toBe("sh");
-		expect(attach1!.argv[2]).toContain("workspace focus");
-		expect(attach1!.argv[2]).toContain("tab focus");
+		if (!attach1) throw new Error("expected attach command");
+		expect(attach1.argv[0]).toBe("sh");
+		expect(attach1.argv[2]).toContain("workspace focus");
+		expect(attach1.argv[2]).toContain("tab focus");
 		await expect(backend.capturePane("t_abc", { scrollbackLines: 20 })).resolves.toContain(
 			"echo hello",
 		);
@@ -53,10 +53,10 @@ describe("HerdrBackend", () => {
 		expect(restored.sessionNameFor("t_abc")).toBe("ck-old");
 		expect(restored.sessionNameFor("t_abc")).toBe("ck-old");
 		const attach2 = restored.attachCommand("t_abc");
-		expect(attach2).not.toBeNull();
-		expect(attach2!.argv[0]).toBe("sh");
-		expect(attach2!.argv[2]).toContain("workspace focus");
-		expect(attach2!.argv[2]).toContain("tab focus");
+		if (!attach2) throw new Error("expected attach command");
+		expect(attach2.argv[0]).toBe("sh");
+		expect(attach2.argv[2]).toContain("workspace focus");
+		expect(attach2.argv[2]).toContain("tab focus");
 	});
 
 	test("restored handle validates workspace and tab before operating", async () => {
@@ -625,9 +625,11 @@ describe("HerdrBackend", () => {
 
 		// Simulate coordinator output that mentions the worker task ID
 		// (common when a coordinator logs delegation decisions).
+		const coordinatorPaneId = coordinator.backend_pane_id?.split("/").pop();
+		if (!coordinatorPaneId) throw new Error("expected coordinator pane id");
 		await runner.sendInput({
 			session: "ck-test",
-			paneId: coordinator.backend_pane_id!.split("/").pop()!,
+			paneId: coordinatorPaneId,
 			text: `Delegating to t_worker`,
 			keys: ["Enter"],
 		});
