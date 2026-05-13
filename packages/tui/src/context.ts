@@ -48,6 +48,33 @@ export type TuiManualSteerHint = {
 	rationale: string;
 };
 
+export type TuiTeamBlackboardEvent = {
+	sequence: number;
+	event_id: string;
+	task_id?: string;
+	position?: string;
+	event_type: string;
+	message: string;
+	payload?: unknown;
+	created_at: string;
+};
+
+export type TuiTeamHandoff = {
+	task_id: string;
+	position?: string;
+	event_id: string;
+	sequence: number;
+	message_preview?: string;
+	artifact_path?: string;
+	created_at: string;
+};
+
+export type TuiTeamBlocker = {
+	task_id: string;
+	position?: string;
+	message: string;
+};
+
 export type TuiTeamStatusOutput =
 	| {
 			team_id: string;
@@ -69,6 +96,36 @@ export type TuiTeamStatusOutput =
 				}>;
 			};
 			cleanup_hint?: string;
+	  }
+	| { error: JobError };
+
+export type TuiTeamSnapshotOutput =
+	| {
+			team_id: string;
+			session_id: string;
+			title: string;
+			objective?: string;
+			status: string;
+			task_counts: TeamTaskCounts;
+			generated_at: string;
+			members: Array<{
+				task_id: string;
+				position?: string;
+				role?: string;
+				agent_kind: string;
+				model?: string;
+				status: TaskSummary["status"];
+				summary?: string;
+				updated_at: string;
+			}>;
+			positions: Record<string, unknown>;
+			recent_events: unknown[];
+			attention_items?: TuiTeamAttentionItem[];
+			manual_steer_hints?: TuiManualSteerHint[];
+			latest_handoffs: TuiTeamHandoff[];
+			blackboard_events: TuiTeamBlackboardEvent[];
+			blockers?: TuiTeamBlocker[];
+			guidance: Record<string, unknown>;
 	  }
 	| { error: JobError };
 
@@ -97,6 +154,7 @@ export type TuiContext = {
 	listTeams?(input: TuiTeamListInput): Promise<TuiTeamListOutput>;
 	getTaskStatus(taskId: string): Promise<TaskStatusView>;
 	getTeamStatus?(teamId: string): Promise<TuiTeamStatusOutput>;
+	getTeamSnapshot?(teamId: string): Promise<TuiTeamSnapshotOutput>;
 	listTaskEvents(taskId: string): Promise<TuiListTaskEventsOutput>;
 	cancelTask(taskId: string): Promise<Ack>;
 	deleteTask(taskId: string): Promise<Ack>;

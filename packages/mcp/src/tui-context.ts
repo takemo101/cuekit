@@ -7,6 +7,7 @@ import { runCleanupTeam } from "./commands/cleanup-team.ts";
 import { runDeleteTasks } from "./commands/delete-task.ts";
 import { runDeleteTeam } from "./commands/delete-team.ts";
 import { runGetTaskStatus } from "./commands/get-task-status.ts";
+import { runGetTeamSnapshot } from "./commands/get-team-snapshot.ts";
 import { runGetTeamStatus } from "./commands/get-team-status.ts";
 import { runListTaskEvents } from "./commands/list-task-events.ts";
 import { runListTasks } from "./commands/list-tasks.ts";
@@ -52,6 +53,7 @@ export function createTuiContext(ctx: CommandContext, scope: TuiScopeOptions = {
 			}),
 		getTaskStatus: (taskId: string) => runGetTaskStatus(ctx, { task_id: taskId }),
 		getTeamStatus: (teamId: string) => runGetTeamStatus(ctx, { team_id: teamId }),
+		getTeamSnapshot: (teamId: string) => runGetTeamSnapshot(ctx, { team_id: teamId }),
 		listTaskEvents: (taskId: string) => runListTaskEvents(ctx, { task_id: taskId }),
 		cancelTask: (taskId: string) => runCancelTasks(ctx, { task_ids: [taskId] }),
 		deleteTask: (taskId: string) => runDeleteTasks(ctx, { task_ids: [taskId] }),

@@ -7,6 +7,7 @@ import {
 	padLinesForLiveOutput,
 	TaskDetail,
 } from "../src/components/task-detail.tsx";
+import { TeamDetail } from "../src/components/team-detail.tsx";
 import type { TuiTaskDetail } from "../src/data.ts";
 
 describe("TaskDetail contextHeight", () => {
@@ -257,6 +258,96 @@ describe("TaskDetail contextHeight", () => {
 		expect(metadataEntries(task, detail)).toContainEqual(
 			expect.objectContaining({ label: "team status", value: "team status failed" }),
 		);
+	});
+
+	it("renders compact team snapshot and blackboard sections", () => {
+		const source = TeamDetail({
+			team: {
+				team_id: "tm_1",
+				session_id: "s_1",
+				title: "Team",
+				status: "running",
+				task_counts: {
+					total: 1,
+					queued: 0,
+					running: 1,
+					input_required: 0,
+					completed: 0,
+					failed: 0,
+					cancelled: 0,
+					timed_out: 0,
+					blocked: 0,
+				},
+				created_at: "2026-05-01T00:00:00.000Z",
+				updated_at: "2026-05-01T00:00:00.000Z",
+			},
+			detail: {
+				team: {
+					team_id: "tm_1",
+					session_id: "s_1",
+					title: "Team",
+					status: "running",
+					task_counts: {
+						total: 1,
+						queued: 0,
+						running: 1,
+						input_required: 0,
+						completed: 0,
+						failed: 0,
+						cancelled: 0,
+						timed_out: 0,
+						blocked: 0,
+					},
+					created_at: "2026-05-01T00:00:00.000Z",
+					updated_at: "2026-05-01T00:00:00.000Z",
+				},
+				members: [],
+				lanes: {},
+				attentionItems: [
+					{
+						sequence: 1,
+						task_id: "t_worker",
+						position: "worker",
+						type: "help_requested",
+						message_preview: "Need API input",
+						created_at: "2026-05-01T00:00:00.000Z",
+					},
+				],
+				blockers: [{ task_id: "t_worker", position: "worker", message: "Waiting on API" }],
+				latestHandoffs: [
+					{
+						task_id: "t_worker",
+						position: "worker",
+						event_id: "e_1",
+						sequence: 2,
+						message_preview: "Continue from handoff",
+						created_at: "2026-05-01T00:00:00.000Z",
+					},
+				],
+				blackboardEvents: [
+					{
+						sequence: 3,
+						event_id: "te_1",
+						event_type: "finding",
+						position: "worker",
+						message: "Found shared constraint",
+						created_at: "2026-05-01T00:00:00.000Z",
+					},
+				],
+			},
+			selectedMemberIndex: 0,
+			focus: "members",
+		});
+
+		const rendered = JSON.stringify(source);
+		expect(rendered).toContain("ATTENTION 1");
+		expect(rendered).toContain("BLOCKERS 1");
+		expect(rendered).toContain("Waiting on API");
+		expect(rendered).toContain("HANDOFFS 1");
+		expect(rendered).toContain("Continue from handoff");
+		expect(rendered).toContain("BLACKBOARD 1");
+		expect(rendered).toContain("finding");
+		expect(rendered).toContain("Found shared constraint");
 	});
 
 	it("shows backend mismatch metadata with attach-only guidance", () => {
