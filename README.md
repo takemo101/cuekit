@@ -22,7 +22,7 @@ cuekit is **not a workflow engine**. The parent agent stays the decision-maker; 
 Pinned to a specific release tag (recommended):
 
 ```sh
-bun install -g github:takemo101/cuekit#v0.0.7
+bun install -g github:takemo101/cuekit#v0.0.8
 cuekit doctor
 cuekit mcp config   # prints the snippet to register cuekit with your MCP client
 ```
@@ -38,6 +38,15 @@ bun install -g github:takemo101/cuekit#$(curl -s https://api.github.com/repos/ta
 ```
 
 Bun has no `#latest` shorthand for GitHub installs, so the one-liners above resolve the tag at command-execution time and pin the install to that exact version. After install, `cuekit update` is the advisory-only command that prints the next install command when a newer release exists.
+
+When upgrading an existing global GitHub install, remove first and then install the new tag:
+
+```sh
+bun remove -g cuekit-workspace
+bun install -g github:takemo101/cuekit#v0.0.8
+```
+
+This avoids Bun global-install dependency-loop errors that can occur when installing a newer `github:takemo101/cuekit#...` tag over an older one.
 
 Use an immutable release tag for normal installs. Avoid floating `#main` outside development — Bun's caching semantics for branches are less explicit. After installing a newer tag, restart MCP clients.
 

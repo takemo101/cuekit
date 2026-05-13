@@ -34,6 +34,8 @@ function installCommand(tag: string): string {
 	return `bun install -g github:${REPO}#${tag}`;
 }
 
+const REMOVE_COMMAND = "bun remove -g cuekit-workspace";
+
 export async function runUpdate(options: RunUpdateOptions = {}): Promise<UpdateResult> {
 	const current =
 		options.getCurrentVersion !== undefined
@@ -43,7 +45,17 @@ export async function runUpdate(options: RunUpdateOptions = {}): Promise<UpdateR
 	const lines = ["cuekit update", "", `Current: ${current}`];
 
 	if (latest.ok) {
-		lines.push(`Latest:  ${latest.tag}`, "", "Run:", "", `  ${installCommand(latest.tag)}`, "");
+		lines.push(
+			`Latest:  ${latest.tag}`,
+			"",
+			"Run:",
+			"",
+			`  ${REMOVE_COMMAND}`,
+			`  ${installCommand(latest.tag)}`,
+			"",
+			"Removing first avoids Bun global GitHub dependency-loop errors when upgrading from an older cuekit tag.",
+			"",
+		);
 	} else {
 		lines.push(
 			"Latest:  unknown",
@@ -51,7 +63,9 @@ export async function runUpdate(options: RunUpdateOptions = {}): Promise<UpdateR
 			`Could not fetch the latest release tag: ${latest.reason}`,
 			"Open https://github.com/takemo101/cuekit/releases and choose a release tag.",
 			"",
-			`Manual update pattern: ${installCommand("<release-tag>")}`,
+			"Manual update pattern:",
+			`  ${REMOVE_COMMAND}`,
+			`  ${installCommand("<release-tag>")}`,
 			"(<release-tag> is a placeholder, not a discovered version.)",
 			"",
 		);
