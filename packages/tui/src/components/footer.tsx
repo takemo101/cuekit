@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 import { truncateEnd } from "../format.ts";
-import type { TeamFocus } from "../tui-state.ts";
-import type { TuiMode } from "../tui-state.ts";
+import type { DetailTab, TeamFocus, TuiMode } from "../tui-state.ts";
 import { theme } from "../theme.ts";
 
 const TASK_FULL_HOTKEYS = ["↑/↓|j/k select", "r refresh"];
@@ -65,6 +64,15 @@ function teamHotkeys(focus: TeamFocus, attachable: boolean, compact: boolean): s
 			);
 }
 
+function tabHint(labels: string[] | undefined, active: DetailTab | undefined): string {
+	if (!labels?.length) return "";
+	const activeIndex = active ? labels.findIndex((label) => label.toLowerCase() === active) : -1;
+	const rendered = labels
+		.map((label, index) => `[${index + 1}] ${label}${index === activeIndex ? "*" : ""}`)
+		.join("  ");
+	return `Detail: ${rendered}  [/] tabs`;
+}
+
 function fullHotkeys(mode: TuiMode, attachable: boolean, teamFocus: TeamFocus): string {
 	return mode === "teams"
 		? teamHotkeys(teamFocus, attachable, false)
@@ -80,16 +88,28 @@ function compactHotkeys(mode: TuiMode, attachable: boolean, teamFocus: TeamFocus
 export function footerLine(
 	status: string,
 	terminalWidth: number,
-	options: { attachable?: boolean; mode?: TuiMode; teamFocus?: TeamFocus } = {},
+	options: {
+		attachable?: boolean;
+		mode?: TuiMode;
+		teamFocus?: TeamFocus;
+		detailTabs?: string[];
+		activeDetailTab?: DetailTab;
+	} = {},
 ): string {
 	const available = Math.max(0, terminalWidth - 4);
 	if (available === 0) return "";
 	const attachable = options.attachable ?? true;
 	const mode = options.mode ?? "tasks";
 	const teamFocus = options.teamFocus ?? "list";
-	const full = fullHotkeys(mode, attachable, teamFocus);
-	const compact = compactHotkeys(mode, attachable, teamFocus);
-	const hotkeys = full.length + status.length + 3 <= available ? full : compact;
+	const tabs = tabHint(options.detailTabs, options.activeDetailTab);
+	const baseFull = fullHotkeys(mode, attachable, teamFocus);
+	const full = [tabs, baseFull].filter(Boolean).join("   ");
+	const compact = [tabs ? "[/] tabs" : "", compactHotkeys(mode, attachable, teamFocus)].filter(Boolean).join("  ");
+	const hotkeys = tabs && tabs.length + status.length + 3 <= available
+		? tabs
+		: full.length + status.length + 3 <= available
+			? full
+			: compact;
 	const candidate = available >= COMPACT_SELECTION_WIDTH ? `${hotkeys} — ${status}` : `${compact} — ${status}`;
 	return truncateEnd(candidate, available);
 }
@@ -102,6 +122,8 @@ export function Footer(props: {
 	attachable?: boolean;
 	mode?: TuiMode;
 	teamFocus?: TeamFocus;
+	detailTabs?: string[];
+	activeDetailTab?: DetailTab;
 }): ReactNode {
 	const status = props.error ?? props.message ?? (props.loading ? "Loading..." : "Ready");
 	const terminalWidth = props.terminalWidth ?? 80;
@@ -112,6 +134,8 @@ export function Footer(props: {
 					attachable: props.attachable,
 					mode: props.mode,
 					teamFocus: props.teamFocus,
+					detailTabs: props.detailTabs,
+					activeDetailTab: props.activeDetailTab,
 				})}
 			</text>
 		</box>

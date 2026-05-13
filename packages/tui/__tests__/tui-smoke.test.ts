@@ -70,10 +70,32 @@ describe("@cuekit/tui package smoke", () => {
 
 	it("keeps footer and modal styling aligned with the shared theme", async () => {
 		const footer = await Bun.file(new URL("../src/components/footer.tsx", import.meta.url)).text();
+		const app = await Bun.file(new URL("../src/app.tsx", import.meta.url)).text();
+		expect(app).not.toContain("<DetailTabs");
 		const modal = await Bun.file(
 			new URL("../src/components/modal-frame.tsx", import.meta.url),
 		).text();
 		expect(footer).toContain("↑/↓|j/k");
+		expect(app).toContain("detailTabs={activeTabs.map((tab) => tab.label)}");
+		expect(app).toContain("activeDetailTab={activeDetailTab}");
+		expect(
+			footerLine("Ready", 160, {
+				detailTabs: ["Overview", "Events", "Output", "Context"],
+				activeDetailTab: "output",
+			}),
+		).toContain("Detail:");
+		expect(
+			footerLine("Ready", 160, {
+				detailTabs: ["Overview", "Events", "Output", "Context"],
+				activeDetailTab: "output",
+			}),
+		).toContain("[3] Output");
+		expect(
+			footerLine("Ready", 160, {
+				detailTabs: ["Overview", "Events", "Output", "Context"],
+				activeDetailTab: "output",
+			}),
+		).toContain("[/] tabs");
 		expect(footerLine("Ready", 80).length).toBeLessThanOrEqual(76);
 		expect(footerLine("Ready", 80, { attachable: false })).not.toContain("attach");
 		expect(footerLine("Ready", 80, { attachable: false })).not.toContain("att");
