@@ -137,7 +137,7 @@ describe("tui tmux attach helpers", () => {
 				"tm_abcd",
 				"t_abc",
 				undefined,
-				"members",
+				"knowledge",
 			),
 		).toMatchObject({
 			returnState: {
@@ -224,6 +224,7 @@ describe("tui tmux attach helpers", () => {
 				selected_team_id: "tm_abcd",
 				selected_member_task_id: "t_abc",
 				team_focus: "members",
+				team_detail_tab: "members",
 			},
 		});
 		expect(buildTuiTeamAttachExit(command, "tm_abcd")).toEqual({
