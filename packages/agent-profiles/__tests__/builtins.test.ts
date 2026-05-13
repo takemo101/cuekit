@@ -3,6 +3,7 @@ import { BUILTIN_AGENT_PROFILE_MARKDOWN } from "../src/builtins.ts";
 import { parseAgentProfileMarkdown } from "../src/frontmatter.ts";
 
 const expectedBuiltinIds = [
+	"coordinator",
 	"worker",
 	"reviewer",
 	"planner",
@@ -56,5 +57,41 @@ describe("builtin agent profiles", () => {
 		expect(instructions).toContain("gh pr view");
 		expect(instructions).toContain("blocked");
 		expect(instructions).toContain("PR");
+	});
+
+	it("builtin profiles include Swarm-lite cooperative team guidance", () => {
+		const coordinator = instructionsFor("coordinator");
+		expect(coordinator).toContain("team snapshot");
+		expect(coordinator).toContain("attention items");
+		expect(coordinator).toContain("blackboard_events");
+		expect(coordinator).toContain("record important decisions");
+		expect(coordinator).toContain("manual and selective");
+
+		const worker = instructionsFor("worker");
+		expect(worker).toContain("important findings");
+		expect(worker).toContain("blockers");
+		expect(worker).toContain("changed assumptions");
+		expect(worker).toContain("observability payloads");
+		expect(worker).toContain("do not spawn or stop other agents");
+
+		const reviewer = instructionsFor("reviewer");
+		expect(reviewer).toContain("team snapshot");
+		expect(reviewer).toContain("handoffs");
+		expect(reviewer).toContain("relevant findings");
+		expect(reviewer).toContain("severity");
+		expect(reviewer).toContain("review_result");
+
+		const finisher = instructionsFor("pr-finisher");
+		expect(finisher).toContain("worker and reviewer reports");
+		expect(finisher).toContain("attention items");
+		expect(finisher).toContain("handoffs");
+		expect(finisher).toContain("final evidence");
+		expect(finisher).toContain("cleanup decisions explicit");
+	});
+
+	it("Swarm-lite profile guidance does not imply autonomous workflow control", () => {
+		for (const id of ["coordinator", "worker", "reviewer", "pr-finisher"]) {
+			expect(instructionsFor(id)).not.toMatch(/auto-wake|auto-steer|scheduler/i);
+		}
 	});
 });
