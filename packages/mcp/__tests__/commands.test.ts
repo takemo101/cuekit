@@ -36,6 +36,10 @@ import { runGetTaskResult } from "../src/commands/get-task-result.ts";
 import { runGetTaskSnapshot } from "../src/commands/get-task-snapshot.ts";
 import { runGetTaskStatus } from "../src/commands/get-task-status.ts";
 import { runGetTeamResult } from "../src/commands/get-team-result.ts";
+import {
+	GetTeamSnapshotOutputSchema,
+	runGetTeamSnapshot,
+} from "../src/commands/get-team-snapshot.ts";
 import { runGetTeamStatus } from "../src/commands/get-team-status.ts";
 import { runListAdapters } from "../src/commands/list-adapters.ts";
 import { runListAgentProfiles } from "../src/commands/list-agent-profiles.ts";
@@ -257,6 +261,292 @@ describe("team commands", () => {
 				},
 			],
 		});
+	});
+
+	it("get-team-snapshot aggregates existing team state for coordination", () => {
+		createSession(db, {
+			id: "s_snapshot",
+			project_root: "/p",
+			worktree_path: "/w",
+			parent_agent_kind: "pi",
+		});
+		createTaskTeam(db, {
+			id: "tm_snapshot",
+			session_id: "s_snapshot",
+			title: "Snapshot team",
+			objective: "Coordinate implementation",
+		});
+		createTask(db, {
+			id: "t_worker_snapshot",
+			session_id: "s_snapshot",
+			agent_kind: "claude-code",
+			role: "worker",
+			team_id: "tm_snapshot",
+			team_position: "worker",
+			objective: "Implement",
+			status: "blocked",
+		});
+		createTask(db, {
+			id: "t_review_snapshot",
+			session_id: "s_snapshot",
+			agent_kind: "claude-code",
+			role: "reviewer",
+			team_id: "tm_snapshot",
+			team_position: "reviewer",
+			objective: "Review",
+			status: "completed",
+		});
+		appendTaskEvent(db, {
+			id: "e_worker_progress",
+			task_id: "t_worker_snapshot",
+			type: "progress",
+			message: "Checking implementation options",
+			payload: { files: { read: ["packages/mcp/src/commands/get-team-snapshot.ts"] } },
+		});
+		appendTaskEvent(db, {
+			id: "e_worker_blocked",
+			task_id: "t_worker_snapshot",
+			type: "blocked",
+			message: "Need API decision before continuing",
+		});
+		appendTaskEvent(db, {
+			id: "e_review_handoff",
+			task_id: "t_review_snapshot",
+			type: "handoff",
+			message: "Reviewer handoff body preview",
+			payload: { artifact_path: ".cuekit/tasks/t_review_snapshot/handoffs/e_review_handoff.md" },
+		});
+		appendTaskEvent(db, {
+			id: "e_review_completed",
+			task_id: "t_review_snapshot",
+			type: "completed",
+			message: "No blocking review issues",
+			payload: { files: { written: ["packages/mcp/src/commands/get-team-snapshot.ts"] } },
+		});
+
+		const result = runGetTeamSnapshot(ctx, { team_id: "tm_snapshot", event_limit: 10 });
+
+		expect("team_id" in result).toBe(true);
+		if (!("team_id" in result)) return;
+		expect(result).toMatchObject({
+			team_id: "tm_snapshot",
+			session_id: "s_snapshot",
+			title: "Snapshot team",
+			objective: "Coordinate implementation",
+			status: "mixed",
+		});
+		expect(result.members.map((member) => member.task_id)).toEqual([
+			"t_worker_snapshot",
+			"t_review_snapshot",
+		]);
+		expect(result.positions.worker?.[0]?.last_report).toBe("Need API decision before continuing");
+		expect(result.positions.reviewer?.[0]?.last_report).toBe("No blocking review issues");
+		expect(result.recent_events.map((event) => event.type)).toEqual([
+			"progress",
+			"blocked",
+			"handoff",
+			"completed",
+		]);
+		expect(result.attention_items?.map((item) => item.task_id)).toContain("t_worker_snapshot");
+		expect(result.latest_handoffs).toEqual([
+			{
+				task_id: "t_review_snapshot",
+				position: "reviewer",
+				event_id: "e_review_handoff",
+				sequence: expect.any(Number),
+				message_preview: "Reviewer handoff body preview",
+				artifact_path: ".cuekit/tasks/t_review_snapshot/handoffs/e_review_handoff.md",
+				created_at: expect.any(String),
+			},
+		]);
+		expect(result.blockers).toEqual([
+			{
+				task_id: "t_worker_snapshot",
+				position: "worker",
+				message: "Need API decision before continuing",
+			},
+		]);
+		expect(result.observability?.warnings?.[0]?.kind).toBe("stale_read");
+		expect(result.guidance.suggested_next_actions).toContain(
+			"Inspect blocked task t_worker_snapshot before waiting again.",
+		);
+		expect(result.guidance.manual_steer_hints?.[0]?.tool).toBe("steer");
+		expect(result.guidance.manual_steer_hints?.[0]?.target).toEqual({
+			kind: "task",
+			task_id: "t_worker_snapshot",
+		});
+		expect(GetTeamSnapshotOutputSchema.safeParse(result).success).toBe(true);
+	});
+
+	it("get-team-snapshot ignores resolved blocked events and handoffs as last reports", () => {
+		createSession(db, {
+			id: "s_snapshot_resolved",
+			project_root: "/p",
+			worktree_path: "/w",
+			parent_agent_kind: "pi",
+		});
+		createTaskTeam(db, {
+			id: "tm_snapshot_resolved",
+			session_id: "s_snapshot_resolved",
+			title: "Resolved blockers",
+		});
+		createTask(db, {
+			id: "t_worker_resolved",
+			session_id: "s_snapshot_resolved",
+			agent_kind: "claude-code",
+			role: "worker",
+			team_id: "tm_snapshot_resolved",
+			team_position: "worker",
+			objective: "Implement",
+			status: "completed",
+		});
+		appendTaskEvent(db, {
+			id: "e_worker_resolved_blocked",
+			task_id: "t_worker_resolved",
+			type: "blocked",
+			message: "Temporarily blocked",
+		});
+		appendTaskEvent(db, {
+			id: "e_worker_resolved_progress",
+			task_id: "t_worker_resolved",
+			type: "progress",
+			message: "Recovered and continued",
+		});
+		appendTaskEvent(db, {
+			id: "e_worker_resolved_handoff",
+			task_id: "t_worker_resolved",
+			type: "handoff",
+			message: "Parent handoff after progress",
+		});
+		appendTaskEvent(db, {
+			id: "e_worker_resolved_completed",
+			task_id: "t_worker_resolved",
+			type: "completed",
+			message: "Finished after recovery",
+		});
+
+		const result = runGetTeamSnapshot(ctx, { team_id: "tm_snapshot_resolved" });
+
+		expect("team_id" in result).toBe(true);
+		if (!("team_id" in result)) return;
+		expect(result.blockers).toBeUndefined();
+		expect(result.manual_steer_hints).toBeUndefined();
+		expect(result.guidance.manual_steer_hints).toBeUndefined();
+		expect(result.guidance.suggested_next_actions).not.toContain(
+			"Inspect blocked task t_worker_resolved before waiting again.",
+		);
+		expect(result.positions.worker?.[0]?.last_report).toBe("Finished after recovery");
+		expect(result.latest_handoffs[0]?.message_preview).toBe("Parent handoff after progress");
+	});
+
+	it("get-team-snapshot does not keep help_requested hints after later child progress", () => {
+		createSession(db, {
+			id: "s_snapshot_help_resolved",
+			project_root: "/p",
+			worktree_path: "/w",
+			parent_agent_kind: "pi",
+		});
+		createTaskTeam(db, {
+			id: "tm_snapshot_help_resolved",
+			session_id: "s_snapshot_help_resolved",
+			title: "Resolved help",
+		});
+		createTask(db, {
+			id: "t_worker_help_resolved",
+			session_id: "s_snapshot_help_resolved",
+			agent_kind: "claude-code",
+			role: "worker",
+			team_id: "tm_snapshot_help_resolved",
+			team_position: "worker",
+			objective: "Implement",
+			status: "running",
+		});
+		appendTaskEvent(db, {
+			id: "e_worker_help_requested",
+			task_id: "t_worker_help_resolved",
+			type: "help_requested",
+			message: "Need help choosing API shape",
+		});
+		appendTaskEvent(db, {
+			id: "e_worker_help_progress",
+			task_id: "t_worker_help_resolved",
+			type: "progress",
+			message: "Resolved the question and continuing",
+		});
+
+		const result = runGetTeamSnapshot(ctx, { team_id: "tm_snapshot_help_resolved" });
+
+		expect("team_id" in result).toBe(true);
+		if (!("team_id" in result)) return;
+		expect(result.manual_steer_hints).toBeUndefined();
+		expect(result.guidance.manual_steer_hints).toBeUndefined();
+		expect(result.guidance.suggested_next_actions).not.toContain(
+			"Review attention item 1 before deciding next action.",
+		);
+		expect(result.positions.worker?.[0]?.last_report).toBe("Resolved the question and continuing");
+	});
+
+	it("get-team-snapshot keeps active blocker hints after later observability logs", () => {
+		createSession(db, {
+			id: "s_snapshot_blocked_log",
+			project_root: "/p",
+			worktree_path: "/w",
+			parent_agent_kind: "pi",
+		});
+		createTaskTeam(db, {
+			id: "tm_snapshot_blocked_log",
+			session_id: "s_snapshot_blocked_log",
+			title: "Blocked with log",
+		});
+		createTask(db, {
+			id: "t_worker_blocked_log",
+			session_id: "s_snapshot_blocked_log",
+			agent_kind: "claude-code",
+			role: "worker",
+			team_id: "tm_snapshot_blocked_log",
+			team_position: "worker",
+			objective: "Implement",
+			status: "blocked",
+		});
+		appendTaskEvent(db, {
+			id: "e_worker_blocked_log_blocked",
+			task_id: "t_worker_blocked_log",
+			type: "blocked",
+			message: "Still need parent input",
+		});
+		appendTaskEvent(db, {
+			id: "e_worker_blocked_log_log",
+			task_id: "t_worker_blocked_log",
+			type: "log",
+			message: "Observed files while blocked",
+			payload: { files: { read: ["README.md"] } },
+		});
+
+		const result = runGetTeamSnapshot(ctx, { team_id: "tm_snapshot_blocked_log" });
+
+		expect("team_id" in result).toBe(true);
+		if (!("team_id" in result)) return;
+		expect(result.blockers?.[0]?.message).toBe("Still need parent input");
+		expect(result.manual_steer_hints?.[0]?.task_id).toBe("t_worker_blocked_log");
+		expect(result.guidance.suggested_next_actions).toContain(
+			"Inspect blocked task t_worker_blocked_log before waiting again.",
+		);
+	});
+
+	it("get-team-snapshot returns team_not_found for an unknown team", () => {
+		const result = runGetTeamSnapshot(ctx, { team_id: "tm_missing" });
+
+		expect("error" in result).toBe(true);
+		if ("error" in result) expect(result.error.code).toBe("team_not_found");
+	});
+
+	it("exposes get-team-snapshot as an MCP operation", () => {
+		const operation = CUEKIT_MCP_OPERATIONS.find(
+			(operation) => operation.mcpName === "get_team_snapshot",
+		);
+
+		expect(operation).toBeDefined();
+		expect(operation?.options.safeParse({ team_id: "tm_1" }).success).toBe(true);
 	});
 
 	it("get-team-status team run summaries prefer durable events over transcript noise", () => {

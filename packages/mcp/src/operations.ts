@@ -58,6 +58,11 @@ import {
 	runGetTeamResult,
 } from "./commands/get-team-result.ts";
 import {
+	GetTeamSnapshotInputSchema,
+	GetTeamSnapshotOutputSchema,
+	runGetTeamSnapshot,
+} from "./commands/get-team-snapshot.ts";
+import {
 	GetTeamStatusInputSchema,
 	GetTeamStatusOutputSchema,
 	runGetTeamStatus,
@@ -482,6 +487,15 @@ export const CUEKIT_MCP_OPERATIONS = [
 		run: runGetTeamResult,
 	}),
 	defineMcpOperation({
+		mcpName: "get_team_snapshot",
+		cliPath: ["team", "snapshot"],
+		description:
+			"Fetch a high-signal team snapshot with members, recent events, attention items, handoffs, observability, blockers, and manual guidance before intervening.",
+		options: GetTeamSnapshotInputSchema,
+		output: GetTeamSnapshotOutputSchema,
+		run: runGetTeamSnapshot,
+	}),
+	defineMcpOperation({
 		mcpName: "wait",
 		cliPath: ["wait", "target"],
 		description:
@@ -609,6 +623,14 @@ export const CUEKIT_CLI_OPERATIONS = [
 		options: GetTeamStatusInputSchema,
 		output: GetTeamStatusOutputSchema,
 		run: runGetTeamStatus,
+	}),
+	defineOperation({
+		cliPath: ["team", "snapshot"],
+		description:
+			"Fetch a high-signal team snapshot before waiting, steering, adding tasks, or finishing.",
+		options: GetTeamSnapshotInputSchema,
+		output: GetTeamSnapshotOutputSchema,
+		run: runGetTeamSnapshot,
 	}),
 	defineOperation({
 		cliPath: ["team", "start"],
