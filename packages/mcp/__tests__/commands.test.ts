@@ -22,6 +22,7 @@ import {
 	getTaskTeamMultiplexerMetadata,
 	listSessionsByWorktree,
 	listTaskEvents,
+	listTasksByTeam,
 	listTeamEvents,
 	runMigrations,
 	updateTaskChildTokenHash,
@@ -1510,6 +1511,78 @@ describe("wait-team and cleanup-team", () => {
 
 		expect("deleted" in result).toBe(true);
 		expect(killedTeams).toEqual(["tm_cleanup_all"]);
+	});
+
+	it("cleanup-team falls back to team session cleanup when terminal member pane identity is ambiguous", async () => {
+		const cleanedTasks: string[] = [];
+		const killedTeams: string[] = [];
+		ctx.registry.register({
+			kind: "ambiguous-cleanup",
+			capabilities: () => ({
+				agent_kind: "ambiguous-cleanup",
+				supports_steering: false,
+				supports_attach: false,
+				supports_model_selection: false,
+				available_models: [],
+			}),
+			submit: async () => ({
+				ok: false,
+				error: { code: "invalid_input", message: "unused", retryable: false },
+			}),
+			status: async (task_id) => ({ task_id, status: "completed" }),
+			steer: async () => ({ ok: true }),
+			collect: async (task_id) => ({
+				ok: true,
+				value: { task_id, status: "completed", summary: "done", files_changed: [], artifacts: [] },
+			}),
+			cancel: async () => ({ ok: true }),
+			list: async () => [],
+			cleanup: async (taskId) => {
+				cleanedTasks.push(taskId);
+				throw new Error(`herdr pane identity for task ${taskId} is ambiguous`);
+			},
+		});
+		(
+			ctx.panes as typeof ctx.panes & { killTeamSession: (teamId: string) => Promise<void> }
+		).killTeamSession = async (teamId: string) => {
+			killedTeams.push(teamId);
+		};
+		createSession(db, {
+			id: "s_cleanup_ambiguous",
+			project_root: "/p",
+			worktree_path: "/w",
+			parent_agent_kind: "pi",
+		});
+		createTaskTeam(db, {
+			id: "tm_cleanup_ambiguous",
+			session_id: "s_cleanup_ambiguous",
+			title: "Team",
+		});
+		createTask(db, {
+			id: "t_ambiguous_1",
+			session_id: "s_cleanup_ambiguous",
+			agent_kind: "ambiguous-cleanup",
+			team_id: "tm_cleanup_ambiguous",
+			objective: "done",
+			status: "completed",
+		});
+		createTask(db, {
+			id: "t_ambiguous_2",
+			session_id: "s_cleanup_ambiguous",
+			agent_kind: "ambiguous-cleanup",
+			team_id: "tm_cleanup_ambiguous",
+			objective: "done",
+			status: "completed",
+		});
+
+		const result = await runCleanupTeam(ctx, { team_id: "tm_cleanup_ambiguous" });
+
+		expect("deleted" in result).toBe(true);
+		if (!("deleted" in result)) return;
+		expect(cleanedTasks).toEqual(["t_ambiguous_1"]);
+		expect(killedTeams).toEqual(["tm_cleanup_ambiguous"]);
+		expect(result.deleted.map((task) => task.task_id)).toEqual(["t_ambiguous_1", "t_ambiguous_2"]);
+		expect(listTasksByTeam(db, "tm_cleanup_ambiguous")).toEqual([]);
 	});
 
 	it("cleanup-team returns team_not_found for unknown teams", async () => {

@@ -337,6 +337,62 @@ describe("HerdrBackend", () => {
 		expect(await backend.capturePane("t_worker_3")).toContain("t_worker_3");
 	});
 
+	test("uses cuekit launch markers to disambiguate same-tab panes that mention sibling task ids", async () => {
+		const runner = new FakeHerdrRunner();
+		const backend = new HerdrBackend({ runner, sessionName: "ck-test" });
+		const first = await backend.spawnPane({
+			task_id: "t_worker_1",
+			team_id: "tm_1",
+			team_position: "worker",
+			cwd: "/repo",
+			command: "worker 1",
+		});
+		const second = await backend.spawnPane({
+			task_id: "t_worker_2",
+			team_id: "tm_1",
+			team_position: "worker",
+			cwd: "/repo",
+			command: "worker 2",
+		});
+		const third = await backend.spawnPane({
+			task_id: "t_worker_3",
+			team_id: "tm_1",
+			team_position: "worker",
+			cwd: "/repo",
+			command: "worker 3",
+		});
+		const [workspaceId, , firstPaneId] = (first.backend_pane_id as string).split("/");
+		const [, , secondPaneId] = (second.backend_pane_id as string).split("/");
+		const [, , thirdPaneId] = (third.backend_pane_id as string).split("/");
+		const allTaskIds = "siblings: t_worker_1 t_worker_2 t_worker_3";
+		await runner.sendInput({
+			session: "ck-test",
+			paneId: firstPaneId as string,
+			text: `[cuekit] herdr task started: t_worker_1\n${allTaskIds}`,
+			keys: ["Enter"],
+		});
+		await runner.sendInput({
+			session: "ck-test",
+			paneId: secondPaneId as string,
+			text: `[cuekit] herdr task started: t_worker_2\n${allTaskIds}`,
+			keys: ["Enter"],
+		});
+		await runner.sendInput({
+			session: "ck-test",
+			paneId: thirdPaneId as string,
+			text: `[cuekit] herdr task started: t_worker_3\n${allTaskIds}`,
+			keys: ["Enter"],
+		});
+
+		await backend.killPane("t_worker_2");
+
+		expect(await backend.isAlive("t_worker_1")).toBe(true);
+		expect(await backend.isAlive("t_worker_2")).toBe(false);
+		expect(await backend.isAlive("t_worker_3")).toBe(true);
+		const remaining = await runner.listPanes({ session: "ck-test", workspaceId });
+		expect(remaining.map((pane) => pane.pane_id).sort()).toEqual(["w1-1", "w1-2"]);
+	});
+
 	test("recreates stale persisted team workspace handles", async () => {
 		const runner = new FakeHerdrRunner();
 		const first = new HerdrBackend({ runner, sessionName: "ck-test" });

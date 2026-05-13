@@ -425,11 +425,15 @@ export class HerdrBackend implements MultiplexerBackend {
 		pane: { pane_id: string; tab_id: string; workspace_id: string } | null;
 		foundOtherKnownTask: boolean;
 	}> {
-		const matches = [];
+		const markerMatches = [];
+		const legacyMatches = [];
+		let foundAnyCuekitMarker = false;
 		let foundOtherKnownTask = false;
 		const otherTaskIds = [...this.taskHandles.values()]
 			.filter((candidate) => candidate.taskId !== handle.taskId)
 			.map((candidate) => candidate.taskId);
+		const taskMarker = herdrTaskStartedMarker(handle.taskId);
+		const otherTaskMarkers = otherTaskIds.map(herdrTaskStartedMarker);
 		for (const pane of panes) {
 			try {
 				const capture = await this.runner.readPane({
@@ -438,14 +442,23 @@ export class HerdrBackend implements MultiplexerBackend {
 					source: "recent",
 					lines: DEFAULT_CAPTURE_SCROLLBACK,
 				});
-				if (capture.text.includes(handle.taskId)) matches.push(pane);
-				if (otherTaskIds.some((taskId) => capture.text.includes(taskId))) {
+				const hasAnyMarker =
+					capture.text.includes(taskMarker) ||
+					otherTaskMarkers.some((marker) => capture.text.includes(marker));
+				if (hasAnyMarker) foundAnyCuekitMarker = true;
+				if (capture.text.includes(taskMarker)) markerMatches.push(pane);
+				if (capture.text.includes(handle.taskId)) legacyMatches.push(pane);
+				if (
+					otherTaskMarkers.some((marker) => capture.text.includes(marker)) ||
+					(!hasAnyMarker && otherTaskIds.some((taskId) => capture.text.includes(taskId)))
+				) {
 					foundOtherKnownTask = true;
 				}
 			} catch {
 				// Treat unreadable panes as unverified.
 			}
 		}
+		const matches = foundAnyCuekitMarker ? markerMatches : legacyMatches;
 		return {
 			pane:
 				matches.length === 1
@@ -612,7 +625,7 @@ export class HerdrBackend implements MultiplexerBackend {
 		const launchScriptPath = join(scriptDir, "launch.sh");
 		await writeFile(
 			launchScriptPath,
-			`#!/bin/sh\ntrap 'rm -rf ${shellQuote(scriptDir)}' EXIT HUP INT TERM\n. ${shellQuote(envScriptPath)}\nprintf '[cuekit] herdr task started: %s\\n' ${shellQuote(params.task_id)}\n${params.command}\nstatus=$?\nprintf '[cuekit] herdr task launcher exited: %s\\n' "$status"\nexit "$status"\n`,
+			`#!/bin/sh\ntrap 'rm -rf ${shellQuote(scriptDir)}' EXIT HUP INT TERM\n. ${shellQuote(envScriptPath)}\nprintf '%s\\n' ${shellQuote(herdrTaskStartedMarker(params.task_id))}\n${params.command}\nstatus=$?\nprintf '[cuekit] herdr task launcher exited: %s\\n' "$status"\nexit "$status"\n`,
 			{ mode: 0o700 },
 		);
 		return {
@@ -622,6 +635,10 @@ export class HerdrBackend implements MultiplexerBackend {
 			},
 		};
 	}
+}
+
+function herdrTaskStartedMarker(taskId: string): string {
+	return `[cuekit] herdr task started: ${taskId}`;
 }
 
 function parsePersistedHerdrTeamWorkspace(value: unknown): PersistedHerdrTeamWorkspace | null {
