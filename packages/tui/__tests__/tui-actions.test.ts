@@ -1,6 +1,14 @@
 import { describe, expect, it } from "bun:test";
 import type { TaskStatus, TaskStatusView } from "@cuekit/core";
 import {
+	detailTabByIndex,
+	detailTabsForMode,
+	nextDetailTab,
+	safeDetailTabForMode,
+	TASK_DETAIL_TABS,
+	TEAM_DETAIL_TABS,
+} from "../src/components/detail-tabs.tsx";
+import {
 	canAttach,
 	canCancel,
 	canCleanupTeam,
@@ -12,6 +20,7 @@ import {
 	resolveEscapeTeamFocus,
 	restoreIndexById,
 } from "../src/task-actions.ts";
+import type { TaskDetailTab, TeamDetailTab } from "../src/tui-state.ts";
 
 describe("tui task action helpers", () => {
 	it("clamps selection movement to task list bounds", () => {
@@ -218,5 +227,30 @@ describe("tui task action helpers", () => {
 			start: 8,
 			end: 9,
 		});
+	});
+
+	it("navigates detail tabs with wrapping semantics", () => {
+		expect(nextDetailTab("overview", TASK_DETAIL_TABS, 1)).toBe("events");
+		expect(nextDetailTab("context", TASK_DETAIL_TABS, 1)).toBe("overview");
+		expect(nextDetailTab("overview", TASK_DETAIL_TABS, -1)).toBe("context");
+		expect(nextDetailTab("missing", TASK_DETAIL_TABS, 1)).toBe("overview");
+	});
+
+	it("jumps to valid numeric detail tabs and ignores invalid indexes", () => {
+		expect(detailTabByIndex(TASK_DETAIL_TABS, "1", "context")).toBe("overview");
+		expect(detailTabByIndex(TASK_DETAIL_TABS, "4", "overview")).toBe("context");
+		expect(detailTabByIndex(TASK_DETAIL_TABS, "5", "events")).toBe("events");
+		expect(detailTabByIndex(TASK_DETAIL_TABS, "x", "events")).toBe("events");
+	});
+
+	it("resolves mode-specific detail tab sets and safe fallbacks", () => {
+		expect(detailTabsForMode("tasks")).toEqual(TASK_DETAIL_TABS);
+		expect(detailTabsForMode("parents")).toEqual(TASK_DETAIL_TABS);
+		expect(detailTabsForMode("teams")).toEqual(TEAM_DETAIL_TABS);
+		expect(safeDetailTabForMode("tasks", "output" satisfies TaskDetailTab)).toBe("output");
+		expect(safeDetailTabForMode("parents", "events" satisfies TaskDetailTab)).toBe("events");
+		expect(safeDetailTabForMode("teams", "knowledge" satisfies TeamDetailTab)).toBe("knowledge");
+		expect(safeDetailTabForMode("teams", "context")).toBe("overview");
+		expect(safeDetailTabForMode("tasks", "knowledge")).toBe("overview");
 	});
 });

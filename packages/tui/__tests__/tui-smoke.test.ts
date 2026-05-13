@@ -6,6 +6,7 @@ const TUI_FILES = [
 	"../src/app.tsx",
 	"../src/components/task-list.tsx",
 	"../src/components/task-detail.tsx",
+	"../src/components/detail-tabs.tsx",
 	"../src/components/footer.tsx",
 	"../src/components/confirm-dialog.tsx",
 	"../src/components/input-dialog.tsx",
