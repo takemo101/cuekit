@@ -164,7 +164,7 @@ describe("team attention items", () => {
 			task_id: "t_worker",
 			position: "worker",
 			target: { kind: "task", task_id: "t_worker" },
-			tool: "steer_task",
+			tool: "steer",
 		});
 		expect(hints[0]?.suggested_message).toContain("need repo context");
 		expect(hints[0]?.rationale).toContain("will not auto-steer");

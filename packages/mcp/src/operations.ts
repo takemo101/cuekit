@@ -598,7 +598,7 @@ export const CUEKIT_MCP_OPERATIONS = [
 		mcpName: "steer",
 		cliPath: ["steer", "target"],
 		description:
-			"Send a steering message to one task or all currently non-terminal tasks in a team. Set kind to 'task' or 'team'.",
+			"Send a steering message to a task, an entire team, one team position, or an explicit team task subset. Set kind to 'task', 'team', 'team_position', or 'team_tasks'.",
 		options: SteerInputSchema,
 		output: SteerOutputSchema,
 		run: runSteer,

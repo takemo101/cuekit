@@ -4054,6 +4054,8 @@ describe("steer-task", () => {
 	it("validates grouped steer task handoff message fields", () => {
 		const steer = CUEKIT_MCP_OPERATIONS.find((operation) => operation.mcpName === "steer");
 		if (!steer) throw new Error("missing steer operation");
+		expect(steer.description).toContain("team_position");
+		expect(steer.description).toContain("team_tasks");
 		expect(steer.options.safeParse({ kind: "task", task_id: "t1", message: "a" }).success).toBe(
 			true,
 		);

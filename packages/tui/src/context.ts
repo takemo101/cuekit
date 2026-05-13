@@ -43,7 +43,7 @@ export type TuiManualSteerHint = {
 	attention_sequence: number;
 	task_id: string;
 	position?: string;
-	tool: "steer_task";
+	tool: "steer";
 	suggested_message: string;
 	rationale: string;
 };

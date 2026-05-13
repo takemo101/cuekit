@@ -336,7 +336,7 @@ describe("tui data helpers", () => {
 								attention_sequence: 1,
 								task_id: "t_worker",
 								position: "worker",
-								tool: "steer_task",
+								tool: "steer",
 								suggested_message: "Please clarify",
 								rationale: "Manual helper only",
 							},
@@ -349,7 +349,7 @@ describe("tui data helpers", () => {
 		const detail = await loadTaskDetail(teamCtx, task.id);
 
 		expect(detail.teamAttentionItems?.[0]?.message_preview).toBe("need input");
-		expect(detail.manualSteerHints?.[0]?.tool).toBe("steer_task");
+		expect(detail.manualSteerHints?.[0]?.tool).toBe("steer");
 	});
 
 	it("loads teams and groups selected team members by lane", async () => {
