@@ -455,6 +455,103 @@ describe("tui data helpers", () => {
 		expect(detail.attentionItems?.[0]?.message_preview).toBe("needs polish");
 	});
 
+	it("loads high-signal team snapshot sections for teams mode", async () => {
+		const { tui } = makeCtx();
+		const teamCtx: TuiContext = {
+			...tui,
+			async getTeamSnapshot(teamId) {
+				return {
+					team_id: teamId,
+					session_id: "s_snapshot",
+					title: "Snapshot team",
+					status: "running",
+					task_counts: {
+						total: 1,
+						queued: 0,
+						running: 1,
+						input_required: 0,
+						completed: 0,
+						failed: 0,
+						cancelled: 0,
+						timed_out: 0,
+						blocked: 0,
+					},
+					generated_at: "2026-05-01T00:00:00.000Z",
+					members: [
+						{
+							task_id: "t_worker",
+							position: "worker",
+							agent_kind: "pi",
+							status: "running",
+							updated_at: "2026-05-01T00:00:00.000Z",
+						},
+					],
+					positions: {},
+					recent_events: [],
+					blackboard_events: [
+						{
+							sequence: 10,
+							event_id: "te_1",
+							task_id: "t_worker",
+							position: "worker",
+							event_type: "finding",
+							message: "Worker found the API boundary.",
+							created_at: "2026-05-01T00:00:00.000Z",
+						},
+					],
+					attention_items: [
+						{
+							sequence: 2,
+							task_id: "t_worker",
+							position: "worker",
+							type: "help_requested",
+							message_preview: "Need input",
+							created_at: "2026-05-01T00:00:00.000Z",
+						},
+					],
+					latest_handoffs: [
+						{
+							task_id: "t_worker",
+							position: "worker",
+							event_id: "e_handoff",
+							sequence: 3,
+							message_preview: "Continue from this design.",
+							created_at: "2026-05-01T00:00:00.000Z",
+						},
+					],
+					blockers: [{ task_id: "t_worker", position: "worker", message: "Waiting on API" }],
+					guidance: {},
+				};
+			},
+		};
+
+		const detail = await loadTeamDetail(teamCtx, {
+			team_id: "tm_snapshot",
+			session_id: "s_snapshot",
+			title: "Snapshot team",
+			status: "running",
+			task_counts: {
+				total: 1,
+				queued: 0,
+				running: 1,
+				input_required: 0,
+				completed: 0,
+				failed: 0,
+				cancelled: 0,
+				timed_out: 0,
+				blocked: 0,
+			},
+			created_at: "2026-05-01T00:00:00.000Z",
+			updated_at: "2026-05-01T00:00:00.000Z",
+		});
+
+		expect(detail.members.map((member) => member.task_id)).toEqual(["t_worker"]);
+		expect(detail.attentionItems?.[0]?.message_preview).toBe("Need input");
+		expect(detail.blockers?.[0]?.message).toBe("Waiting on API");
+		expect(detail.latestHandoffs?.[0]?.message_preview).toBe("Continue from this design.");
+		expect(detail.blackboardEvents?.[0]?.message).toBe("Worker found the API boundary.");
+	});
+
 	it("keeps team summary when selected team status loading fails", async () => {
 		const { tui } = makeCtx();
 		const teamCtx: TuiContext = {

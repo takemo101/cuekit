@@ -49,6 +49,9 @@ export function TeamDetail(props: {
 	const status = detail?.status?.status ?? team.status;
 	const attention = detail?.attentionItems ?? [];
 	const hints = detail?.manualSteerHints ?? [];
+	const blockers = detail?.blockers ?? [];
+	const handoffs = detail?.latestHandoffs ?? [];
+	const blackboard = detail?.blackboardEvents ?? [];
 	return (
 		<box
 			title="Detail"
@@ -80,6 +83,36 @@ export function TeamDetail(props: {
 				))
 			)}
 			{hints.length > 0 ? <text fg={theme.muted}>{`Manual steer hints: ${hints.length}`}</text> : null}
+			<text fg={theme.cyan}>{`BLOCKERS ${blockers.length}`}</text>
+			{blockers.length === 0 ? (
+				<text fg={theme.muted}>No blockers.</text>
+			) : (
+				blockers.slice(0, 3).map((item) => (
+					<text key={`${item.task_id}:blocker`} fg={theme.red}>
+						{truncateEnd(`${item.position ?? "?"} ${item.task_id}: ${item.message}`, 90)}
+					</text>
+				))
+			)}
+			<text fg={theme.cyan}>{`HANDOFFS ${handoffs.length}`}</text>
+			{handoffs.length === 0 ? (
+				<text fg={theme.muted}>No handoffs.</text>
+			) : (
+				handoffs.slice(-3).map((item) => (
+					<text key={item.event_id} fg={theme.purple}>
+						{truncateEnd(`${item.position ?? "?"} ${item.task_id}: ${item.message_preview ?? item.event_id}`, 90)}
+					</text>
+				))
+			)}
+			<text fg={theme.cyan}>{`BLACKBOARD ${blackboard.length}`}</text>
+			{blackboard.length === 0 ? (
+				<text fg={theme.muted}>No blackboard events.</text>
+			) : (
+				blackboard.slice(-3).map((event) => (
+					<text key={event.event_id} fg={theme.purple}>
+						{truncateEnd(`${event.event_type} ${event.position ?? "?"}: ${event.message}`, 90)}
+					</text>
+				))
+			)}
 			<text fg={theme.cyan}>MEMBERS</text>
 			{detail?.members.length ? (
 				detail.members.map((member, index) => {

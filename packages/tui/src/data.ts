@@ -12,6 +12,9 @@ import type {
 	TuiTaskEvent,
 	TuiTaskListOutput,
 	TuiTeamAttentionItem,
+	TuiTeamBlackboardEvent,
+	TuiTeamBlocker,
+	TuiTeamHandoff,
 	TuiTeamListInput,
 	TuiTeamListOutput,
 	TuiTeamStatusOutput,
@@ -94,6 +97,9 @@ export type TuiTeamDetail = {
 	lanes: Partial<Record<string, TaskSummary[]>>;
 	attentionItems?: TuiTeamAttentionItem[];
 	manualSteerHints?: TuiManualSteerHint[];
+	blockers?: TuiTeamBlocker[];
+	latestHandoffs?: TuiTeamHandoff[];
+	blackboardEvents?: TuiTeamBlackboardEvent[];
 	error?: string;
 };
 
@@ -107,6 +113,44 @@ function groupMembersByLane(members: TaskSummary[]): Partial<Record<string, Task
 }
 
 export async function loadTeamDetail(ctx: TuiContext, team: TeamSummary): Promise<TuiTeamDetail> {
+	const snapshotResult = ctx.getTeamSnapshot ? await ctx.getTeamSnapshot(team.team_id) : undefined;
+	if (snapshotResult && "error" in snapshotResult) {
+		return { team, members: [], lanes: {}, error: snapshotResult.error.message };
+	}
+	if (snapshotResult) {
+		const members = snapshotResult.members.map((member) => ({
+			task_id: member.task_id,
+			agent_kind: member.agent_kind,
+			...(member.model ? { model: member.model } : {}),
+			...(member.role ? { role: member.role } : {}),
+			team_id: snapshotResult.team_id,
+			...(member.position ? { position: member.position as TaskSummary["position"] } : {}),
+			status: member.status,
+			...(member.summary ? { summary: member.summary } : {}),
+			updated_at: member.updated_at,
+		}));
+		return {
+			team,
+			members,
+			lanes: groupMembersByLane(members),
+			...(snapshotResult.attention_items && snapshotResult.attention_items.length > 0
+				? { attentionItems: snapshotResult.attention_items }
+				: {}),
+			...(snapshotResult.manual_steer_hints && snapshotResult.manual_steer_hints.length > 0
+				? { manualSteerHints: snapshotResult.manual_steer_hints }
+				: {}),
+			...(snapshotResult.blockers && snapshotResult.blockers.length > 0
+				? { blockers: snapshotResult.blockers }
+				: {}),
+			...(snapshotResult.latest_handoffs.length > 0
+				? { latestHandoffs: snapshotResult.latest_handoffs }
+				: {}),
+			...(snapshotResult.blackboard_events.length > 0
+				? { blackboardEvents: snapshotResult.blackboard_events }
+				: {}),
+		};
+	}
+
 	const statusResult = ctx.getTeamStatus ? await ctx.getTeamStatus(team.team_id) : undefined;
 	if (statusResult && "error" in statusResult) {
 		return { team, members: [], lanes: {}, error: statusResult.error.message };
