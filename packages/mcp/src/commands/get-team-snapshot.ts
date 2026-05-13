@@ -5,7 +5,7 @@ import {
 	TeamStatusSchema,
 	TeamTaskCountsSchema,
 } from "@cuekit/core";
-import { getTaskTeamById, listTaskEvents, listTasksByTeam } from "@cuekit/store";
+import { getTaskTeamById, listTaskEvents, listTasksByTeam, listTeamEvents } from "@cuekit/store";
 import { z } from "incur";
 import type { CommandContext } from "../command-context.ts";
 import {
@@ -13,6 +13,7 @@ import {
 	type TeamAttentionItem,
 	TeamAttentionItemSchema,
 } from "../team-attention.ts";
+import { TeamBlackboardEventSchema, toTeamBlackboardEvent } from "../team-blackboard.ts";
 import { buildTeamRunSummary, TeamRunSummarySchema } from "../team-run-summary.ts";
 import { aggregateTeamStatus, countTeamTasks } from "../team-status.ts";
 
@@ -109,6 +110,7 @@ export const GetTeamSnapshotOutputSchema = z.union([
 		members: z.array(TeamSnapshotMemberSchema),
 		positions: z.record(TeamPositionSchema, z.array(TeamSnapshotPositionEntrySchema)),
 		recent_events: z.array(TeamSnapshotEventSchema),
+		blackboard_events: z.array(TeamBlackboardEventSchema),
 		attention_items: z.array(TeamAttentionItemSchema).optional(),
 		manual_steer_hints: z.array(TeamSnapshotManualSteerHintSchema).optional(),
 		latest_handoffs: z.array(TeamSnapshotHandoffSchema),
@@ -242,6 +244,9 @@ export function runGetTeamSnapshot(
 
 	const tasks = listTasksByTeam(ctx.db, team.id);
 	const taskEvents = tasks.map((task) => ({ task, events: listTaskEvents(ctx.db, task.id) }));
+	const blackboardEvents = listTeamEvents(ctx.db, team.id)
+		.map(toTeamBlackboardEvent)
+		.slice(-(input.event_limit ?? DEFAULT_EVENT_LIMIT));
 	const summary = buildTeamRunSummary(ctx, tasks);
 	const attentionItems = buildTeamAttentionItemsFromEvents(taskEvents, {
 		includeFullMessage: false,
@@ -356,6 +361,7 @@ export function runGetTeamSnapshot(
 		members,
 		positions,
 		recent_events: recentEvents,
+		blackboard_events: blackboardEvents,
 		...(attentionItems.length > 0 ? { attention_items: attentionItems } : {}),
 		...(manualSteerHints.length > 0 ? { manual_steer_hints: manualSteerHints } : {}),
 		latest_handoffs: latestHandoffs,
@@ -366,6 +372,7 @@ export function runGetTeamSnapshot(
 				"Inspect attention_items and blockers before steering or waiting again.",
 				"Open latest_handoffs artifacts when present.",
 				"Use get_task_snapshot for a specific member before task-level steering.",
+				"Read blackboard_events for shared findings, decisions, blockers, and review results.",
 			],
 			...(manualSteerHints.length > 0 ? { manual_steer_hints: manualSteerHints } : {}),
 			suggested_next_actions: suggestedNextActions,

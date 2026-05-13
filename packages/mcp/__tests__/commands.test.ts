@@ -13,6 +13,7 @@ import {
 import { FakeHerdrRunner, FakeTmuxRunner } from "@cuekit/adapters/testing";
 import {
 	appendTaskEvent,
+	appendTeamEvent,
 	createSession,
 	createTask,
 	createTaskTeam,
@@ -325,6 +326,22 @@ describe("team commands", () => {
 			message: "No blocking review issues",
 			payload: { files: { written: ["packages/mcp/src/commands/get-team-snapshot.ts"] } },
 		});
+		appendTeamEvent(db, {
+			id: "te_snapshot_decision",
+			team_id: "tm_snapshot",
+			position: "coordinator",
+			event_type: "decision",
+			message: "Use grouped report for shared context.",
+		});
+		appendTeamEvent(db, {
+			id: "te_snapshot_finding",
+			team_id: "tm_snapshot",
+			task_id: "t_worker_snapshot",
+			position: "worker",
+			event_type: "finding",
+			message: "Worker found the snapshot integration point.",
+			payload: { files: ["packages/mcp/src/commands/get-team-snapshot.ts"] },
+		});
 
 		const result = runGetTeamSnapshot(ctx, { team_id: "tm_snapshot", event_limit: 10 });
 
@@ -349,6 +366,26 @@ describe("team commands", () => {
 			"handoff",
 			"completed",
 		]);
+		expect(result.blackboard_events).toEqual([
+			{
+				sequence: expect.any(Number),
+				event_id: "te_snapshot_decision",
+				event_type: "decision",
+				position: "coordinator",
+				message: "Use grouped report for shared context.",
+				created_at: expect.any(String),
+			},
+			{
+				sequence: expect.any(Number),
+				event_id: "te_snapshot_finding",
+				task_id: "t_worker_snapshot",
+				event_type: "finding",
+				position: "worker",
+				message: "Worker found the snapshot integration point.",
+				payload: { files: ["packages/mcp/src/commands/get-team-snapshot.ts"] },
+				created_at: expect.any(String),
+			},
+		]);
 		expect(result.attention_items?.map((item) => item.task_id)).toContain("t_worker_snapshot");
 		expect(result.latest_handoffs).toEqual([
 			{
@@ -371,6 +408,9 @@ describe("team commands", () => {
 		expect(result.observability?.warnings?.[0]?.kind).toBe("stale_read");
 		expect(result.guidance.suggested_next_actions).toContain(
 			"Inspect blocked task t_worker_snapshot before waiting again.",
+		);
+		expect(result.guidance.recommended_next_reads).toContain(
+			"Read blackboard_events for shared findings, decisions, blockers, and review results.",
 		);
 		expect(result.guidance.manual_steer_hints?.[0]?.tool).toBe("steer");
 		expect(result.guidance.manual_steer_hints?.[0]?.target).toEqual({
@@ -1550,6 +1590,23 @@ describe("team result", () => {
 			type: "completed",
 			message: "coordinator final report",
 		});
+		appendTeamEvent(db, {
+			id: "te_result_finding",
+			team_id: "tm_result",
+			task_id: "t_worker_result",
+			position: "worker",
+			event_type: "finding",
+			message: "Worker found the root cause.",
+			payload: { files: ["packages/mcp/src/commands/get-team-result.ts"] },
+		});
+		appendTeamEvent(db, {
+			id: "te_result_review",
+			team_id: "tm_result",
+			task_id: "t_reviewer_result",
+			position: "reviewer",
+			event_type: "review_result",
+			message: "Reviewer found no blocking issues.",
+		});
 
 		const result = runGetTeamResult(ctx, { team_id: "tm_result" });
 
@@ -1569,6 +1626,27 @@ describe("team result", () => {
 			"reviewer final report",
 			"finisher final report",
 			"coordinator final report",
+		]);
+		expect(result.blackboard_events).toEqual([
+			{
+				sequence: expect.any(Number),
+				event_id: "te_result_finding",
+				task_id: "t_worker_result",
+				position: "worker",
+				event_type: "finding",
+				message: "Worker found the root cause.",
+				payload: { files: ["packages/mcp/src/commands/get-team-result.ts"] },
+				created_at: expect.any(String),
+			},
+			{
+				sequence: expect.any(Number),
+				event_id: "te_result_review",
+				task_id: "t_reviewer_result",
+				position: "reviewer",
+				event_type: "review_result",
+				message: "Reviewer found no blocking issues.",
+				created_at: expect.any(String),
+			},
 		]);
 		expect(result.attention_items?.map((item) => item.position)).toEqual([
 			"worker",
