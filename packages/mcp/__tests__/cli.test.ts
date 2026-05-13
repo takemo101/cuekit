@@ -909,6 +909,74 @@ describe("createCli", () => {
 		}
 	});
 
+	it("reports a team blackboard event from the CLI", async () => {
+		const tmpRoot = mkdtempSync(`${tmpdir()}/cuekit-team-report-cli-`);
+		try {
+			const env = { ...process.env, CUEKIT_DB_PATH: `${tmpRoot}/state.db` };
+			const create = Bun.spawn(
+				[
+					"bun",
+					"packages/mcp/src/bin.ts",
+					"team",
+					"create",
+					"--format",
+					"json",
+					"--title",
+					"cli report team",
+				],
+				{ cwd: WORKSPACE_ROOT, env, stderr: "pipe", stdout: "pipe" },
+			);
+			const [createExit, createStdout, createStderr] = await Promise.all([
+				create.exited,
+				new Response(create.stdout).text(),
+				new Response(create.stderr).text(),
+			]);
+			expect(createExit).toBe(0);
+			expect(createStderr).toBe("");
+			const created = JSON.parse(createStdout) as { team_id: string };
+
+			const report = Bun.spawn(
+				[
+					"bun",
+					"packages/mcp/src/bin.ts",
+					"team",
+					"report",
+					"--format",
+					"json",
+					"--team_id",
+					created.team_id,
+					"--event_type",
+					"decision",
+					"--message",
+					"Use the grouped team event surface.",
+					"--payload",
+					'{"source":"cli-test"}',
+				],
+				{ cwd: WORKSPACE_ROOT, env, stderr: "pipe", stdout: "pipe" },
+			);
+			const [reportExit, reportStdout, reportStderr] = await Promise.all([
+				report.exited,
+				new Response(report.stdout).text(),
+				new Response(report.stderr).text(),
+			]);
+
+			expect(reportExit).toBe(0);
+			expect(reportStderr).toBe("");
+			const body = JSON.parse(reportStdout) as {
+				ok?: boolean;
+				team_id?: string;
+				event_type?: string;
+			};
+			expect(body).toMatchObject({
+				ok: true,
+				team_id: created.team_id,
+				event_type: "decision",
+			});
+		} finally {
+			rmSync(tmpRoot, { recursive: true, force: true });
+		}
+	});
+
 	it("serves strategy show with a positional strategy name", async () => {
 		const tmpRoot = mkdtempSync(`${tmpdir()}/cuekit-strategy-show-cli-`);
 		try {

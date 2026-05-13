@@ -21,6 +21,7 @@ import {
 	getTaskTeamMultiplexerMetadata,
 	listSessionsByWorktree,
 	listTaskEvents,
+	listTeamEvents,
 	runMigrations,
 	updateTaskChildTokenHash,
 } from "@cuekit/store";
@@ -48,6 +49,7 @@ import { runListTaskEvents } from "../src/commands/list-task-events.ts";
 import { runListTasks } from "../src/commands/list-tasks.ts";
 import { runListTeams } from "../src/commands/list-teams.ts";
 import { runReportTaskEvent } from "../src/commands/report-task-event.ts";
+import { runReportTeamEvent } from "../src/commands/report-team-event.ts";
 import { runShowMcpConfig } from "../src/commands/show-mcp-config.ts";
 import { runStartTeamStrategy } from "../src/commands/start-team-strategy.ts";
 import { runSteerTask, SteerTaskInputSchema } from "../src/commands/steer-task.ts";
@@ -3133,6 +3135,123 @@ describe("report-task-event", () => {
 		// The terminal status MUST commit regardless of cleanup outcome.
 		expect(result.ok).toBe(true);
 		expect(getTaskById(db, submit.task_id)?.status).toBe("completed");
+	});
+});
+
+describe("report-team-event", () => {
+	it("stores a team blackboard event", async () => {
+		createSession(db, {
+			id: "s_team_event_report",
+			project_root: "/p",
+			worktree_path: "/w",
+			parent_agent_kind: "pi",
+		});
+		createTaskTeam(db, {
+			id: "tm_event_report",
+			session_id: "s_team_event_report",
+			title: "Team events",
+		});
+		createTask(db, {
+			id: "t_team_event_worker",
+			session_id: "s_team_event_report",
+			agent_kind: "pi",
+			team_id: "tm_event_report",
+			team_position: "worker",
+			objective: "work",
+			status: "running",
+		});
+
+		const ack = await runReportTeamEvent(ctx, {
+			team_id: "tm_event_report",
+			task_id: "t_team_event_worker",
+			position: "worker",
+			event_type: "finding",
+			message: "Worker found the relevant API.",
+			payload: '{"files":["packages/mcp/src/operations.ts"]}',
+		});
+
+		expect(ack.ok).toBe(true);
+		if (!ack.ok) return;
+		expect(ack).toMatchObject({
+			team_id: "tm_event_report",
+			event_type: "finding",
+		});
+		const events = listTeamEvents(db, "tm_event_report");
+		expect(events).toHaveLength(1);
+		expect(events[0]).toMatchObject({
+			id: ack.event_id,
+			team_id: "tm_event_report",
+			task_id: "t_team_event_worker",
+			position: "worker",
+			event_type: "finding",
+			message: "Worker found the relevant API.",
+			payload_json: JSON.stringify({ files: ["packages/mcp/src/operations.ts"] }),
+		});
+	});
+
+	it("returns team_not_found for unknown teams", async () => {
+		const ack = await runReportTeamEvent(ctx, {
+			team_id: "tm_missing",
+			event_type: "decision",
+			message: "No team.",
+		});
+
+		expect(ack.ok).toBe(false);
+		if (!ack.ok) expect(ack.error.code).toBe("team_not_found");
+	});
+
+	it("returns invalid_input for cross-team task links", async () => {
+		createSession(db, {
+			id: "s_team_event_cross",
+			project_root: "/p",
+			worktree_path: "/w",
+			parent_agent_kind: "pi",
+		});
+		createTaskTeam(db, { id: "tm_event_a", session_id: "s_team_event_cross", title: "A" });
+		createTaskTeam(db, { id: "tm_event_b", session_id: "s_team_event_cross", title: "B" });
+		createTask(db, {
+			id: "t_event_b",
+			session_id: "s_team_event_cross",
+			agent_kind: "pi",
+			team_id: "tm_event_b",
+			objective: "work",
+			status: "running",
+		});
+
+		const ack = await runReportTeamEvent(ctx, {
+			team_id: "tm_event_a",
+			task_id: "t_event_b",
+			event_type: "blocker",
+			message: "Wrong team.",
+		});
+
+		expect(ack.ok).toBe(false);
+		if (!ack.ok) expect(ack.error.code).toBe("invalid_input");
+	});
+
+	it("exposes grouped report for team events without overloading report_task_event", () => {
+		const report = CUEKIT_MCP_OPERATIONS.find((operation) => operation.mcpName === "report");
+		const reportTaskEvent = CUEKIT_MCP_OPERATIONS.find(
+			(operation) => operation.mcpName === "report_task_event",
+		);
+
+		expect(report).toBeDefined();
+		expect(
+			report?.options.safeParse({
+				kind: "team_event",
+				team_id: "tm_1",
+				event_type: "review_result",
+				message: "Review complete.",
+			}).success,
+		).toBe(true);
+		expect(
+			reportTaskEvent?.options.safeParse({
+				task_id: "t_1",
+				child_token: "token",
+				type: "finding",
+				message: "Not a task report type.",
+			}).success,
+		).toBe(false);
 	});
 });
 
