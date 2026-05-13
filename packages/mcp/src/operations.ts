@@ -1,3 +1,4 @@
+import { TeamPositionSchema } from "@cuekit/core";
 import { applyTeamWaitDefaults, loadProjectConfig } from "@cuekit/project-config";
 import { getSessionById, getTaskTeamById } from "@cuekit/store";
 import { z } from "incur";
@@ -224,9 +225,19 @@ const WaitOutputSchema = z.union([WaitTasksOutputSchema, WaitTeamOutputSchema]);
 
 const SteerInputSchema = z
 	.object({
-		kind: z.enum(["task", "team"]).describe("Steering target type."),
+		kind: z.enum(["task", "team", "team_position", "team_tasks"]).describe("Steering target type."),
 		task_id: z.string().min(1).optional().describe("Required when kind is task."),
-		team_id: z.string().min(1).optional().describe("Required when kind is team."),
+		team_id: z
+			.string()
+			.min(1)
+			.optional()
+			.describe("Required when kind is team, team_position, or team_tasks."),
+		position: TeamPositionSchema.optional().describe("Required when kind is team_position."),
+		task_ids: z
+			.array(z.string().min(1))
+			.min(1)
+			.optional()
+			.describe("Required when kind is team_tasks."),
 		message: z.string().min(1).optional(),
 		message_file: z.string().min(1).optional(),
 		event_type: z.enum(["handoff"]).optional(),
@@ -239,13 +250,41 @@ const SteerInputSchema = z
 			input.kind === "task" || (input.message_file === undefined && input.event_type === undefined),
 		{ message: "message_file and event_type are only supported for kind=task" },
 	)
+	.refine((input) => input.kind === "task" || input.task_id === undefined, {
+		message: "task_id is only supported for kind=task",
+	})
+	.refine((input) => input.kind !== "task" || input.task_id !== undefined, {
+		message: "task_id is required for kind=task",
+	})
+	.refine((input) => input.kind !== "task" || input.team_id === undefined, {
+		message: "team_id is not supported for kind=task",
+	})
 	.refine(
 		(input) =>
 			input.kind !== "task" || (input.message ? 1 : 0) + (input.message_file ? 1 : 0) === 1,
 		{ message: "exactly one of message or message_file is required for kind=task" },
 	)
-	.refine((input) => input.kind !== "team" || input.message !== undefined, {
-		message: "message is required for kind=team",
+	.refine(
+		(input) =>
+			!["team", "team_position", "team_tasks"].includes(input.kind) || input.team_id !== undefined,
+		{ message: "team_id is required for team steering" },
+	)
+	.refine(
+		(input) =>
+			!["team", "team_position", "team_tasks"].includes(input.kind) || input.message !== undefined,
+		{ message: "message is required for team steering" },
+	)
+	.refine((input) => input.kind === "team_position" || input.position === undefined, {
+		message: "position is only supported for kind=team_position",
+	})
+	.refine((input) => input.kind !== "team_position" || input.position !== undefined, {
+		message: "position is required for kind=team_position",
+	})
+	.refine((input) => input.kind === "team_tasks" || input.task_ids === undefined, {
+		message: "task_ids is only supported for kind=team_tasks",
+	})
+	.refine((input) => input.kind !== "team_tasks" || input.task_ids !== undefined, {
+		message: "task_ids is required for kind=team_tasks",
 	});
 const SteerOutputSchema = z.union([SteerTaskOutputSchema, SteerTeamOutputSchema]);
 
