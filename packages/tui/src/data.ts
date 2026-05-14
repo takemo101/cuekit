@@ -17,6 +17,7 @@ import type {
 	TuiTeamHandoff,
 	TuiTeamListInput,
 	TuiTeamListOutput,
+	TuiTeamSnapshotGuidance,
 	TuiTeamStatusOutput,
 } from "./context.ts";
 
@@ -100,6 +101,7 @@ export type TuiTeamDetail = {
 	blockers?: TuiTeamBlocker[];
 	latestHandoffs?: TuiTeamHandoff[];
 	blackboardEvents?: TuiTeamBlackboardEvent[];
+	guidance?: TuiTeamSnapshotGuidance;
 	error?: string;
 };
 
@@ -148,6 +150,7 @@ export async function loadTeamDetail(ctx: TuiContext, team: TeamSummary): Promis
 			...(snapshotResult.blackboard_events.length > 0
 				? { blackboardEvents: snapshotResult.blackboard_events }
 				: {}),
+			guidance: snapshotResult.guidance,
 		};
 	}
 

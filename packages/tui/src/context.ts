@@ -33,6 +33,7 @@ export type TuiTeamAttentionItem = {
 	task_id: string;
 	position?: string;
 	type: string;
+	reason?: string;
 	message?: string;
 	message_preview?: string;
 	full_message?: string;
@@ -99,6 +100,12 @@ export type TuiTeamStatusOutput =
 	  }
 	| { error: JobError };
 
+export type TuiTeamSnapshotGuidance = {
+	recommended_next_reads?: string[];
+	manual_steer_hints?: TuiManualSteerHint[];
+	suggested_next_actions?: string[];
+};
+
 export type TuiTeamSnapshotOutput =
 	| {
 			team_id: string;
@@ -125,7 +132,7 @@ export type TuiTeamSnapshotOutput =
 			latest_handoffs: TuiTeamHandoff[];
 			blackboard_events: TuiTeamBlackboardEvent[];
 			blockers?: TuiTeamBlocker[];
-			guidance: Record<string, unknown>;
+			guidance: TuiTeamSnapshotGuidance;
 	  }
 	| { error: JobError };
 

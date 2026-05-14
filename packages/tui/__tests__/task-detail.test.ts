@@ -301,6 +301,15 @@ describe("TaskDetail contextHeight", () => {
 					message_preview: "Need API input",
 					created_at: "2026-05-01T00:00:00.000Z",
 				},
+				{
+					sequence: 4,
+					task_id: "t_reviewer",
+					position: "reviewer",
+					type: "completed" as const,
+					reason: "terminal_report",
+					message_preview: "Review complete",
+					created_at: "2026-05-01T00:00:00.000Z",
+				},
 			],
 			manualSteerHints: [
 				{
@@ -333,6 +342,7 @@ describe("TaskDetail contextHeight", () => {
 					created_at: "2026-05-01T00:00:00.000Z",
 				},
 			],
+			guidance: { suggested_next_actions: ["Review blackboard before final reporting."] },
 		};
 		const overview = JSON.stringify(
 			TeamDetail({ team, detail, selectedMemberIndex: 0, focus: "list", activeTab: "overview" }),
@@ -342,16 +352,33 @@ describe("TaskDetail contextHeight", () => {
 		expect(overview).toContain("tasks");
 		expect(overview).toContain("1 running / 0 blocked / 0 completed");
 		expect(overview).toContain("context");
-		expect(overview).toContain("attention 1 / blockers 1 / handoffs 1 / blackboard 1");
+		expect(overview).toContain("attention 2 / blockers 1 / handoffs 1 / blackboard 1");
 		expect(overview).toContain("Next: inspect blocker t_worker");
+		const guidanceOverview = JSON.stringify(
+			TeamDetail({
+				team,
+				detail: {
+					...detail,
+					blockers: [],
+					attentionItems: detail.attentionItems?.slice(1),
+					manualSteerHints: [],
+				},
+				selectedMemberIndex: 0,
+				focus: "list",
+				activeTab: "overview",
+			}),
+		);
+		expect(guidanceOverview).toContain("Review blackboard before final reporting.");
 
 		const attention = JSON.stringify(
 			TeamDetail({ team, detail, selectedMemberIndex: 0, focus: "list", activeTab: "attention" }),
 		);
+		expect(attention).toContain("TERMINAL REPORTS 1");
+		expect(attention).toContain("Review complete");
 		expect(attention).toContain("BLOCKERS 1");
 		expect(attention).toContain("backgroundColor");
 		expect(attention).toContain("Waiting on API");
-		expect(attention).toContain("ATTENTION 1");
+		expect(attention).toContain("ATTENTION 2");
 		expect(attention).toContain("Need API input");
 		expect(attention).toContain("STEER HINTS 1");
 		expect(attention).toContain("Please inspect API");
@@ -359,6 +386,7 @@ describe("TaskDetail contextHeight", () => {
 		const knowledge = JSON.stringify(
 			TeamDetail({ team, detail, selectedMemberIndex: 0, focus: "list", activeTab: "knowledge" }),
 		);
+		expect(knowledge.indexOf("BLACKBOARD 1")).toBeLessThan(knowledge.indexOf("HANDOFFS 1"));
 		expect(knowledge).toContain("HANDOFFS 1");
 		expect(knowledge).toContain("Continue from handoff");
 		expect(knowledge).toContain("BLACKBOARD 1");
