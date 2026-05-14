@@ -1,6 +1,6 @@
 import type { TaskStatus, TaskSummary } from "@cuekit/core";
 import type { ReactNode } from "react";
-import { detailTabTitleHint, TASK_DETAIL_TABS } from "./detail-tabs.tsx";
+import { detailTabHintLabel, TASK_DETAIL_TABS } from "./detail-tabs.tsx";
 import type { TuiTaskEvent } from "../context.ts";
 import { DEFAULT_TRANSCRIPT_LINES, type TuiTaskDetail } from "../data.ts";
 import { truncateEnd, truncateMiddle } from "../format.ts";
@@ -366,20 +366,23 @@ export function TaskDetail(props: {
 	const attention = attentionEntries(detail);
 
 	return (
-		<box
-			title={`${detailTitle(task, status)} | ${detailTabTitleHint(TASK_DETAIL_TABS, activeTab)}`}
-			borderStyle="single"
-			borderColor={statusAccent(status)}
-			backgroundColor={theme.panel}
-			flexGrow={2}
-			padding={1}
-			flexDirection="column"
-		>
-			{loadingDetail ? <text fg={theme.yellow}>{`${loadingFrame ?? "⠋"} Loading detail…`}</text> : null}
-			{activeTab === "overview" ? MetadataPanel({ metadata }) : null}
-			{activeTab === "events" ? EventsPanel({ events, error: detail?.eventsError }) : null}
-			{activeTab === "output" ? OutputPanel({ detail, status, lines }) : null}
-			{activeTab === "context" ? ContextPanel({ attention, detail, error: detail?.teamStatusError }) : null}
-		</box>
+		<>
+			<box
+				title={detailTitle(task, status)}
+				borderStyle="single"
+				borderColor={statusAccent(status)}
+				backgroundColor={theme.panel}
+				flexGrow={2}
+				padding={1}
+				flexDirection="column"
+			>
+				{loadingDetail ? <text fg={theme.yellow}>{`${loadingFrame ?? "⠋"} Loading detail…`}</text> : null}
+				{activeTab === "overview" ? MetadataPanel({ metadata }) : null}
+				{activeTab === "events" ? EventsPanel({ events, error: detail?.eventsError }) : null}
+				{activeTab === "output" ? OutputPanel({ detail, status, lines }) : null}
+				{activeTab === "context" ? ContextPanel({ attention, detail, error: detail?.teamStatusError }) : null}
+			</box>
+			<text fg={theme.muted}>{detailTabHintLabel(TASK_DETAIL_TABS, activeTab)}</text>
+		</>
 	);
 }

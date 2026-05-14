@@ -40,10 +40,12 @@ export function safeDetailTabForMode(mode: TuiMode, requested: string | undefine
 	return tabs.find((tab) => tab.id === requested)?.id ?? tabs[0]?.id ?? "overview";
 }
 
-export function detailTabTitleHint<T extends DetailTab>(
+export function detailTabHintLabel<T extends DetailTab>(
 	tabs: readonly DetailTabDefinition<T>[],
 	active: T,
 ): string {
-	const activeLabel = tabs.find((tab) => tab.id === active)?.label ?? active;
-	return `Tab/Shift+Tab: ${activeLabel}`;
+	const labels = tabs
+		.map((tab) => (tab.id === active ? `${tab.label}*` : tab.label))
+		.join(" | ");
+	return `Tab/Shift+Tab: ${labels}`;
 }
