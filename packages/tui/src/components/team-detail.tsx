@@ -139,7 +139,7 @@ function renderAttention(detail?: TuiTeamDetail): ReactNode {
 	const attention = detail?.attentionItems ?? [];
 	const hints = detail?.manualSteerHints ?? [];
 	const blockers = detail?.blockers ?? [];
-	const terminalReports = attention.filter((item) => item.reason === "terminal_report" || item.type === "completed");
+	const terminalReports = attention.filter((item) => item.type === "completed");
 	return (
 		<>
 			{SectionHeader({ label: `TERMINAL REPORTS ${terminalReports.length}`, color: theme.green })}

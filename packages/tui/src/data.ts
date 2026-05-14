@@ -120,6 +120,14 @@ export async function loadTeamDetail(ctx: TuiContext, team: TeamSummary): Promis
 		return { team, members: [], lanes: {}, error: snapshotResult.error.message };
 	}
 	if (snapshotResult) {
+		const snapshotTeam: TeamSummary = {
+			...team,
+			session_id: snapshotResult.session_id,
+			title: snapshotResult.title,
+			...(snapshotResult.objective ? { objective: snapshotResult.objective } : {}),
+			status: snapshotResult.status,
+			task_counts: snapshotResult.task_counts,
+		};
 		const members = snapshotResult.members.map((member) => ({
 			task_id: member.task_id,
 			agent_kind: member.agent_kind,
@@ -132,7 +140,7 @@ export async function loadTeamDetail(ctx: TuiContext, team: TeamSummary): Promis
 			updated_at: member.updated_at,
 		}));
 		return {
-			team,
+			team: snapshotTeam,
 			members,
 			lanes: groupMembersByLane(members),
 			...(snapshotResult.attention_items && snapshotResult.attention_items.length > 0

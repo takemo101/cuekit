@@ -528,12 +528,12 @@ describe("tui data helpers", () => {
 		const detail = await loadTeamDetail(teamCtx, {
 			team_id: "tm_snapshot",
 			session_id: "s_snapshot",
-			title: "Snapshot team",
-			status: "running",
+			title: "Stale list title",
+			status: "empty",
 			task_counts: {
-				total: 1,
+				total: 0,
 				queued: 0,
-				running: 1,
+				running: 0,
 				input_required: 0,
 				completed: 0,
 				failed: 0,
@@ -545,6 +545,9 @@ describe("tui data helpers", () => {
 			updated_at: "2026-05-01T00:00:00.000Z",
 		});
 
+		expect(detail.team.title).toBe("Snapshot team");
+		expect(detail.team.status).toBe("running");
+		expect(detail.team.task_counts.running).toBe(1);
 		expect(detail.members.map((member) => member.task_id)).toEqual(["t_worker"]);
 		expect(detail.attentionItems?.[0]?.message_preview).toBe("Need input");
 		expect(detail.blockers?.[0]?.message).toBe("Waiting on API");
