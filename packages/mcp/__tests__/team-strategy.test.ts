@@ -88,6 +88,8 @@ describe("team strategy helpers", () => {
 		expect(prompt).toContain("Unpositioned team tasks are allowed");
 		expect(prompt).toContain("attention_items");
 		expect(prompt).toContain("inspect them before deciding whether to continue");
+		expect(prompt).toContain("Report progress after submitting tasks, bounded waits, and steering");
+		expect(prompt).toContain("avoid appearing idle while work is still in progress");
 		expect(prompt).not.toContain("Validation:");
 	});
 

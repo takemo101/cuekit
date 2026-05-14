@@ -2,7 +2,7 @@
 
 ## Status
 
-Foundation implemented: cuekit derives `attention_items` from existing `task_events` and exposes them in team status/wait run summaries and team results. Delivery, ack/read state, auto-steer, and auto-wake remain out of scope.
+Foundation implemented: cuekit derives `attention_items` from existing `task_events` and exposes them in team status/wait run summaries and team results. It also exposes advisory `next_action_hint` guidance when only a coordinator is still running after non-coordinator team members are terminal. Delivery, ack/read state, auto-steer, and auto-wake remain out of scope.
 
 ## Problem
 
@@ -11,6 +11,8 @@ Cuekit teams already persist worker, reviewer, coordinator, and finisher reports
 The remaining UX problem is discoverability: as team timelines grow, a parent or coordinator can miss the small set of events that require attention, such as a blocked worker, reviewer failure, help request, or finisher terminal report.
 
 Cuekit should make those important events easier to see without becoming a notification delivery system or scheduler.
+
+A related dogfood finding is that a coordinator can appear idle after workers/reviewers finish. Manual steering works, but the parent needs a substrate-safe signal that the next useful action may be to inspect results and steer the coordinator to finalize.
 
 ## Design Goal
 
@@ -21,6 +23,7 @@ Attention items should:
 - be derived from existing `task_events`,
 - require no new durable table, ack state, read/unread state, or delivery queue,
 - highlight important non-coordinator reports for parents and coordinators,
+- highlight the coordinator-finalization case when non-coordinator members are terminal and only the coordinator is still running,
 - keep `position: finisher` visible as the finalization/report-back lane,
 - work in `get_team_status`, `wait_team`, and `get_team_result`, and
 - remain guidance-first: cuekit does not auto-send messages, auto-steer, or wake coordinators.
@@ -149,6 +152,18 @@ run_summary: {
 
 The full timeline remains the audit trail. Attention items are a concise “look here first” summary.
 
+### 3. Coordinator finalization hint
+
+When exactly one team member is non-terminal, that member is `position: coordinator`, and at least one non-coordinator member is terminal, `wait_team` and `get_team_result` may include an advisory `next_action_hint`:
+
+```ts
+{
+  next_action_hint: "Only coordinator task t_coord is still running while worker/reviewer/finisher tasks are terminal. Inspect get_team_result and, if the coordinator has not finalized, steer t_coord to summarize terminal member reports and emit a completed/failed/blocked terminal report. If parent input is still required, the coordinator should explicitly report help_requested instead, but that is not terminal. cuekit will not auto-steer or auto-finalize."
+}
+```
+
+This hint is deliberately plain text and manual-action oriented. It does not wake, steer, schedule, or mutate coordinator state.
+
 ### Message and manual steer semantics
 
 - `run_summary.attention_items[].message` is summary-safe and may be truncated for status/wait surfaces.
@@ -167,6 +182,8 @@ When team status or result includes attention_items, inspect them before decidin
 
 This is prompt guidance only. The parent or coordinator remains responsible for deciding whether to steer, wait, submit follow-up work, or finish.
 
+Coordinator profiles and strategy prompts also remind coordinators to report progress after submitting tasks, bounded waits, and steering, and to inspect `get_team_result` and emit a terminal report once non-coordinator tasks are terminal or explicitly accounted for.
+
 ## Relationship to Existing Designs
 
 - Existing `run_summary.open_attention`: tracks currently non-terminal tasks that need attention, such as running or blocked tasks. `attention_items` are historical/event-based excerpts from `task_events`, including terminal reports and help requests. Keep this distinction explicit; if overlap becomes confusing in real use, rename or reshape one surface in a later UX slice.
@@ -183,6 +200,7 @@ This is prompt guidance only. The parent or coordinator remains responsible for 
 - `run_summary.attention_items` and `get_team_result.attention_items` expose the derived items.
 - Attention items include `message_preview` for display, optional `full_message` on result surfaces, and `steer_target`/`manual_steer_hints` for manual inspection/steering workflows without automatic delivery semantics.
 - Coordinator prompt rendering tells coordinators to inspect attention items before deciding the next action.
+- `wait_team` and `get_team_result` expose a manual `next_action_hint` when non-coordinator members are terminal and only the coordinator is still running.
 
 ## Future Implementation Notes
 

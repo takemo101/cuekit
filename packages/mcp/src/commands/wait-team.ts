@@ -10,7 +10,7 @@ import {
 	emptyTeamRunSummary,
 	TeamRunSummarySchema,
 } from "../team-run-summary.ts";
-import { aggregateTeamStatus } from "../team-status.ts";
+import { aggregateTeamStatus, buildCoordinatorFinalizationHint } from "../team-status.ts";
 import { sleep } from "./_sleep.ts";
 import {
 	runWaitTasks,
@@ -55,6 +55,10 @@ export type WaitTeamOutput = z.infer<typeof WaitTeamOutputSchema>;
 function teamWaitTimeoutHint(followNewTasks: boolean, baseHint = WAIT_TIMEOUT_ACTION_HINT): string {
 	if (!followNewTasks) return baseHint;
 	return `${baseHint} follow_new_tasks is enabled, so call wait again to continue polling current and newly created team tasks.`;
+}
+
+function combineWaitHints(...hints: Array<string | undefined>): string | undefined {
+	return hints.filter(Boolean).join(" ") || undefined;
 }
 
 async function waitCurrentTeamTasks(
@@ -161,6 +165,13 @@ export async function runWaitTeam(
 	if (latest.length > 0 && terminalTaskCount === latest.length)
 		fireTeamCompleteHookIfDone(ctx, team.id);
 	const cleanupHint = cleanupHintForTeam(team.id, terminalTaskCount);
+	const coordinatorFinalizationHint = buildCoordinatorFinalizationHint(latest);
+	const nextActionHint = combineWaitHints(
+		wait.timed_out
+			? teamWaitTimeoutHint(input.follow_new_tasks ?? false, wait.next_action_hint)
+			: undefined,
+		coordinatorFinalizationHint,
+	);
 	return {
 		team_id: team.id,
 		status: aggregateTeamStatus(latest),
@@ -170,14 +181,7 @@ export async function runWaitTeam(
 		scope: { team_id: team.id, session_id: team.session_id },
 		tasks: wait.tasks,
 		run_summary: buildTeamRunSummary(ctx, latest),
-		...(wait.timed_out
-			? {
-					next_action_hint: teamWaitTimeoutHint(
-						input.follow_new_tasks ?? false,
-						wait.next_action_hint,
-					),
-				}
-			: {}),
+		...(nextActionHint ? { next_action_hint: nextActionHint } : {}),
 		...(cleanupHint ? { cleanup_hint: cleanupHint } : {}),
 		...(wait.error ? { error: wait.error } : {}),
 	};

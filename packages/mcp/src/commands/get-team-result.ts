@@ -16,7 +16,7 @@ import {
 } from "../team-attention.ts";
 import { TeamBlackboardEventSchema, toTeamBlackboardEvent } from "../team-blackboard.ts";
 import { fireTeamCompleteHookIfDone } from "../team-hooks.ts";
-import { buildTeamSummary } from "../team-status.ts";
+import { buildCoordinatorFinalizationHint, buildTeamSummary } from "../team-status.ts";
 
 const TERMINAL_REPORT_TYPES = new Set(["completed", "failed", "blocked"]);
 const REPORT_TYPES = new Set([
@@ -53,6 +53,7 @@ export const GetTeamResultOutputSchema = z.union([
 		blackboard_events: z.array(TeamBlackboardEventSchema),
 		attention_items: z.array(TeamAttentionItemSchema).optional(),
 		manual_steer_hints: z.array(ManualSteerHintSchema).optional(),
+		next_action_hint: z.string().optional(),
 		cleanup_hint: z.string().optional(),
 	}),
 	z.object({
@@ -108,6 +109,7 @@ export function runGetTeamResult(
 	const attentionItems = buildTeamAttentionItemsFromEvents(taskEvents);
 	const manualSteerHints = buildManualSteerHintsFromAttentionItems(attentionItems);
 	const summary = buildTeamSummary(team, [...tasksById.values()]);
+	const nextActionHint = buildCoordinatorFinalizationHint(tasks);
 	if (tasks.length > 0 && tasks.every((task) => isTerminalTaskStatus(task.status))) {
 		fireTeamCompleteHookIfDone(ctx, team.id);
 	}
@@ -126,6 +128,7 @@ export function runGetTeamResult(
 		blackboard_events: blackboardEvents,
 		...(attentionItems.length > 0 ? { attention_items: attentionItems } : {}),
 		...(manualSteerHints.length > 0 ? { manual_steer_hints: manualSteerHints } : {}),
+		...(nextActionHint ? { next_action_hint: nextActionHint } : {}),
 		...(cleanupHint ? { cleanup_hint: cleanupHint } : {}),
 	};
 }
