@@ -64,11 +64,12 @@ function teamHotkeys(focus: TeamFocus, attachable: boolean, compact: boolean): s
 			);
 }
 
-function tabHint(labels: string[] | undefined, active: DetailTab | undefined): string {
-	if (!labels?.length) return "";
-	const activeIndex = active ? labels.findIndex((label) => label.toLowerCase() === active) : -1;
-	const rendered = labels
-		.map((label, index) => `[${index + 1}] ${label}${index === activeIndex ? "*" : ""}`)
+type FooterDetailTab = { id: DetailTab; label: string };
+
+function tabHint(tabs: readonly FooterDetailTab[] | undefined, active: DetailTab | undefined): string {
+	if (!tabs?.length) return "";
+	const rendered = tabs
+		.map((tab, index) => `[${index + 1}] ${tab.label}${tab.id === active ? "*" : ""}`)
 		.join("  ");
 	return `Detail: ${rendered}  [/] tabs`;
 }
@@ -92,7 +93,7 @@ export function footerLine(
 		attachable?: boolean;
 		mode?: TuiMode;
 		teamFocus?: TeamFocus;
-		detailTabs?: string[];
+		detailTabs?: readonly FooterDetailTab[];
 		activeDetailTab?: DetailTab;
 	} = {},
 ): string {
@@ -122,7 +123,7 @@ export function Footer(props: {
 	attachable?: boolean;
 	mode?: TuiMode;
 	teamFocus?: TeamFocus;
-	detailTabs?: string[];
+	detailTabs?: readonly FooterDetailTab[];
 	activeDetailTab?: DetailTab;
 }): ReactNode {
 	const status = props.error ?? props.message ?? (props.loading ? "Loading..." : "Ready");

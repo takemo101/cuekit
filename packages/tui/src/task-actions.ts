@@ -44,8 +44,8 @@ export function resolveEnterTeamFocus(focus: TeamFocus, memberCount: number): Te
 	return focus;
 }
 
-export function resolveEscapeTeamFocus(focus: TeamFocus): TeamFocus {
-	return focus === "members" ? "list" : "list";
+export function resolveEscapeTeamFocus(): TeamFocus {
+	return "list";
 }
 
 function hasPaneSessionMetadata(view: TaskStatusView): boolean {

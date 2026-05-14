@@ -447,7 +447,7 @@ export function App(props: {
 			return;
 		}
 		if (key.name === "escape") {
-			const nextFocus = resolveEscapeTeamFocus(teamFocus);
+			const nextFocus = resolveEscapeTeamFocus();
 			if (mode === "teams" && nextFocus !== teamFocus) {
 				setTeamFocus(nextFocus);
 				return;
@@ -659,7 +659,12 @@ export function App(props: {
 		}
 	});
 
-	const selectedAttachable = (mode === "tasks" || mode === "parents") && detail ? canAttach(detail.status) : false;
+	const selectedAttachable =
+		mode === "teams"
+			? teamFocus === "members" && activeTeamTab === "members" && Boolean(selectedMember)
+			: detail
+				? canAttach(detail.status)
+				: false;
 
 	return (
 		<box width="100%" height="100%" flexDirection="column" backgroundColor={theme.bg}>
@@ -711,7 +716,7 @@ export function App(props: {
 				attachable={selectedAttachable}
 				mode={mode}
 				teamFocus={teamFocus}
-				detailTabs={activeTabs.map((tab) => tab.label)}
+				detailTabs={activeTabs}
 				activeDetailTab={activeDetailTab}
 			/>
 		</box>
