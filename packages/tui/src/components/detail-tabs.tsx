@@ -42,12 +42,12 @@ export function safeDetailTabForMode(mode: TuiMode, requested: string | undefine
 	return tabs.find((tab) => tab.id === requested)?.id ?? tabs[0]?.id ?? "overview";
 }
 
-export function DetailTabs(props: {
+export function DetailTabHint(props: {
 	tabs: readonly DetailTabDefinition[];
 	active: string;
 }): ReactNode {
-	const label = props.tabs
-		.map((tab, index) => `${index + 1}${tab.id === props.active ? "●" : " "} ${tab.label}`)
-		.join("  ");
-	return <text fg={theme.muted}>{label}</text>;
+	const labels = props.tabs
+		.map((tab) => (tab.id === props.active ? `${tab.label}*` : tab.label))
+		.join(" | ");
+	return <text fg={theme.muted}>{`Tab/Shift+Tab: ${labels}`}</text>;
 }

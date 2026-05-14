@@ -1,5 +1,6 @@
 import type { TaskSummary, TeamSummary } from "@cuekit/core";
 import type { ReactNode } from "react";
+import { DetailTabHint, TEAM_DETAIL_TABS } from "./detail-tabs.tsx";
 import type { TuiTeamDetail } from "../data.ts";
 import { truncateEnd } from "../format.ts";
 import type { TeamDetailTab, TeamFocus } from "../tui-state.ts";
@@ -231,6 +232,7 @@ export function TeamDetail(props: {
 			{activeTab === "members" ? renderMembers(detail, selectedMemberIndex, focus) : null}
 			{activeTab === "attention" ? renderAttention(detail) : null}
 			{activeTab === "knowledge" ? renderKnowledge(detail) : null}
+			<DetailTabHint tabs={TEAM_DETAIL_TABS} active={activeTab} />
 		</box>
 	);
 }

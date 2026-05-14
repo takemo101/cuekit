@@ -1,5 +1,6 @@
 import type { TaskStatus, TaskSummary } from "@cuekit/core";
 import type { ReactNode } from "react";
+import { DetailTabHint, TASK_DETAIL_TABS } from "./detail-tabs.tsx";
 import type { TuiTaskEvent } from "../context.ts";
 import { DEFAULT_TRANSCRIPT_LINES, type TuiTaskDetail } from "../data.ts";
 import { truncateEnd, truncateMiddle } from "../format.ts";
@@ -229,21 +230,12 @@ function MetadataRow(props: { entry: MetadataEntry }): ReactNode {
 
 function EventHeader(props: { count: number; error?: string }): ReactNode {
 	const label = props.error ? "EVENTS — load error" : `EVENTS (${props.count} shown)`;
-	return (
-		<box backgroundColor={theme.panelAlt} height={1}>
-			<text fg={props.error ? theme.red : theme.cyan}>{label}</text>
-		</box>
-	);
+	return SectionHeader({ label, color: props.error ? theme.red : theme.cyan });
 }
 
 function AttentionHeader(props: { count: number }): ReactNode {
-	return (
-		<box backgroundColor={theme.panelAlt} height={1}>
-			<text fg={theme.yellow}>{`ATTENTION (${props.count} shown)`}</text>
-		</box>
-	);
+	return SectionHeader({ label: `ATTENTION (${props.count} shown)`, color: theme.yellow });
 }
-
 function AttentionRow(props: { entry: AttentionEntry }): ReactNode {
 	return (
 		<box flexDirection="row" height={1}>
@@ -264,9 +256,18 @@ function EventRow(props: { event: TuiTaskEvent }): ReactNode {
 	);
 }
 
+function SectionHeader(props: { label: string; color?: string }): ReactNode {
+	return (
+		<box backgroundColor={theme.panelAlt} height={1}>
+			<text fg={props.color ?? theme.cyan}>{props.label}</text>
+		</box>
+	);
+}
+
 function MetadataPanel(props: { metadata: MetadataEntry[] }): ReactNode {
 	return (
-		<scrollbox height={Math.min(12, Math.max(4, props.metadata.length + 1))} flexShrink={1} viewportCulling>
+		<scrollbox height={Math.min(12, Math.max(4, props.metadata.length + 2))} flexShrink={1} viewportCulling>
+			{SectionHeader({ label: "OVERVIEW" })}
 			{props.metadata.map((entry) => MetadataRow({ entry }))}
 		</scrollbox>
 	);
@@ -295,9 +296,7 @@ function ContextPanel(props: { attention: AttentionEntry[]; detail?: TuiTaskDeta
 			flexShrink={1}
 			viewportCulling
 		>
-			<box backgroundColor={theme.panelAlt} height={1}>
-				<text fg={theme.yellow}>TEAM CONTEXT</text>
-			</box>
+			{SectionHeader({ label: "TEAM CONTEXT", color: theme.yellow })}
 			{props.error ? <text fg={theme.red}>{truncateEnd(props.error, 128)}</text> : null}
 			{props.attention.length > 0 ? AttentionHeader({ count: props.attention.length }) : <text fg={theme.muted}>No team attention snippets.</text>}
 			{props.attention.map((entry) => AttentionRow({ entry }))}
@@ -320,26 +319,22 @@ function OutputPanel(props: { detail?: TuiTaskDetail; status: TaskStatus; lines:
 	const isTerminal = ["completed", "failed", "cancelled", "timed_out", "blocked"].includes(props.status);
 	return isTerminal ? (
 		<>
-			<box backgroundColor={theme.panelAlt} height={1} flexShrink={0}>
-				<text fg={theme.cyan}>RESULT</text>
-			</box>
+			<box flexShrink={0}>{SectionHeader({ label: "RESULT" })}</box>
 			<text flexShrink={0}>{resultBlock(props.detail, props.status)}</text>
 			<text flexShrink={0}> </text>
-			<box backgroundColor={theme.panelAlt} height={1} flexShrink={0}>
-				<text fg={theme.cyan}>{`TRANSCRIPT TAIL (${props.lines.length} line${props.lines.length === 1 ? "" : "s"})`}</text>
-			</box>
+			<box flexShrink={0}>{SectionHeader({ label: `TRANSCRIPT TAIL (${props.lines.length} line${props.lines.length === 1 ? "" : "s"})` })}</box>
 			<scrollbox flexGrow={1} flexShrink={1} stickyScroll stickyStart="bottom" viewportCulling>
 				<text fg={theme.text}>{props.lines.length > 0 ? props.lines.map((line) => truncateEnd(line, 150)).join("\n") : "No transcript output available."}</text>
 			</scrollbox>
 		</>
 	) : (
 		<>
-			<box backgroundColor={theme.panelAlt} height={1} flexShrink={0}>
-				<text fg={theme.cyan}>
-					{`LIVE OUTPUT (${props.lines.length} line${props.lines.length === 1 ? "" : "s"}, ${
+			<box flexShrink={0}>
+				{SectionHeader({
+					label: `LIVE OUTPUT (${props.lines.length} line${props.lines.length === 1 ? "" : "s"}, ${
 						props.detail?.transcriptSource === "live" ? "live pane" : "transcript file"
-					})`}
-				</text>
+					})`,
+				})}
 			</box>
 			<scrollbox flexGrow={1} flexShrink={1} stickyScroll stickyStart="bottom" viewportCulling>
 				<text fg={theme.text}>{props.lines.length > 0 ? padLinesForLiveOutput(props.lines, LIVE_OUTPUT_TARGET_HEIGHT).map((line) => truncateEnd(line, 150)).join("\n") : "No output available yet."}</text>
@@ -385,6 +380,7 @@ export function TaskDetail(props: {
 			{activeTab === "events" ? EventsPanel({ events, error: detail?.eventsError }) : null}
 			{activeTab === "output" ? OutputPanel({ detail, status, lines }) : null}
 			{activeTab === "context" ? ContextPanel({ attention, detail, error: detail?.teamStatusError }) : null}
+			<DetailTabHint tabs={TASK_DETAIL_TABS} active={activeTab} />
 		</box>
 	);
 }
