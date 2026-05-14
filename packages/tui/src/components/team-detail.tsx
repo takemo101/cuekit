@@ -218,20 +218,22 @@ export function TeamDetail(props: {
 	}
 	const status = detail?.status?.status ?? team.status;
 	return (
-		<box
-			title={teamDetailTitle(team, status)}
-			borderStyle="single"
-			borderColor={focus === "members" ? theme.cyan : statusAccent(status)}
-			backgroundColor={theme.panel}
-			flexGrow={1}
-			padding={1}
-			flexDirection="column"
-		>
-			{loadingDetail ? <text fg={theme.yellow}>{`${loadingFrame ?? "⠋"} Loading detail…`}</text> : null}
-			{activeTab === "overview" ? renderOverview(team, detail) : null}
-			{activeTab === "members" ? renderMembers(detail, selectedMemberIndex, focus) : null}
-			{activeTab === "attention" ? renderAttention(detail) : null}
-			{activeTab === "knowledge" ? renderKnowledge(detail) : null}
+		<box flexDirection="column" flexGrow={1}>
+			<box
+				title={teamDetailTitle(team, status)}
+				borderStyle="single"
+				borderColor={focus === "members" ? theme.cyan : statusAccent(status)}
+				backgroundColor={theme.panel}
+				flexGrow={1}
+				padding={1}
+				flexDirection="column"
+			>
+				{loadingDetail ? <text fg={theme.yellow}>{`${loadingFrame ?? "⠋"} Loading detail…`}</text> : null}
+				{activeTab === "overview" ? renderOverview(team, detail) : null}
+				{activeTab === "members" ? renderMembers(detail, selectedMemberIndex, focus) : null}
+				{activeTab === "attention" ? renderAttention(detail) : null}
+				{activeTab === "knowledge" ? renderKnowledge(detail) : null}
+			</box>
 			<DetailTabHint tabs={TEAM_DETAIL_TABS} active={activeTab} />
 		</box>
 	);

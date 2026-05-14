@@ -366,20 +366,22 @@ export function TaskDetail(props: {
 	const attention = attentionEntries(detail);
 
 	return (
-		<box
-			title={detailTitle(task, status)}
-			borderStyle="single"
-			borderColor={statusAccent(status)}
-			backgroundColor={theme.panel}
-			flexGrow={2}
-			padding={1}
-			flexDirection="column"
-		>
-			{loadingDetail ? <text fg={theme.yellow}>{`${loadingFrame ?? "⠋"} Loading detail…`}</text> : null}
-			{activeTab === "overview" ? MetadataPanel({ metadata }) : null}
-			{activeTab === "events" ? EventsPanel({ events, error: detail?.eventsError }) : null}
-			{activeTab === "output" ? OutputPanel({ detail, status, lines }) : null}
-			{activeTab === "context" ? ContextPanel({ attention, detail, error: detail?.teamStatusError }) : null}
+		<box flexDirection="column" flexGrow={2}>
+			<box
+				title={detailTitle(task, status)}
+				borderStyle="single"
+				borderColor={statusAccent(status)}
+				backgroundColor={theme.panel}
+				flexGrow={1}
+				padding={1}
+				flexDirection="column"
+			>
+				{loadingDetail ? <text fg={theme.yellow}>{`${loadingFrame ?? "⠋"} Loading detail…`}</text> : null}
+				{activeTab === "overview" ? MetadataPanel({ metadata }) : null}
+				{activeTab === "events" ? EventsPanel({ events, error: detail?.eventsError }) : null}
+				{activeTab === "output" ? OutputPanel({ detail, status, lines }) : null}
+				{activeTab === "context" ? ContextPanel({ attention, detail, error: detail?.teamStatusError }) : null}
+			</box>
 			<DetailTabHint tabs={TASK_DETAIL_TABS} active={activeTab} />
 		</box>
 	);
