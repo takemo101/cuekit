@@ -184,6 +184,23 @@ export function contextHeight(
 	return Math.min(12, Math.max(4, metadata.length + 1 + eventRows + attentionRows));
 }
 
+export function teamContextPanelHeight(input: {
+	attentionCount: number;
+	hintCount: number;
+	hasError?: boolean;
+}): number {
+	const visibleHints = input.hintCount > 0 ? Math.min(input.hintCount, 3) : 1;
+	const rows =
+		1 + // TEAM CONTEXT header
+		(input.hasError ? 1 : 0) +
+		1 + // ATTENTION header or empty state
+		input.attentionCount +
+		1 + // STEER HINTS header
+		visibleHints +
+		1; // deferred snippets note
+	return Math.min(12, Math.max(4, rows));
+}
+
 function terminalEvent(detail: TuiTaskDetail | undefined): TuiTaskEvent | undefined {
 	return detail?.events.findLast((event) =>
 		["completed", "failed", "cancelled", "timed_out", "blocked"].includes(event.type),
@@ -269,7 +286,15 @@ function EventsPanel(props: { events: TuiTaskEvent[]; error?: string }): ReactNo
 function ContextPanel(props: { attention: AttentionEntry[]; detail?: TuiTaskDetail; error?: string }): ReactNode {
 	const hints = props.detail?.manualSteerHints ?? [];
 	return (
-		<scrollbox height={Math.min(12, Math.max(4, props.attention.length + 4))} flexShrink={1} viewportCulling>
+		<scrollbox
+			height={teamContextPanelHeight({
+				attentionCount: props.attention.length,
+				hintCount: hints.length,
+				hasError: Boolean(props.error),
+			})}
+			flexShrink={1}
+			viewportCulling
+		>
 			<box backgroundColor={theme.panelAlt} height={1}>
 				<text fg={theme.yellow}>TEAM CONTEXT</text>
 			</box>
