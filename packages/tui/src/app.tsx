@@ -12,7 +12,6 @@ import { ConfirmDialog } from "./components/confirm-dialog.tsx";
 import {
 	TASK_DETAIL_TABS,
 	TEAM_DETAIL_TABS,
-	detailTabByIndex,
 	nextDetailTab,
 	safeDetailTabForMode,
 } from "./components/detail-tabs.tsx";
@@ -455,29 +454,15 @@ export function App(props: {
 			exit({ kind: "quit" });
 			return;
 		}
-		if (key.sequence === "[" || key.sequence === "]") {
+		if (key.name === "tab") {
 			if (mode === "teams") {
 				setActiveTeamTab((current) => {
-					const next = nextDetailTab(current, TEAM_DETAIL_TABS, key.sequence === "]" ? 1 : -1);
+					const next = nextDetailTab(current, TEAM_DETAIL_TABS, key.shift ? -1 : 1);
 					if (next !== "members") setTeamFocus("list");
 					return next;
 				});
 			} else {
-				setActiveTaskTab((current) =>
-					nextDetailTab(current, TASK_DETAIL_TABS, key.sequence === "]" ? 1 : -1),
-				);
-			}
-			return;
-		}
-		if (/^[1-5]$/.test(key.sequence)) {
-			if (mode === "teams") {
-				setActiveTeamTab((current) => {
-					const next = detailTabByIndex(TEAM_DETAIL_TABS, key.sequence, current);
-					if (next !== "members") setTeamFocus("list");
-					return next;
-				});
-			} else {
-				setActiveTaskTab((current) => detailTabByIndex(TASK_DETAIL_TABS, key.sequence, current));
+				setActiveTaskTab((current) => nextDetailTab(current, TASK_DETAIL_TABS, key.shift ? -1 : 1));
 			}
 			return;
 		}
@@ -716,8 +701,6 @@ export function App(props: {
 				attachable={selectedAttachable}
 				mode={mode}
 				teamFocus={teamFocus}
-				detailTabs={activeTabs}
-				activeDetailTab={activeDetailTab}
 			/>
 		</box>
 	);
