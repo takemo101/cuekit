@@ -6,6 +6,7 @@ import {
 	metadataEntries,
 	padLinesForLiveOutput,
 	TaskDetail,
+	teamContextPanelHeight,
 } from "../src/components/task-detail.tsx";
 import { TeamDetail } from "../src/components/team-detail.tsx";
 import type { TuiTaskDetail } from "../src/data.ts";
@@ -93,6 +94,13 @@ describe("TaskDetail contextHeight", () => {
 		const attention = [{ sequence: 1, type: "completed", message: "done" }];
 
 		expect(contextHeight(metadata, events, attention)).toBe(7);
+	});
+
+	it("sizes team context to fit visible rows without spurious scrollbars", () => {
+		expect(teamContextPanelHeight({ attentionCount: 3, hintCount: 0 })).toBe(8);
+		expect(teamContextPanelHeight({ attentionCount: 3, hintCount: 2 })).toBe(9);
+		expect(teamContextPanelHeight({ attentionCount: 3, hintCount: 4 })).toBe(10);
+		expect(teamContextPanelHeight({ attentionCount: 3, hintCount: 0, hasError: true })).toBe(9);
 	});
 
 	it("derives task detail attention entries from important non-coordinator events", () => {
