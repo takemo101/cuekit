@@ -49,5 +49,9 @@ export function DetailTabHint(props: {
 	const labels = props.tabs
 		.map((tab) => (tab.id === props.active ? `${tab.label}*` : tab.label))
 		.join(" | ");
-	return <text fg={theme.muted}>{`Tab/Shift+Tab: ${labels}`}</text>;
+	return (
+		<box borderStyle="single" borderColor={theme.border} backgroundColor={theme.panel} height={3} paddingX={1}>
+			<text fg={theme.muted}>{`Tab/Shift+Tab: ${labels}`}</text>
+		</box>
+	);
 }
