@@ -44,17 +44,63 @@ function firstNextAction(detail?: TuiTeamDetail): string | undefined {
 	return undefined;
 }
 
-function renderOverview(team: TeamSummary, detail?: TuiTeamDetail): ReactNode {
+function teamDetailTitle(team: TeamSummary, status: string): string {
+	return `Detail: ${statusGlyph(status)} ${team.team_id} / ${status} / team`;
+}
+
+type TeamMetadataEntry = { label: string; value: string; color?: string };
+
+function teamMetadataEntries(team: TeamSummary, detail?: TuiTeamDetail): TeamMetadataEntry[] {
 	const counts = teamCounts(team, detail);
 	const attention = detail?.attentionItems?.length ?? 0;
 	const blockers = detail?.blockers?.length ?? 0;
 	const handoffs = detail?.latestHandoffs?.length ?? 0;
 	const blackboard = detail?.blackboardEvents?.length ?? 0;
+	const entries: TeamMetadataEntry[] = [
+		{ label: "title", value: truncateEnd(team.title, 110), color: theme.strong },
+		{ label: "session", value: team.session_id },
+		{
+			label: "tasks",
+			value: `${counts.running} running / ${counts.blocked} blocked / ${counts.completed} completed`,
+		},
+		{
+			label: "context",
+			value: `attention ${attention} / blockers ${blockers} / handoffs ${handoffs} / blackboard ${blackboard}`,
+		},
+	];
+	if (team.objective) entries.splice(1, 0, { label: "objective", value: truncateEnd(team.objective, 110) });
+	if (detail?.error) entries.push({ label: "team status", value: truncateEnd(detail.error, 110), color: theme.red });
+	entries.push(
+		firstNextAction(detail)
+			? { label: "next", value: firstNextAction(detail) ?? "", color: theme.yellow }
+			: { label: "next", value: "No immediate action suggested.", color: theme.muted },
+	);
+	return entries;
+}
+
+function TeamMetadataRow(props: { entry: TeamMetadataEntry }): ReactNode {
+	return (
+		<box flexDirection="row" height={1}>
+			<text fg={props.entry.color ?? theme.cyan} width={12}>{props.entry.label}</text>
+			<text fg={theme.text}>{props.entry.value}</text>
+		</box>
+	);
+}
+
+function SectionHeader(props: { label: string; color?: string }): ReactNode {
+	return (
+		<box backgroundColor={theme.panelAlt} height={1}>
+			<text fg={props.color ?? theme.cyan}>{props.label}</text>
+		</box>
+	);
+}
+
+function renderOverview(team: TeamSummary, detail?: TuiTeamDetail): ReactNode {
+	const entries = teamMetadataEntries(team, detail);
 	return (
 		<>
-			<text fg={theme.text}>{`Tasks: ${counts.running} running / ${counts.blocked} blocked / ${counts.completed} completed`}</text>
-			<text fg={theme.text}>{`Attention: ${attention}   Blockers: ${blockers}   Handoffs: ${handoffs}   Blackboard: ${blackboard}`}</text>
-			{firstNextAction(detail) ? <text fg={theme.yellow}>{firstNextAction(detail)}</text> : <text fg={theme.muted}>No immediate action suggested.</text>}
+			{SectionHeader({ label: "OVERVIEW" })}
+			{entries.map((entry) => TeamMetadataRow({ entry }))}
 		</>
 	);
 }
@@ -62,11 +108,11 @@ function renderOverview(team: TeamSummary, detail?: TuiTeamDetail): ReactNode {
 function renderMembers(detail: TuiTeamDetail | undefined, selectedMemberIndex: number, focus: TeamFocus): ReactNode {
 	return (
 		<>
-			<text fg={theme.cyan}>LANES</text>
+			{SectionHeader({ label: "LANES" })}
 			{LANE_ORDER.map((lane) => (
 				<LaneRow key={lane} lane={lane} tasks={detail?.lanes[lane] ?? []} />
 			))}
-			<text fg={theme.cyan}>MEMBERS</text>
+			{SectionHeader({ label: "MEMBERS" })}
 			{detail?.members.length ? (
 				detail.members.map((member, index) => {
 					const selected = index === selectedMemberIndex;
@@ -89,7 +135,7 @@ function renderAttention(detail?: TuiTeamDetail): ReactNode {
 	const blockers = detail?.blockers ?? [];
 	return (
 		<>
-			<text fg={theme.cyan}>{`BLOCKERS ${blockers.length}`}</text>
+			{SectionHeader({ label: `BLOCKERS ${blockers.length}`, color: theme.red })}
 			{blockers.length === 0 ? (
 				<text fg={theme.muted}>No blockers.</text>
 			) : (
@@ -99,7 +145,7 @@ function renderAttention(detail?: TuiTeamDetail): ReactNode {
 					</text>
 				))
 			)}
-			<text fg={theme.cyan}>{`ATTENTION ${attention.length}`}</text>
+			{SectionHeader({ label: `ATTENTION ${attention.length}`, color: theme.yellow })}
 			{attention.length === 0 ? (
 				<text fg={theme.muted}>No attention items.</text>
 			) : (
@@ -109,7 +155,7 @@ function renderAttention(detail?: TuiTeamDetail): ReactNode {
 					</text>
 				))
 			)}
-			<text fg={theme.cyan}>{`STEER HINTS ${hints.length}`}</text>
+			{SectionHeader({ label: `STEER HINTS ${hints.length}` })}
 			{hints.length === 0 ? (
 				<text fg={theme.muted}>No manual steer hints.</text>
 			) : (
@@ -128,7 +174,7 @@ function renderKnowledge(detail?: TuiTeamDetail): ReactNode {
 	const blackboard = detail?.blackboardEvents ?? [];
 	return (
 		<>
-			<text fg={theme.cyan}>{`HANDOFFS ${handoffs.length}`}</text>
+			{SectionHeader({ label: `HANDOFFS ${handoffs.length}` })}
 			{handoffs.length === 0 ? (
 				<text fg={theme.muted}>No handoffs.</text>
 			) : (
@@ -138,7 +184,7 @@ function renderKnowledge(detail?: TuiTeamDetail): ReactNode {
 					</text>
 				))
 			)}
-			<text fg={theme.cyan}>{`BLACKBOARD ${blackboard.length}`}</text>
+			{SectionHeader({ label: `BLACKBOARD ${blackboard.length}`, color: theme.purple })}
 			{blackboard.length === 0 ? (
 				<text fg={theme.muted}>No blackboard events.</text>
 			) : (
@@ -172,20 +218,15 @@ export function TeamDetail(props: {
 	const status = detail?.status?.status ?? team.status;
 	return (
 		<box
-			title="Detail"
+			title={teamDetailTitle(team, status)}
 			borderStyle="single"
-			borderColor={focus === "members" ? theme.cyan : theme.border}
+			borderColor={focus === "members" ? theme.cyan : statusAccent(status)}
 			backgroundColor={theme.panel}
 			flexGrow={1}
 			padding={1}
+			flexDirection="column"
 		>
 			{loadingDetail ? <text fg={theme.yellow}>{`${loadingFrame ?? "⠋"} Loading detail…`}</text> : null}
-			<box height={1}>
-				<text fg={statusAccent(status)}>{`${statusGlyph(status)} ${status}`}</text>
-				<text fg={theme.strong}>{`  ${team.team_id}  ${truncateEnd(team.title, 56)}`}</text>
-			</box>
-			{team.objective ? <text fg={theme.muted}>{truncateEnd(team.objective, 90)}</text> : null}
-			{detail?.error ? <text fg={theme.red}>{`Team status error: ${detail.error}`}</text> : null}
 			{activeTab === "overview" ? renderOverview(team, detail) : null}
 			{activeTab === "members" ? renderMembers(detail, selectedMemberIndex, focus) : null}
 			{activeTab === "attention" ? renderAttention(detail) : null}

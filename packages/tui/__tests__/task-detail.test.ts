@@ -337,17 +337,19 @@ describe("TaskDetail contextHeight", () => {
 		const overview = JSON.stringify(
 			TeamDetail({ team, detail, selectedMemberIndex: 0, focus: "list", activeTab: "overview" }),
 		);
-		expect(overview).toContain("Tasks: 1 running / 0 blocked / 0 completed");
-		expect(overview).toContain("Attention: 1");
-		expect(overview).toContain("Blockers: 1");
-		expect(overview).toContain("Handoffs: 1");
-		expect(overview).toContain("Blackboard: 1");
+		expect(overview).toContain("Detail: ○ tm_1 / running / team");
+		expect(overview).toContain("OVERVIEW");
+		expect(overview).toContain("tasks");
+		expect(overview).toContain("1 running / 0 blocked / 0 completed");
+		expect(overview).toContain("context");
+		expect(overview).toContain("attention 1 / blockers 1 / handoffs 1 / blackboard 1");
 		expect(overview).toContain("Next: inspect blocker t_worker");
 
 		const attention = JSON.stringify(
 			TeamDetail({ team, detail, selectedMemberIndex: 0, focus: "list", activeTab: "attention" }),
 		);
 		expect(attention).toContain("BLOCKERS 1");
+		expect(attention).toContain("backgroundColor");
 		expect(attention).toContain("Waiting on API");
 		expect(attention).toContain("ATTENTION 1");
 		expect(attention).toContain("Need API input");
