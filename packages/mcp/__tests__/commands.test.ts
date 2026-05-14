@@ -2717,6 +2717,31 @@ describe("submit-task", () => {
 		}
 	});
 
+	it("does not inherit a role model when the caller overrides the role agent", async () => {
+		const root = mkdtempSync(join(tmpdir(), "cuekit-submit-role-agent-"));
+		try {
+			mkdirSync(join(root, ".git"));
+			const result = await runSubmitTask(ctx, {
+				objective: "review this with pi",
+				role: "reviewer",
+				agent_kind: "pi",
+				cwd: root,
+			});
+			expect(result.accepted).toBe(true);
+			if (!result.accepted) return;
+			expect(result.agent_kind).toBe("pi");
+			expect(result.role).toBe("reviewer");
+			const task = getTaskById(db, result.task_id);
+			expect(task?.agent_kind).toBe("pi");
+			expect(task?.model).toBeNull();
+			expect(JSON.parse(task?.spec_json ?? "{}").role_instructions).toContain(
+				"evidence-based reviewer",
+			);
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
 	it("uses session worktree when resolving an explicit role", async () => {
 		const root = mkdtempSync(join(tmpdir(), "cuekit-submit-role-"));
 		try {

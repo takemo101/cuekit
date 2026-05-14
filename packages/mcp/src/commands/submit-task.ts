@@ -284,10 +284,17 @@ export async function runSubmitTask(
 	const { session_id: _ignored, team_id, position, timeout_ms: _timeout_ms, ...rawSpec } = input;
 	const agent_kind =
 		rawSpec.agent_kind ?? roleResolution.specPatch.agent_kind ?? submitDefaults.agent_kind;
-	const model = rawSpec.model ?? roleResolution.specPatch.model ?? submitDefaults.model;
+	const roleModel =
+		rawSpec.agent_kind !== undefined &&
+		roleResolution.specPatch.agent_kind !== undefined &&
+		rawSpec.agent_kind !== roleResolution.specPatch.agent_kind
+			? undefined
+			: roleResolution.specPatch.model;
+	const model = rawSpec.model ?? roleModel ?? submitDefaults.model;
+	const { model: _rolePatchModel, ...roleSpecPatch } = roleResolution.specPatch;
 	let unresolvedSpec: Partial<TaskSpec> = {
 		...rawSpec,
-		...roleResolution.specPatch,
+		...roleSpecPatch,
 		...teamResolution.specPatch,
 		...(agent_kind ? { agent_kind } : {}),
 		...(model ? { model } : {}),
