@@ -38,11 +38,13 @@ function teamCounts(team: TeamSummary, detail?: TuiTeamDetail): TeamSummary["tas
 function firstNextAction(detail?: TuiTeamDetail): string | undefined {
 	const blocker = detail?.blockers?.[0];
 	if (blocker) return `Next: inspect blocker ${blocker.task_id}`;
-	const attention = detail?.attentionItems?.[0];
-	if (attention?.task_id) return `Next: inspect attention item ${attention.task_id}`;
+	const actionableAttention = detail?.attentionItems?.find(
+		(item) => item.type === "blocked" || item.type === "help_requested",
+	);
+	if (actionableAttention?.task_id) return `Next: inspect attention item ${actionableAttention.task_id}`;
 	const hint = detail?.manualSteerHints?.[0];
 	if (hint?.task_id) return `Next: consider steering ${hint.task_id}`;
-	return undefined;
+	return detail?.guidance?.suggested_next_actions?.[0];
 }
 
 function teamDetailTitle(team: TeamSummary, status: string): string {
@@ -137,8 +139,19 @@ function renderAttention(detail?: TuiTeamDetail): ReactNode {
 	const attention = detail?.attentionItems ?? [];
 	const hints = detail?.manualSteerHints ?? [];
 	const blockers = detail?.blockers ?? [];
+	const terminalReports = attention.filter((item) => item.reason === "terminal_report" || item.type === "completed");
 	return (
 		<>
+			{SectionHeader({ label: `TERMINAL REPORTS ${terminalReports.length}`, color: theme.green })}
+			{terminalReports.length === 0 ? (
+				<text fg={theme.muted}>No terminal reports.</text>
+			) : (
+				terminalReports.slice(0, 5).map((item) => (
+					<text key={`${item.sequence}:terminal`} fg={theme.green}>
+						{truncateEnd(`${item.position ?? "?"} ${item.task_id}: ${item.message_preview ?? item.message ?? item.type}`, 110)}
+					</text>
+				))
+			)}
 			{SectionHeader({ label: `BLOCKERS ${blockers.length}`, color: theme.red })}
 			{blockers.length === 0 ? (
 				<text fg={theme.muted}>No blockers.</text>
@@ -178,6 +191,16 @@ function renderKnowledge(detail?: TuiTeamDetail): ReactNode {
 	const blackboard = detail?.blackboardEvents ?? [];
 	return (
 		<>
+			{SectionHeader({ label: `BLACKBOARD ${blackboard.length}`, color: theme.purple })}
+			{blackboard.length === 0 ? (
+				<text fg={theme.muted}>No blackboard events.</text>
+			) : (
+				blackboard.slice(-5).map((event) => (
+					<text key={event.event_id} fg={theme.purple}>
+						{truncateEnd(`${event.event_type} ${event.position ?? "?"}: ${event.message}`, 110)}
+					</text>
+				))
+			)}
 			{SectionHeader({ label: `HANDOFFS ${handoffs.length}` })}
 			{handoffs.length === 0 ? (
 				<text fg={theme.muted}>No handoffs.</text>
@@ -185,16 +208,6 @@ function renderKnowledge(detail?: TuiTeamDetail): ReactNode {
 				handoffs.slice(-5).map((item) => (
 					<text key={item.event_id} fg={theme.purple}>
 						{truncateEnd(`${item.position ?? "?"} ${item.task_id}: ${item.message_preview ?? item.event_id}`, 90)}
-					</text>
-				))
-			)}
-			{SectionHeader({ label: `BLACKBOARD ${blackboard.length}`, color: theme.purple })}
-			{blackboard.length === 0 ? (
-				<text fg={theme.muted}>No blackboard events.</text>
-			) : (
-				blackboard.slice(-5).map((event) => (
-					<text key={event.event_id} fg={theme.purple}>
-						{truncateEnd(`${event.event_type} ${event.position ?? "?"}: ${event.message}`, 90)}
 					</text>
 				))
 			)}

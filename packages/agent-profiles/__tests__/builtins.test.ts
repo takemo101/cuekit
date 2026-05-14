@@ -64,7 +64,8 @@ describe("builtin agent profiles", () => {
 		expect(coordinator).toContain("team snapshot");
 		expect(coordinator).toContain("attention items");
 		expect(coordinator).toContain("blackboard_events");
-		expect(coordinator).toContain("record important decisions");
+		expect(coordinator).toContain("Record important decisions");
+		expect(coordinator).toContain("durable shared knowledge");
 		expect(coordinator).toContain("manual and selective");
 
 		const worker = instructionsFor("worker");
@@ -72,6 +73,7 @@ describe("builtin agent profiles", () => {
 		expect(worker).toContain("blockers");
 		expect(worker).toContain("changed assumptions");
 		expect(worker).toContain("observability payloads");
+		expect(worker).toContain("team blackboard");
 		expect(worker).toContain("do not spawn or stop other agents");
 
 		const reviewer = instructionsFor("reviewer");
@@ -80,6 +82,7 @@ describe("builtin agent profiles", () => {
 		expect(reviewer).toContain("relevant findings");
 		expect(reviewer).toContain("severity");
 		expect(reviewer).toContain("review_result");
+		expect(reviewer).toContain("durable blackboard decisions/findings");
 
 		const finisher = instructionsFor("pr-finisher");
 		expect(finisher).toContain("worker and reviewer reports");
