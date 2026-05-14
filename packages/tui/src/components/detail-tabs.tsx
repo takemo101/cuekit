@@ -37,16 +37,6 @@ export function nextDetailTab<T extends DetailTab>(
 	return tabs[nextIndex]?.id ?? fallback;
 }
 
-export function detailTabByIndex<T extends DetailTab>(
-	tabs: readonly DetailTabDefinition<T>[],
-	sequence: string,
-	current: T,
-): T {
-	const index = Number.parseInt(sequence, 10) - 1;
-	if (!Number.isInteger(index) || index < 0 || index >= tabs.length) return current;
-	return tabs[index]?.id ?? current;
-}
-
 export function safeDetailTabForMode(mode: TuiMode, requested: string | undefined): DetailTab {
 	const tabs = detailTabsForMode(mode);
 	return tabs.find((tab) => tab.id === requested)?.id ?? tabs[0]?.id ?? "overview";

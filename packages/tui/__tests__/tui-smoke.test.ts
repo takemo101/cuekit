@@ -78,23 +78,13 @@ describe("@cuekit/tui package smoke", () => {
 		expect(footer).toContain("↑/↓|j/k");
 		expect(app).toContain('mode === "teams"');
 		expect(app).toContain("Boolean(selectedMember)");
-		expect(app).toContain("detailTabs={activeTabs}");
-		expect(app).toContain("activeDetailTab={activeDetailTab}");
-		const detailTabs = [
-			{ id: "overview" as const, label: "Overview" },
-			{ id: "events" as const, label: "Events" },
-			{ id: "output" as const, label: "Live Output" },
-			{ id: "context" as const, label: "Context" },
-		];
-		expect(footerLine("Ready", 160, { detailTabs, activeDetailTab: "output" })).toContain(
-			"Detail:",
-		);
-		expect(footerLine("Ready", 160, { detailTabs, activeDetailTab: "output" })).toContain(
-			"[3] Live Output",
-		);
-		expect(footerLine("Ready", 160, { detailTabs, activeDetailTab: "output" })).toContain(
-			"[/] tabs",
-		);
+		expect(app).toContain('key.name === "tab"');
+		expect(app).toContain("key.shift");
+		expect(app).not.toContain("detailTabByIndex");
+		expect(app).not.toContain("detailTabs={activeTabs}");
+		expect(app).not.toContain("activeDetailTab={activeDetailTab}");
+		expect(footerLine("Ready", 160)).not.toContain("Detail:");
+		expect(footerLine("Ready", 160)).not.toContain("[/] tabs");
 		expect(
 			footerLine("Ready", 200, { mode: "teams", teamFocus: "members", attachable: true }),
 		).toContain("a attach member");

@@ -1,7 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import type { TaskStatus, TaskStatusView } from "@cuekit/core";
 import {
-	detailTabByIndex,
 	detailTabsForMode,
 	nextDetailTab,
 	safeDetailTabForMode,
@@ -233,13 +232,6 @@ describe("tui task action helpers", () => {
 		expect(nextDetailTab("context", TASK_DETAIL_TABS, 1)).toBe("overview");
 		expect(nextDetailTab("overview", TASK_DETAIL_TABS, -1)).toBe("context");
 		expect(nextDetailTab("missing", TASK_DETAIL_TABS, 1)).toBe("overview");
-	});
-
-	it("jumps to valid numeric detail tabs and ignores invalid indexes", () => {
-		expect(detailTabByIndex(TASK_DETAIL_TABS, "1", "context")).toBe("overview");
-		expect(detailTabByIndex(TASK_DETAIL_TABS, "4", "overview")).toBe("context");
-		expect(detailTabByIndex(TASK_DETAIL_TABS, "5", "events")).toBe("events");
-		expect(detailTabByIndex(TASK_DETAIL_TABS, "x", "events")).toBe("events");
 	});
 
 	it("resolves mode-specific detail tab sets and safe fallbacks", () => {
