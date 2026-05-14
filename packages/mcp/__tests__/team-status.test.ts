@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import type { Task, TaskTeamRow } from "@cuekit/store";
 import {
 	aggregateTeamStatus,
+	buildCoordinatorFinalizationHint,
 	buildTeamSummary,
 	countTeamTasks,
 	groupTasksByPosition,
@@ -131,5 +132,32 @@ describe("team status aggregation", () => {
 		expect(summary.metadata).toEqual({ source: "test" });
 		expect(summary.status).toBe("completed");
 		expect(summary.task_counts.completed).toBe(1);
+	});
+
+	it("suggests manual coordinator finalization when only the coordinator is still running", () => {
+		const hint = buildCoordinatorFinalizationHint([
+			task("t_coord", "running", "coordinator"),
+			task("t_worker", "completed", "worker"),
+			task("t_review", "completed", "reviewer"),
+		]);
+
+		expect(hint).toContain("Only coordinator task t_coord is still running");
+		expect(hint).toContain("worker/reviewer/finisher tasks are terminal");
+		expect(hint).toContain("get_team_result");
+		expect(hint).toContain("completed/failed/blocked terminal report");
+		expect(hint).toContain("help_requested instead, but that is not terminal");
+		expect(hint).toContain("steer");
+	});
+
+	it("does not suggest coordinator finalization while non-coordinator tasks are active", () => {
+		expect(
+			buildCoordinatorFinalizationHint([
+				task("t_coord", "running", "coordinator"),
+				task("t_worker", "running", "worker"),
+			]),
+		).toBeUndefined();
+		expect(
+			buildCoordinatorFinalizationHint([task("t_coord", "running", "coordinator")]),
+		).toBeUndefined();
 	});
 });

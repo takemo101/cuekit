@@ -58,6 +58,22 @@ export function groupTasksByPosition(tasks: TaskSummary[]): Record<TeamPosition,
 	return grouped;
 }
 
+export function buildCoordinatorFinalizationHint(
+	tasks: Pick<Task, "id" | "status" | "team_position">[],
+): string | undefined {
+	if (tasks.length < 2) return undefined;
+	const nonTerminal = tasks.filter((task) => !isTerminalTaskStatus(task.status));
+	if (nonTerminal.length !== 1) return undefined;
+	const [coordinator] = nonTerminal;
+	if (coordinator?.team_position !== "coordinator") return undefined;
+	const terminalNonCoordinators = tasks.filter(
+		(task) => task.team_position !== "coordinator" && isTerminalTaskStatus(task.status),
+	);
+	if (terminalNonCoordinators.length === 0) return undefined;
+
+	return `Only coordinator task ${coordinator.id} is still running while worker/reviewer/finisher tasks are terminal. Inspect get_team_result and, if the coordinator has not finalized, steer ${coordinator.id} to summarize terminal member reports and emit a completed/failed/blocked terminal report. If parent input is still required, the coordinator should explicitly report help_requested instead, but that is not terminal. cuekit will not auto-steer or auto-finalize.`;
+}
+
 function parseMetadata(metadata_json: string | null): Record<string, unknown> | undefined {
 	if (!metadata_json) return undefined;
 	try {

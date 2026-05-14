@@ -66,9 +66,13 @@ describe("builtin agent profiles", () => {
 		expect(coordinator).toContain("blackboard_events");
 		expect(coordinator).toContain("Record important decisions");
 		expect(coordinator).toContain("durable shared knowledge");
+		expect(coordinator).toContain("completed/failed/blocked terminal report");
+		expect(coordinator).toContain("help_requested explicitly, but treat it as non-terminal");
 		expect(coordinator).toContain("manual and selective");
 
 		const worker = instructionsFor("worker");
+		expect(worker).toContain("emit concise progress after initial discovery");
+		expect(worker).toContain("idle task");
 		expect(worker).toContain("important findings");
 		expect(worker).toContain("blockers");
 		expect(worker).toContain("changed assumptions");
@@ -81,6 +85,8 @@ describe("builtin agent profiles", () => {
 		expect(reviewer).toContain("handoffs");
 		expect(reviewer).toContain("relevant findings");
 		expect(reviewer).toContain("severity");
+		expect(reviewer).toContain("emit concise progress after scope discovery");
+		expect(reviewer).toContain("idle task");
 		expect(reviewer).toContain("review_result");
 		expect(reviewer).toContain("durable blackboard decisions/findings");
 

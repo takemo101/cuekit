@@ -1229,6 +1229,53 @@ describe("wait-team and cleanup-team", () => {
 		expect(result.cleanup_hint).toContain("tm_1");
 	});
 
+	it("wait-team hints when terminal members are waiting on a running coordinator", async () => {
+		createSession(db, {
+			id: "s_wait_finalize",
+			project_root: "/p",
+			worktree_path: "/w",
+			parent_agent_kind: "pi",
+		});
+		createTaskTeam(db, { id: "tm_wait_finalize", session_id: "s_wait_finalize", title: "Team" });
+		const coordinator = await runSubmitTask(ctx, {
+			objective: "coordinate",
+			agent_kind: "pi",
+			session_id: "s_wait_finalize",
+			team_id: "tm_wait_finalize",
+			position: "coordinator",
+			timeout_ms: null,
+		});
+		expect(coordinator.accepted).toBe(true);
+		createTask(db, {
+			id: "t_wait_worker",
+			session_id: "s_wait_finalize",
+			agent_kind: "claude-code",
+			team_id: "tm_wait_finalize",
+			team_position: "worker",
+			objective: "work",
+			status: "completed",
+		});
+		appendTaskEvent(db, {
+			id: "e_wait_worker_done",
+			task_id: "t_wait_worker",
+			type: "completed",
+			message: "Worker finished implementation",
+		});
+
+		const result = await runWaitTeam(ctx, {
+			team_id: "tm_wait_finalize",
+			timeout_ms: 0,
+			poll_interval_ms: 1,
+		});
+
+		expect(result.timed_out).toBe(true);
+		expect(result.next_action_hint).toContain(
+			`Only coordinator task ${coordinator.accepted ? coordinator.task_id : ""} is still running`,
+		);
+		expect(result.next_action_hint).toContain("get_team_result");
+		expect(result.next_action_hint).toContain("steer");
+	});
+
 	it("fires on_team_complete once when all team tasks are terminal", async () => {
 		createSession(db, {
 			id: "s_team_hook_complete",
@@ -1764,6 +1811,54 @@ describe("team result", () => {
 		expect("error" in result).toBe(false);
 		if ("error" in result) return;
 		expect(result.cleanup_hint).toBeUndefined();
+	});
+
+	it("team result hints when terminal members are waiting on a running coordinator", () => {
+		createSession(db, {
+			id: "s_team_result_finalize",
+			project_root: "/p",
+			worktree_path: "/w",
+			parent_agent_kind: "pi",
+		});
+		createTaskTeam(db, {
+			id: "tm_result_finalize",
+			session_id: "s_team_result_finalize",
+			title: "Team",
+		});
+		createTask(db, {
+			id: "t_result_coord",
+			session_id: "s_team_result_finalize",
+			team_id: "tm_result_finalize",
+			team_position: "coordinator",
+			agent_kind: "pi",
+			objective: "coordinate",
+			status: "running",
+		});
+		createTask(db, {
+			id: "t_result_worker",
+			session_id: "s_team_result_finalize",
+			team_id: "tm_result_finalize",
+			team_position: "worker",
+			agent_kind: "claude-code",
+			objective: "work",
+			status: "completed",
+		});
+		appendTaskEvent(db, {
+			id: "e_result_worker_done",
+			task_id: "t_result_worker",
+			type: "completed",
+			message: "Worker finished implementation",
+		});
+
+		const result = runGetTeamResult(ctx, { team_id: "tm_result_finalize" });
+
+		expect("error" in result).toBe(false);
+		if ("error" in result) return;
+		expect(result.next_action_hint).toContain(
+			"Only coordinator task t_result_coord is still running",
+		);
+		expect(result.next_action_hint).toContain("get_team_result");
+		expect(result.next_action_hint).toContain("steer");
 	});
 
 	it("team result returns team_not_found for unknown teams", () => {
