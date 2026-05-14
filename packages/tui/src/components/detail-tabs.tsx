@@ -1,5 +1,3 @@
-import type { ReactNode } from "react";
-import { theme } from "../theme.ts";
 import type { DetailTab, TaskDetailTab, TeamDetailTab, TuiMode } from "../tui-state.ts";
 
 export type DetailTabDefinition<T extends DetailTab = DetailTab> = {
@@ -42,16 +40,10 @@ export function safeDetailTabForMode(mode: TuiMode, requested: string | undefine
 	return tabs.find((tab) => tab.id === requested)?.id ?? tabs[0]?.id ?? "overview";
 }
 
-export function DetailTabHint(props: {
-	tabs: readonly DetailTabDefinition[];
-	active: string;
-}): ReactNode {
-	const labels = props.tabs
-		.map((tab) => (tab.id === props.active ? `${tab.label}*` : tab.label))
-		.join(" | ");
-	return (
-		<box height={1} paddingX={1} flexShrink={0}>
-			<text fg={theme.muted}>{`Tab/Shift+Tab: ${labels}`}</text>
-		</box>
-	);
+export function detailTabTitleHint<T extends DetailTab>(
+	tabs: readonly DetailTabDefinition<T>[],
+	active: T,
+): string {
+	const activeLabel = tabs.find((tab) => tab.id === active)?.label ?? active;
+	return `Tab/Shift+Tab: ${activeLabel}`;
 }

@@ -1,6 +1,6 @@
 import type { TaskSummary, TeamSummary } from "@cuekit/core";
 import type { ReactNode } from "react";
-import { DetailTabHint, TEAM_DETAIL_TABS } from "./detail-tabs.tsx";
+import { detailTabTitleHint, TEAM_DETAIL_TABS } from "./detail-tabs.tsx";
 import type { TuiTeamDetail } from "../data.ts";
 import { truncateEnd } from "../format.ts";
 import type { TeamDetailTab, TeamFocus } from "../tui-state.ts";
@@ -218,23 +218,20 @@ export function TeamDetail(props: {
 	}
 	const status = detail?.status?.status ?? team.status;
 	return (
-		<box flexDirection="column" flexGrow={1}>
-			<box
-				title={teamDetailTitle(team, status)}
-				borderStyle="single"
-				borderColor={focus === "members" ? theme.cyan : statusAccent(status)}
-				backgroundColor={theme.panel}
-				flexGrow={1}
-				padding={1}
-				flexDirection="column"
-			>
-				{loadingDetail ? <text fg={theme.yellow}>{`${loadingFrame ?? "⠋"} Loading detail…`}</text> : null}
-				{activeTab === "overview" ? renderOverview(team, detail) : null}
-				{activeTab === "members" ? renderMembers(detail, selectedMemberIndex, focus) : null}
-				{activeTab === "attention" ? renderAttention(detail) : null}
-				{activeTab === "knowledge" ? renderKnowledge(detail) : null}
-			</box>
-			<DetailTabHint tabs={TEAM_DETAIL_TABS} active={activeTab} />
+		<box
+			title={`${teamDetailTitle(team, status)} | ${detailTabTitleHint(TEAM_DETAIL_TABS, activeTab)}`}
+			borderStyle="single"
+			borderColor={focus === "members" ? theme.cyan : statusAccent(status)}
+			backgroundColor={theme.panel}
+			flexGrow={1}
+			padding={1}
+			flexDirection="column"
+		>
+			{loadingDetail ? <text fg={theme.yellow}>{`${loadingFrame ?? "⠋"} Loading detail…`}</text> : null}
+			{activeTab === "overview" ? renderOverview(team, detail) : null}
+			{activeTab === "members" ? renderMembers(detail, selectedMemberIndex, focus) : null}
+			{activeTab === "attention" ? renderAttention(detail) : null}
+			{activeTab === "knowledge" ? renderKnowledge(detail) : null}
 		</box>
 	);
 }
