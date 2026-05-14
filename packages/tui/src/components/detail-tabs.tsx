@@ -50,8 +50,8 @@ export function DetailTabHint(props: {
 		.map((tab) => (tab.id === props.active ? `${tab.label}*` : tab.label))
 		.join(" | ");
 	return (
-		<box borderStyle="single" borderColor={theme.border} backgroundColor={theme.panel} height={3} paddingX={1}>
-			<text fg={theme.muted}>{`Tab/Shift+Tab: ${labels}`}</text>
+		<box backgroundColor={theme.panel} height={1} paddingX={1} flexShrink={0}>
+			<text fg={theme.muted}>{`└─ Tab/Shift+Tab: ${labels}`}</text>
 		</box>
 	);
 }
