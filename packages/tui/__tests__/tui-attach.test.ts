@@ -137,7 +137,6 @@ describe("tui tmux attach helpers", () => {
 				"tm_abcd",
 				"t_abc",
 				undefined,
-				"knowledge",
 			),
 		).toMatchObject({
 			returnState: {

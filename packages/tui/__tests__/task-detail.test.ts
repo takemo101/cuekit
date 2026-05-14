@@ -497,12 +497,14 @@ describe("TaskDetail contextHeight", () => {
 		};
 
 		const overview = JSON.stringify(TaskDetail({ task, detail, activeTab: "overview" }));
+		expect(overview).toContain("Tab/Shift+Tab: Overview* | Events | Output | Context");
 		expect(overview).toContain("Working summary");
 		expect(overview).toContain("position");
 		expect(overview).not.toContain("LIVE OUTPUT");
 
 		const events = JSON.stringify(TaskDetail({ task, detail, activeTab: "events" }));
 		expect(events).toContain("EVENTS (1 shown)");
+		expect(events).toContain("Tab/Shift+Tab: Overview | Events* | Output | Context");
 		expect(events).toContain("made progress");
 		expect(events).not.toContain("hello output");
 

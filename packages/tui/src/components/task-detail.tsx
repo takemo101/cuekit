@@ -353,9 +353,12 @@ export function TaskDetail(props: {
 	const { task, detail, activeTab = "overview", loadingDetail, loadingFrame } = props;
 	if (!task) {
 		return (
-			<box title="Detail" borderStyle="single" borderColor={theme.border} backgroundColor={theme.panel} flexGrow={2} padding={1}>
-				<EmptyText>Select a task.</EmptyText>
-			</box>
+			<>
+				<box title="Detail" borderStyle="single" borderColor={theme.border} backgroundColor={theme.panel} flexGrow={2} padding={1}>
+					<EmptyText>Select a task.</EmptyText>
+				</box>
+				<text height={1} fg={theme.muted}>{detailTabHintLabel(TASK_DETAIL_TABS, "overview")}</text>
+			</>
 		);
 	}
 
@@ -382,7 +385,7 @@ export function TaskDetail(props: {
 				{activeTab === "output" ? OutputPanel({ detail, status, lines }) : null}
 				{activeTab === "context" ? ContextPanel({ attention, detail, error: detail?.teamStatusError }) : null}
 			</box>
-			<text fg={theme.muted}>{detailTabHintLabel(TASK_DETAIL_TABS, activeTab)}</text>
+			<text height={1} fg={theme.muted}>{detailTabHintLabel(TASK_DETAIL_TABS, activeTab)}</text>
 		</>
 	);
 }

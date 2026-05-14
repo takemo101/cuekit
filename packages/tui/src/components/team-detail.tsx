@@ -57,6 +57,7 @@ function teamMetadataEntries(team: TeamSummary, detail?: TuiTeamDetail): TeamMet
 	const blockers = detail?.blockers?.length ?? 0;
 	const handoffs = detail?.latestHandoffs?.length ?? 0;
 	const blackboard = detail?.blackboardEvents?.length ?? 0;
+	const nextAction = firstNextAction(detail);
 	const entries: TeamMetadataEntry[] = [
 		{ label: "title", value: truncateEnd(team.title, 110), color: theme.strong },
 		{ label: "session", value: team.session_id },
@@ -72,8 +73,8 @@ function teamMetadataEntries(team: TeamSummary, detail?: TuiTeamDetail): TeamMet
 	if (team.objective) entries.splice(1, 0, { label: "objective", value: truncateEnd(team.objective, 110) });
 	if (detail?.error) entries.push({ label: "team status", value: truncateEnd(detail.error, 110), color: theme.red });
 	entries.push(
-		firstNextAction(detail)
-			? { label: "next", value: firstNextAction(detail) ?? "", color: theme.yellow }
+		nextAction
+			? { label: "next", value: nextAction, color: theme.yellow }
 			: { label: "next", value: "No immediate action suggested.", color: theme.muted },
 	);
 	return entries;
@@ -211,9 +212,12 @@ export function TeamDetail(props: {
 	const { team, detail, selectedMemberIndex, focus, activeTab = "overview", loadingDetail, loadingFrame } = props;
 	if (!team) {
 		return (
-			<box title="Detail" borderStyle="single" borderColor={theme.border} backgroundColor={theme.panel} flexGrow={1} padding={1}>
-				<text fg={theme.muted}>No team selected.</text>
-			</box>
+			<>
+				<box title="Detail" borderStyle="single" borderColor={theme.border} backgroundColor={theme.panel} flexGrow={1} padding={1}>
+					<text fg={theme.muted}>No team selected.</text>
+				</box>
+				<text height={1} fg={theme.muted}>{detailTabHintLabel(TEAM_DETAIL_TABS, "overview")}</text>
+			</>
 		);
 	}
 	const status = detail?.status?.status ?? team.status;
@@ -234,7 +238,7 @@ export function TeamDetail(props: {
 				{activeTab === "attention" ? renderAttention(detail) : null}
 				{activeTab === "knowledge" ? renderKnowledge(detail) : null}
 			</box>
-			<text fg={theme.muted}>{detailTabHintLabel(TEAM_DETAIL_TABS, activeTab)}</text>
+			<text height={1} fg={theme.muted}>{detailTabHintLabel(TEAM_DETAIL_TABS, activeTab)}</text>
 		</>
 	);
 }

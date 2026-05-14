@@ -11,7 +11,7 @@ export function printTuiHelp(): void {
 
 Usage: cuekit tui
 
-Keys: ↑/↓ select, r refresh, a attach (returns after detach), t teams/tasks, s steer, c cancel, d delete, q quit
+Keys: ↑/↓ select, Tab/Shift+Tab detail tabs, r refresh, a attach (returns after detach), t teams/tasks, s steer, c cancel, d delete, q quit
 `);
 }
 
