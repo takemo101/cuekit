@@ -5,13 +5,34 @@ import { theme } from "../theme.ts";
 
 const TASK_FULL_HOTKEYS = ["↑/↓|j/k select", "r refresh"];
 const TASK_ATTACH_FULL_HOTKEY = "a attach";
-const TASK_TRAILING_FULL_HOTKEYS = ["t teams", "p parents", "s steer", "c cancel", "d delete", "q quit", "auto 3s"];
-const PARENT_TRAILING_FULL_HOTKEYS = ["t teams", "p tasks", "n new parent", "s steer", "c cancel", "d delete", "q quit", "auto 3s"];
+const DETAIL_TAB_FULL_HOTKEY = "Tab/Shift+Tab detail";
+const TASK_TRAILING_FULL_HOTKEYS = [
+	DETAIL_TAB_FULL_HOTKEY,
+	"t teams",
+	"p parents",
+	"s steer",
+	"c cancel",
+	"d delete",
+	"q quit",
+	"auto 3s",
+];
+const PARENT_TRAILING_FULL_HOTKEYS = [
+	DETAIL_TAB_FULL_HOTKEY,
+	"t teams",
+	"p tasks",
+	"n new parent",
+	"s steer",
+	"c cancel",
+	"d delete",
+	"q quit",
+	"auto 3s",
+];
 
 const TASK_COMPACT_HOTKEYS = "↑/↓|j/k sel  r ref";
 const TASK_ATTACH_COMPACT_HOTKEY = "a att";
 const TASK_TRAILING_COMPACT_HOTKEYS = "t teams  p parents  s steer  c cancel  d del  q quit  auto3s";
 const PARENT_TRAILING_COMPACT_HOTKEYS = "t teams  p tasks  n new  s steer  c cancel  d del  q quit  auto3s";
+// Switch to compact hotkeys below ~80-column terminals after border/status padding.
 const COMPACT_SELECTION_WIDTH = 72;
 
 function taskFullHotkeys(attachable: boolean, parents = false): string {
@@ -33,12 +54,13 @@ function taskCompactHotkeys(attachable: boolean, parents = false): string {
 function teamHotkeys(focus: TeamFocus, attachable: boolean, compact: boolean): string {
 	if (compact) {
 		return focus === "members"
-			? `${attachable ? "a att  " : ""}A team  esc list  j/k member  r ref  t tasks  p parents  q quit  auto3s`
-			: "j/k team  enter  A attach team  c clean  d del empty  t tasks  p parents  r ref  q quit  auto3s";
+			? `${attachable ? "a att  " : ""}tab detail  A team  esc list  j/k member  r ref  t tasks  p parents  q quit  auto3s`
+			: "j/k team  tab detail  enter  A attach team  c clean  d del empty  t tasks  p parents  r ref  q quit  auto3s";
 	}
 	return focus === "members"
 		? [
 				...(attachable ? ["a attach member"] : []),
+				DETAIL_TAB_FULL_HOTKEY,
 				"A attach team",
 				"esc team list",
 				"↑/↓|j/k member",
@@ -50,6 +72,7 @@ function teamHotkeys(focus: TeamFocus, attachable: boolean, compact: boolean): s
 			].join("   ")
 		: [
 				"↑/↓|j/k team",
+				DETAIL_TAB_FULL_HOTKEY,
 				"enter members",
 				"A attach team",
 				"c cleanup",

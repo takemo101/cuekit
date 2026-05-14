@@ -115,7 +115,6 @@ export function buildTuiTeamMemberAttachExit(
 	teamId: string,
 	taskId: string,
 	view?: TaskStatusView,
-	_activeTab?: TeamDetailTab,
 ): TuiExit {
 	const preAttachArgs = preAttachArgsForTask(view);
 	return {

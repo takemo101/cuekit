@@ -83,6 +83,7 @@ describe("@cuekit/tui package smoke", () => {
 		expect(app).not.toContain("detailTabByIndex");
 		expect(app).not.toContain("detailTabs={activeTabs}");
 		expect(app).not.toContain("activeDetailTab={activeDetailTab}");
+		expect(footerLine("Ready", 160)).toContain("Tab/Shift+Tab detail");
 		expect(footerLine("Ready", 160)).not.toContain("Detail:");
 		expect(footerLine("Ready", 160)).not.toContain("[/] tabs");
 		expect(
@@ -91,6 +92,7 @@ describe("@cuekit/tui package smoke", () => {
 		expect(footerLine("Ready", 80).length).toBeLessThanOrEqual(76);
 		expect(footerLine("Ready", 80, { attachable: false })).not.toContain("attach");
 		expect(footerLine("Ready", 80, { attachable: false })).not.toContain("att");
+		expect(footerLine("Ready", 200, { mode: "teams" })).toContain("Tab/Shift+Tab detail");
 		expect(
 			footerLine("A very long status message that should be truncated", 80).length,
 		).toBeLessThanOrEqual(76);

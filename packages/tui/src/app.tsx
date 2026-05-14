@@ -116,8 +116,6 @@ export function App(props: {
 		[teamDetail, selectedMemberIndex],
 	);
 	const selectedTeamCounts = selectedTeam?.task_counts ?? teamDetail?.status?.task_counts;
-	const activeTabs = mode === "teams" ? TEAM_DETAIL_TABS : TASK_DETAIL_TABS;
-	const activeDetailTab = mode === "teams" ? activeTeamTab : activeTaskTab;
 	const listRows = Math.max(1, terminal.height - 7);
 	const detailLoadDebounceMs = props.ctx.detailLoadDebounceMs ?? DEFAULT_DETAIL_LOAD_DEBOUNCE_MS;
 	const taskDetailLoading = Boolean(
@@ -377,13 +375,12 @@ export function App(props: {
 					selectedTeam.team_id,
 					selectedMember.task_id,
 					memberStatus,
-					activeTeamTab,
 				),
 			);
 		} catch (err) {
 			setError(err instanceof Error ? err.message : String(err));
 		}
-	}, [activeTeamTab, exit, props.ctx, selectedMember, selectedTeam]);
+	}, [exit, props.ctx, selectedMember, selectedTeam]);
 
 	const attachSelectedTeam = useCallback(async () => {
 		if (!selectedTeam || !teamDetail?.members.length) {
