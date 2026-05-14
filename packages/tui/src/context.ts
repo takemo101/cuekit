@@ -4,6 +4,7 @@ import type {
 	TaskListFilter,
 	TaskStatusView,
 	TaskSummary,
+	TeamStatus,
 	TeamSummary,
 	TeamTaskCounts,
 } from "@cuekit/core";
@@ -112,7 +113,7 @@ export type TuiTeamSnapshotOutput =
 			session_id: string;
 			title: string;
 			objective?: string;
-			status: string;
+			status: TeamStatus;
 			task_counts: TeamTaskCounts;
 			generated_at: string;
 			members: Array<{

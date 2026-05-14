@@ -310,6 +310,15 @@ describe("TaskDetail contextHeight", () => {
 					message_preview: "Review complete",
 					created_at: "2026-05-01T00:00:00.000Z",
 				},
+				{
+					sequence: 5,
+					task_id: "t_blocked",
+					position: "worker",
+					type: "blocked" as const,
+					reason: "terminal_report",
+					message_preview: "Blocked terminal report",
+					created_at: "2026-05-01T00:00:00.000Z",
+				},
 			],
 			manualSteerHints: [
 				{
@@ -352,7 +361,7 @@ describe("TaskDetail contextHeight", () => {
 		expect(overview).toContain("tasks");
 		expect(overview).toContain("1 running / 0 blocked / 0 completed");
 		expect(overview).toContain("context");
-		expect(overview).toContain("attention 2 / blockers 1 / handoffs 1 / blackboard 1");
+		expect(overview).toContain("attention 3 / blockers 1 / handoffs 1 / blackboard 1");
 		expect(overview).toContain("Next: inspect blocker t_worker");
 		const guidanceOverview = JSON.stringify(
 			TeamDetail({
@@ -360,7 +369,7 @@ describe("TaskDetail contextHeight", () => {
 				detail: {
 					...detail,
 					blockers: [],
-					attentionItems: detail.attentionItems?.slice(1),
+					attentionItems: detail.attentionItems?.filter((item) => item.type === "completed"),
 					manualSteerHints: [],
 				},
 				selectedMemberIndex: 0,
@@ -378,8 +387,9 @@ describe("TaskDetail contextHeight", () => {
 		expect(attention).toContain("BLOCKERS 1");
 		expect(attention).toContain("backgroundColor");
 		expect(attention).toContain("Waiting on API");
-		expect(attention).toContain("ATTENTION 2");
+		expect(attention).toContain("ATTENTION 3");
 		expect(attention).toContain("Need API input");
+		expect(attention).toContain("Blocked terminal report");
 		expect(attention).toContain("STEER HINTS 1");
 		expect(attention).toContain("Please inspect API");
 
