@@ -12,19 +12,19 @@ function memberLine(task: TaskSummary, selected: boolean): string {
 	const marker = selected ? "›" : " ";
 	const role = task.role ?? task.position ?? task.agent_kind;
 	return truncateEnd(
-		`${marker} ${statusGlyph(task.status)} ${task.task_id} ${(task.position ?? "-").padEnd(11)} ${role}`,
-		84,
+		`${marker} ${statusGlyph(task.status)} ${task.task_id}  ${(task.position ?? "-").padEnd(11)}  ${role}`,
+		96,
 	);
 }
 
 function LaneRow(props: { lane: string; tasks: TaskSummary[] }): ReactNode {
 	return (
-		<box height={1}>
-			<text fg={theme.muted}>{props.lane.padEnd(12).slice(0, 12)}</text>
+		<box flexDirection="row" height={1}>
+			<text fg={theme.muted} width={14}>{props.lane}</text>
 			<text fg={theme.text}>
 				{truncateEnd(
 					props.tasks.map((task) => `${statusGlyph(task.status)} ${task.task_id}`).join("  ") || "-",
-					76,
+					96,
 				)}
 			</text>
 		</box>
@@ -119,9 +119,11 @@ function renderMembers(detail: TuiTeamDetail | undefined, selectedMemberIndex: n
 				detail.members.map((member, index) => {
 					const selected = index === selectedMemberIndex;
 					return (
-						<text key={member.task_id} fg={selected && focus === "members" ? theme.strong : statusAccent(member.status)}>
-							{memberLine(member, selected && focus === "members")}
-						</text>
+						<box key={member.task_id} height={1}>
+							<text fg={selected && focus === "members" ? theme.strong : statusAccent(member.status)}>
+								{memberLine(member, selected && focus === "members")}
+							</text>
+						</box>
 					);
 				})
 			) : (
