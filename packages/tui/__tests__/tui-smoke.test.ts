@@ -76,26 +76,28 @@ describe("@cuekit/tui package smoke", () => {
 			new URL("../src/components/modal-frame.tsx", import.meta.url),
 		).text();
 		expect(footer).toContain("↑/↓|j/k");
-		expect(app).toContain("detailTabs={activeTabs.map((tab) => tab.label)}");
+		expect(app).toContain('mode === "teams"');
+		expect(app).toContain("Boolean(selectedMember)");
+		expect(app).toContain("detailTabs={activeTabs}");
 		expect(app).toContain("activeDetailTab={activeDetailTab}");
+		const detailTabs = [
+			{ id: "overview" as const, label: "Overview" },
+			{ id: "events" as const, label: "Events" },
+			{ id: "output" as const, label: "Live Output" },
+			{ id: "context" as const, label: "Context" },
+		];
+		expect(footerLine("Ready", 160, { detailTabs, activeDetailTab: "output" })).toContain(
+			"Detail:",
+		);
+		expect(footerLine("Ready", 160, { detailTabs, activeDetailTab: "output" })).toContain(
+			"[3] Live Output",
+		);
+		expect(footerLine("Ready", 160, { detailTabs, activeDetailTab: "output" })).toContain(
+			"[/] tabs",
+		);
 		expect(
-			footerLine("Ready", 160, {
-				detailTabs: ["Overview", "Events", "Output", "Context"],
-				activeDetailTab: "output",
-			}),
-		).toContain("Detail:");
-		expect(
-			footerLine("Ready", 160, {
-				detailTabs: ["Overview", "Events", "Output", "Context"],
-				activeDetailTab: "output",
-			}),
-		).toContain("[3] Output");
-		expect(
-			footerLine("Ready", 160, {
-				detailTabs: ["Overview", "Events", "Output", "Context"],
-				activeDetailTab: "output",
-			}),
-		).toContain("[/] tabs");
+			footerLine("Ready", 200, { mode: "teams", teamFocus: "members", attachable: true }),
+		).toContain("a attach member");
 		expect(footerLine("Ready", 80).length).toBeLessThanOrEqual(76);
 		expect(footerLine("Ready", 80, { attachable: false })).not.toContain("attach");
 		expect(footerLine("Ready", 80, { attachable: false })).not.toContain("att");

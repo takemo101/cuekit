@@ -138,8 +138,7 @@ describe("tui task action helpers", () => {
 		expect(resolveEnterTeamFocus("list", 1)).toBe("members");
 		expect(resolveEnterTeamFocus("list", 0)).toBe("list");
 		expect(resolveEnterTeamFocus("members", 1)).toBe("members");
-		expect(resolveEscapeTeamFocus("members")).toBe("list");
-		expect(resolveEscapeTeamFocus("list")).toBe("list");
+		expect(resolveEscapeTeamFocus()).toBe("list");
 	});
 
 	it("allows team cleanup only when terminal member tasks exist", () => {
