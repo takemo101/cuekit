@@ -328,9 +328,11 @@ describe("cuekit --mcp (stdio integration)", () => {
 
 	it("tools/call submit_task returns a structured response (happy OR submit_failed)", async () => {
 		// End-to-end wire test: the MCP envelope + tool input/output shape is
-		// what we care about here. On machines without tmux or `claude`, the
-		// adapter returns `accepted: false` with a structured error, which is
-		// itself a valid shape we must handle. Either way `accepted` exists.
+		// what we care about here. Use a deliberately missing adapter so the
+		// server returns the structured `accepted: false` shape without launching
+		// a real tmux/zellij/herdr pane. This keeps stdio protocol coverage from
+		// leaking multiplexer workspaces when the project config points at a real
+		// backend such as Herdr.
 		await initialize(server);
 		await server.send({
 			jsonrpc: "2.0",
@@ -340,7 +342,7 @@ describe("cuekit --mcp (stdio integration)", () => {
 				name: "submit_task",
 				arguments: {
 					objective: "stdio integ test",
-					agent_kind: "claude-code",
+					agent_kind: "missing-adapter-for-stdio-test",
 					cwd: tmpRoot,
 				},
 			},
