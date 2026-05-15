@@ -38,6 +38,7 @@ describe("cuekit doctor", () => {
 		expect(result.stdout).toContain("✓ state db: ~/.cuekit/state.db writable");
 		expect(result.stdout).toContain("✓ project config: /repo/.cuekit.yaml");
 		expect(result.stdout).toContain("✓ MCP config helper: cuekit mcp config");
+		expect(result.stdout).toContain("✓ parent PATH: not set");
 		expect(result.stdout).toContain("! update: v0.1.1 available");
 	});
 
@@ -111,6 +112,9 @@ describe("cuekit doctor", () => {
 		expect(result.stdout).toContain("! adapter opencode: opencode not found");
 		expect(result.stdout).toContain("✓ adapter jcode: jcode found");
 		expect(result.stdout).toContain("✓ adapter gemini: gemini found");
+		expect(result.stdout).toContain("✓ parent PATH: not set");
+		// tmux default: no pane PATH mismatch warning
+		expect(result.stdout).not.toContain("pane PATH");
 	});
 
 	it("reports gemini as not found when the binary is missing", async () => {
@@ -257,6 +261,7 @@ describe("cuekit doctor", () => {
 		expect(result.stdout).toContain("✓ active backend: herdr");
 		expect(result.stdout).toContain("✓ herdr: herdr 0.1.0");
 		expect(result.stdout).toContain("! tmux: not found");
+		expect(result.stdout).toContain("! pane PATH: herdr panes may have a different PATH");
 	});
 
 	it("reports structured zellij strict probe failure without fallback", async () => {

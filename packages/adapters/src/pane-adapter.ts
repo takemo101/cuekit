@@ -539,6 +539,7 @@ export function createPaneAdapter(config: PaneAdapterConfig, deps: PaneAdapterDe
 						CUEKIT_TASK_ID: task_id,
 						CUEKIT_CHILD_TOKEN: childToken,
 						CUEKIT_DB_PATH: db.filename,
+						PATH: process.env.PATH ?? "",
 					},
 				});
 				const nativeRef = handle.backend_pane_id
