@@ -379,6 +379,15 @@ export async function runDoctor(options: RunDoctorOptions = {}): Promise<DoctorR
 
 	checks.push({ level: "ok", label: "MCP config helper", detail: "cuekit mcp config" });
 
+	// Parent PATH summary so operators can spot mismatches with pane
+	// environments (especially under herdr or nested tmux).
+	const parentPath = env.PATH ?? "";
+	checks.push({
+		level: "ok",
+		label: "parent PATH",
+		detail: parentPath ? `${parentPath.split(":").length} entries` : "not set",
+	});
+
 	for (const adapter of ADAPTER_EXECUTABLES) {
 		const result = await exec(adapter.command, ["--version"]);
 		checks.push(
@@ -394,6 +403,22 @@ export async function runDoctor(options: RunDoctorOptions = {}): Promise<DoctorR
 						detail: `${adapter.command} not found`,
 					},
 		);
+	}
+
+	// Warn when adapters were found in the parent PATH but the active
+	// multiplexer backend runs tasks in panes that may inherit a different
+	// PATH. This is especially common with herdr or when cuekit itself is
+	// already running inside a multiplexer session.
+	const anyAdapterFound = checks.some(
+		(c) =>
+			c.label.startsWith("adapter ") && c.level === "ok" && c.detail.includes("found"),
+	);
+	if (anyAdapterFound && requestedMultiplexer !== "tmux") {
+		checks.push({
+			level: "warn",
+			label: "pane PATH",
+			detail: `${requestedMultiplexer} panes may have a different PATH; verify with 'echo $PATH' inside a fresh ${requestedMultiplexer} pane`,
+		});
 	}
 
 	const latest = await (options.getLatestRelease ?? defaultGetLatestRelease)();
