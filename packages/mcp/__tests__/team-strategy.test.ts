@@ -129,6 +129,24 @@ describe("team strategy helpers", () => {
 		expect(prompt).toContain("do not wait for parent steering");
 	});
 
+	it("includes coordinator wait loop recipe in prompt", () => {
+		const result = resolveTeamStrategy(config, "docs-polish");
+		if (!result.ok) throw new Error("setup failed");
+
+		const prompt = renderTeamStrategyPrompt({
+			strategy_name: result.strategy_name,
+			strategy: result.strategy,
+			objective: "Polish README wait guidance.",
+		});
+
+		expect(prompt).toContain("Coordinator wait loop recipe");
+		expect(prompt).toContain("wait_team(follow_new_tasks, timeout_ms: 60000)");
+		expect(prompt).toContain("submit_team_tasks for workers");
+		expect(prompt).toContain("if all workers terminal");
+		expect(prompt).toContain("if blocked/stalled");
+		expect(prompt).toContain("Never exit while non-coordinator tasks are running");
+	});
+
 	it("includes explicit position assignment guidance in coordinator prompt", () => {
 		const result = resolveTeamStrategy(config, "docs-polish");
 		if (!result.ok) throw new Error("setup failed");
