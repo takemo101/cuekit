@@ -251,4 +251,38 @@ describe("team attention items", () => {
 
 		expect(buildTeamAttentionItems(db, tasks, { limit: 0 })).toEqual([]);
 	});
+
+	it("includes coordinator blocked/failed/help_requested but excludes completed", () => {
+		task("t_coord", "coordinator", "blocked");
+		task("t_worker", "worker", "completed");
+		appendTaskEvent(db, {
+			id: "e_coord_blocked",
+			task_id: "t_coord",
+			type: "blocked",
+			message: "coordinator stuck",
+		});
+		appendTaskEvent(db, {
+			id: "e_coord_completed",
+			task_id: "t_coord",
+			type: "completed",
+			message: "coordinator done",
+		});
+		appendTaskEvent(db, {
+			id: "e_worker_completed",
+			task_id: "t_worker",
+			type: "completed",
+			message: "worker done",
+		});
+
+		const items = buildTeamAttentionItems(db, tasks);
+
+		expect(items).toHaveLength(2);
+		expect(items.some((item) => item.task_id === "t_coord" && item.type === "blocked")).toBe(true);
+		expect(items.some((item) => item.task_id === "t_coord" && item.type === "completed")).toBe(
+			false,
+		);
+		expect(items.some((item) => item.task_id === "t_worker" && item.type === "completed")).toBe(
+			true,
+		);
+	});
 });
