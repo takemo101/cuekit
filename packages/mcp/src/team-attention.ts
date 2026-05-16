@@ -66,9 +66,16 @@ export function buildTeamAttentionItemsFromEvents(
 	const includeFullMessage = options.includeFullMessage ?? true;
 
 	const items = taskEvents.flatMap(({ task, events }) => {
-		if (task.team_position === "coordinator") return [];
 		return events
 			.filter((event) => ATTENTION_TYPES.has(event.type))
+			.filter((event) => {
+				// coordinator の completed は attention ではない（正常終了）
+				// しかし blocked / failed / help_requested はチーム停止の信号として重要
+				if (task.team_position === "coordinator" && event.type === "completed") {
+					return false;
+				}
+				return true;
+			})
 			.map((event) => {
 				const type = event.type as TeamAttentionItem["type"];
 				return {

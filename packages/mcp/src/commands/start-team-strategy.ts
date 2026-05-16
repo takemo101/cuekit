@@ -158,10 +158,9 @@ export async function runStartTeamStrategy(
 		...(role ? { role } : {}),
 		...(agent_kind ? { agent_kind } : {}),
 		...(model ? { model } : {}),
-		...(input.coordinator?.timeout_ms !== undefined
-			? { timeout_ms: input.coordinator.timeout_ms }
-			: {}),
+		timeout_ms: input.coordinator?.timeout_ms ?? null,
 		...(adapter_options ? { adapter_options } : {}),
+		metadata: { long_lived: true },
 	});
 	if (!submitted.accepted) {
 		return failure("coordinator_submit_failed", submitted.error.message);
