@@ -1,10 +1,11 @@
+import type { Database } from "bun:sqlite";
 import {
 	isTerminalTaskStatus,
 	JobErrorSchema,
 	TaskStatusSchema,
 	TeamPositionSchema,
 } from "@cuekit/core";
-import { getTaskTeamById, listTasksByTeam } from "@cuekit/store";
+import { getTaskTeamById, listTasksByTeam, listTeamEvents } from "@cuekit/store";
 import { z } from "incur";
 import type { CommandContext } from "../command-context.ts";
 import { runSteerTask } from "./steer-task.ts";
@@ -19,6 +20,21 @@ export const SteerTeamInputSchema = z.object({
 		.optional()
 		.describe("Optional explicit team task subset."),
 	reason: z.string().min(1).optional(),
+	include_blackboard: z
+		.boolean()
+		.optional()
+		.describe("Append recent team blackboard events to the steering message."),
+	blackboard_event_types: z
+		.array(z.string().min(1))
+		.optional()
+		.describe("Filter blackboard events by type. Defaults to all types when omitted."),
+	blackboard_limit: z
+		.number()
+		.int()
+		.min(1)
+		.max(20)
+		.optional()
+		.describe("Maximum number of blackboard events to include. Defaults to 5."),
 });
 
 export type SteerTeamInput = z.infer<typeof SteerTeamInputSchema>;
@@ -77,6 +93,17 @@ export async function runSteerTeam(
 		};
 	}
 
+	let message = input.message;
+	if (input.include_blackboard) {
+		const blackboardAttachment = buildBlackboardAttachment(ctx.db, team.id, {
+			event_types: input.blackboard_event_types,
+			limit: input.blackboard_limit ?? 5,
+		});
+		if (blackboardAttachment) {
+			message = `${message}\n\n${blackboardAttachment}`;
+		}
+	}
+
 	const steered: z.infer<typeof SteeredTeamTaskSchema>[] = [];
 	const skipped: z.infer<typeof SkippedTeamTaskSchema>[] = [];
 	const failed: z.infer<typeof FailedTeamSteerSchema>[] = [];
@@ -123,7 +150,7 @@ export async function runSteerTeam(
 
 		const ack = await runSteerTask(ctx, {
 			task_id: task.id,
-			message: input.message,
+			message,
 			...(input.reason ? { reason: input.reason } : {}),
 		});
 		if (ack.ok) {
@@ -158,4 +185,32 @@ export async function runSteerTeam(
 		failed,
 		message: `steering message delivered to ${steered.length} non-terminal team task(s)`,
 	};
+}
+
+function buildBlackboardAttachment(
+	db: Database,
+	team_id: string,
+	options: {
+		event_types?: string[];
+		limit?: number;
+	},
+): string | undefined {
+	const limit = options.limit ?? 5;
+	const events = listTeamEvents(db, team_id)
+		.filter((e) => !options.event_types || options.event_types.includes(e.event_type))
+		.slice(-limit);
+
+	if (events.length === 0) return undefined;
+
+	const lines = [
+		"",
+		"---",
+		"[Team Blackboard — Recent Context]",
+		...events.map((e) => {
+			const pos = e.position ? `[${e.position}] ` : "";
+			return `- ${pos}${e.event_type}: ${e.message}`;
+		}),
+		"---",
+	];
+	return lines.join("\n");
 }
