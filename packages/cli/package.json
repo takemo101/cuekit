@@ -1,25 +1,53 @@
 {
 	"name": "@cuekit/cli",
-	"version": "0.0.11",
-	"private": true,
+	"version": "0.0.12",
+	"description": "cuekit — delegation substrate for coding agents",
 	"type": "module",
 	"exports": {
 		".": "./src/index.ts"
 	},
 	"bin": {
-		"cuekit": "./src/bin.ts"
+		"cuekit": "./bin/cuekit.js"
 	},
+	"files": [
+		"bin/",
+		"src/",
+		"README.md"
+	],
 	"scripts": {
 		"typecheck": "tsc --noEmit",
 		"test": "bun test"
 	},
 	"dependencies": {
-		"@cuekit/adapters": "workspace:*",
-		"@cuekit/agent-profiles": "workspace:*",
-		"@cuekit/core": "workspace:*",
-		"@cuekit/mcp": "workspace:*",
-		"@cuekit/project-config": "workspace:*",
-		"@cuekit/store": "workspace:*",
-		"@cuekit/tui": "workspace:*"
+		"@cuekit/adapters": "^0.0.12",
+		"@cuekit/agent-profiles": "^0.0.12",
+		"@cuekit/core": "^0.0.12",
+		"@cuekit/mcp": "^0.0.12",
+		"@cuekit/project-config": "^0.0.12",
+		"@cuekit/store": "^0.0.12",
+		"@cuekit/tui": "^0.0.12"
+	},
+	"engines": {
+		"bun": ">=1.2.0"
+	},
+	"publishConfig": {
+		"access": "public"
+	},
+	"keywords": [
+		"ai",
+		"agent",
+		"cli",
+		"mcp",
+		"coding-agent",
+		"orchestration"
+	],
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/takemo101/cuekit.git"
+	},
+	"homepage": "https://github.com/takemo101/cuekit#readme",
+	"bugs": {
+		"url": "https://github.com/takemo101/cuekit/issues"
 	}
 }
