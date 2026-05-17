@@ -38,6 +38,7 @@ export const TaskEventSchema = z.object({
 	message: z.string().nullable(),
 	payload: z.unknown().nullable(),
 	created_at: z.string().datetime({ offset: true }),
+	team_sequence: z.number().int().positive().nullable(),
 });
 
 export type TaskEvent = z.infer<typeof TaskEventSchema>;

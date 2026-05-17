@@ -1,3 +1,4 @@
+import type { Database } from "bun:sqlite";
 import { isTerminalTaskStatus, JobErrorSchema, TeamStatusSchema } from "@cuekit/core";
 import { applyTeamWaitDefaults, loadProjectConfig } from "@cuekit/project-config";
 import { getSessionById, getTaskTeamById, listTasksByTeam, type Task } from "@cuekit/store";
@@ -28,6 +29,12 @@ export const WaitTeamInputSchema = z.object({
 	include_results: z.boolean().optional(),
 	include_events: z.boolean().optional(),
 	since_event_sequences: z.record(z.string(), z.number().int().min(0)).optional(),
+	since_team_sequence: z
+		.number()
+		.int()
+		.min(0)
+		.optional()
+		.describe("Return lightweight response immediately if no new team events since this sequence."),
 	follow_new_tasks: z
 		.boolean()
 		.optional()
@@ -45,6 +52,7 @@ export const WaitTeamOutputSchema = z.object({
 	scope: z.object({ team_id: z.string(), session_id: z.string().optional() }),
 	tasks: z.array(WaitTaskSnapshotSchema),
 	run_summary: TeamRunSummarySchema,
+	team_sequence: z.number().int().min(0).optional(),
 	next_action_hint: z.string().optional(),
 	cleanup_hint: z.string().optional(),
 	error: JobErrorSchema.optional(),
@@ -80,6 +88,18 @@ async function waitCurrentTeamTasks(
 		include_events: input.include_events,
 		since_event_sequences: input.since_event_sequences,
 	});
+}
+
+function getMaxTeamSequence(db: Database, teamId: string): number | null {
+	const row = db
+		.prepare(
+			`select coalesce(max(te.team_sequence), 0) as max_seq
+			from task_events te
+			join tasks t on te.task_id = t.id
+			where t.team_id = ?`,
+		)
+		.get(teamId) as { max_seq: number } | undefined;
+	return row?.max_seq ?? null;
 }
 
 export async function runWaitTeam(
@@ -137,6 +157,26 @@ export async function runWaitTeam(
 			run_summary: emptyTeamRunSummary(),
 		};
 	}
+
+	// since_team_sequence: if no new events, return lightweight response immediately
+	if (input.since_team_sequence !== undefined) {
+		const maxSeq = getMaxTeamSequence(ctx.db, team.id);
+		if (maxSeq !== null && maxSeq <= input.since_team_sequence) {
+			const latest = listTasksByTeam(ctx.db, team.id);
+			return {
+				team_id: team.id,
+				status: aggregateTeamStatus(latest),
+				mode: input.mode ?? "all",
+				done: false,
+				timed_out: true,
+				team_sequence: maxSeq,
+				scope: { team_id: team.id, session_id: team.session_id },
+				tasks: [],
+				run_summary: emptyTeamRunSummary(),
+			};
+		}
+	}
+
 	let wait: Awaited<ReturnType<typeof runWaitTasks>>;
 	let latest: Task[];
 	if (input.follow_new_tasks) {
@@ -183,6 +223,9 @@ export async function runWaitTeam(
 		run_summary: buildTeamRunSummary(ctx, latest),
 		...(nextActionHint ? { next_action_hint: nextActionHint } : {}),
 		...(cleanupHint ? { cleanup_hint: cleanupHint } : {}),
+		...(input.since_team_sequence !== undefined
+			? { team_sequence: getMaxTeamSequence(ctx.db, team.id) ?? 0 }
+			: {}),
 		...(wait.error ? { error: wait.error } : {}),
 	};
 }

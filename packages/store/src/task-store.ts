@@ -427,6 +427,7 @@ function parseTaskEventRow(row: unknown): TaskEvent {
 		message: string | null;
 		payload_json: string | null;
 		created_at: string;
+		team_sequence: number | null;
 	};
 	return TaskEventSchema.parse({
 		sequence: raw.sequence,
@@ -436,14 +437,32 @@ function parseTaskEventRow(row: unknown): TaskEvent {
 		message: raw.message,
 		payload: raw.payload_json === null ? null : JSON.parse(raw.payload_json),
 		created_at: raw.created_at,
+		team_sequence: raw.team_sequence,
 	});
+}
+
+function getNextTeamSequence(db: Database, task_id: string): number | null {
+	const taskRow = db.prepare("select team_id from tasks where id = ?").get(task_id) as
+		| { team_id: string | null }
+		| undefined;
+	if (!taskRow?.team_id) return null;
+	const row = db
+		.prepare(
+			`select coalesce(max(te.team_sequence), 0) as max_seq
+			from task_events te
+			join tasks t on te.task_id = t.id
+			where t.team_id = ?`,
+		)
+		.get(taskRow.team_id) as { max_seq: number };
+	return row.max_seq + 1;
 }
 
 export function appendTaskEvent(db: Database, input: AppendTaskEventInput): TaskEvent {
 	const now = new Date().toISOString();
+	const teamSequence = getNextTeamSequence(db, input.task_id);
 	db.prepare(
-		`insert into task_events (id, task_id, type, message, payload_json, created_at)
-		values (?, ?, ?, ?, ?, ?)`,
+		`insert into task_events (id, task_id, type, message, payload_json, created_at, team_sequence)
+		values (?, ?, ?, ?, ?, ?, ?)`,
 	).run(
 		input.id,
 		input.task_id,
@@ -451,6 +470,7 @@ export function appendTaskEvent(db: Database, input: AppendTaskEventInput): Task
 		input.message ?? null,
 		input.payload === undefined ? null : JSON.stringify(input.payload),
 		now,
+		teamSequence ?? null,
 	);
 	const row = db.prepare("select * from task_events where id = ?").get(input.id);
 	if (!row) {
