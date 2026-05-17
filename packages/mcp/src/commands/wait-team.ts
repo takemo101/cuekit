@@ -168,7 +168,7 @@ export async function runWaitTeam(
 				status: aggregateTeamStatus(latest),
 				mode: input.mode ?? "all",
 				done: false,
-				timed_out: false,
+				timed_out: true,
 				team_sequence: maxSeq,
 				scope: { team_id: team.id, session_id: team.session_id },
 				tasks: [],
@@ -223,6 +223,9 @@ export async function runWaitTeam(
 		run_summary: buildTeamRunSummary(ctx, latest),
 		...(nextActionHint ? { next_action_hint: nextActionHint } : {}),
 		...(cleanupHint ? { cleanup_hint: cleanupHint } : {}),
+		...(input.since_team_sequence !== undefined
+			? { team_sequence: getMaxTeamSequence(ctx.db, team.id) ?? 0 }
+			: {}),
 		...(wait.error ? { error: wait.error } : {}),
 	};
 }

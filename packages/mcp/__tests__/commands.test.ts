@@ -1229,6 +1229,79 @@ describe("wait-team and cleanup-team", () => {
 		expect(result.cleanup_hint).toContain("tm_1");
 	});
 
+	it("wait-team returns the latest team sequence when detailed results include new task events", async () => {
+		createSession(db, {
+			id: "s_wait_team_sequence_detail",
+			project_root: "/p",
+			worktree_path: "/w",
+			parent_agent_kind: "pi",
+		});
+		createTaskTeam(db, {
+			id: "tm_wait_team_sequence_detail",
+			session_id: "s_wait_team_sequence_detail",
+			title: "Team",
+		});
+		createTask(db, {
+			id: "t_wait_team_sequence_detail",
+			session_id: "s_wait_team_sequence_detail",
+			agent_kind: "claude-code",
+			team_id: "tm_wait_team_sequence_detail",
+			team_position: "worker",
+			objective: "done",
+			status: "completed",
+		});
+		appendTaskEvent(db, {
+			id: "e_wait_team_sequence_detail",
+			task_id: "t_wait_team_sequence_detail",
+			type: "completed",
+			message: "Worker finished",
+		});
+
+		const result = await runWaitTeam(ctx, {
+			team_id: "tm_wait_team_sequence_detail",
+			timeout_ms: 0,
+			since_team_sequence: 0,
+		});
+
+		expect(result.tasks.map((task) => task.task_id)).toEqual(["t_wait_team_sequence_detail"]);
+		expect(result.team_sequence).toBe(1);
+	});
+
+	it("wait-team returns a lightweight timeout when there are no task events after since_team_sequence", async () => {
+		createSession(db, {
+			id: "s_wait_team_sequence_quiet",
+			project_root: "/p",
+			worktree_path: "/w",
+			parent_agent_kind: "pi",
+		});
+		createTaskTeam(db, {
+			id: "tm_wait_team_sequence_quiet",
+			session_id: "s_wait_team_sequence_quiet",
+			title: "Team",
+		});
+		createTask(db, {
+			id: "t_wait_team_sequence_quiet",
+			session_id: "s_wait_team_sequence_quiet",
+			agent_kind: "claude-code",
+			team_id: "tm_wait_team_sequence_quiet",
+			team_position: "worker",
+			objective: "running",
+			status: "running",
+		});
+
+		const result = await runWaitTeam(ctx, {
+			team_id: "tm_wait_team_sequence_quiet",
+			timeout_ms: 0,
+			since_team_sequence: 0,
+		});
+
+		expect(result.status).toBe("running");
+		expect(result.done).toBe(false);
+		expect(result.timed_out).toBe(true);
+		expect(result.tasks).toEqual([]);
+		expect(result.team_sequence).toBe(0);
+	});
+
 	it("wait-team hints when terminal members are waiting on a running coordinator", async () => {
 		createSession(db, {
 			id: "s_wait_finalize",
@@ -4503,6 +4576,49 @@ describe("steer-team", () => {
 		expect(ack.steered.map((item) => item.task_id)).toEqual([target.task_id]);
 		expect(ack.steered.some((item) => item.task_id === otherMember.task_id)).toBe(false);
 		expect(runner.calls.slice(before).filter((c) => c[0] === "send-keys")).toHaveLength(2);
+	});
+
+	it("can append recent team blackboard events to team steering", async () => {
+		createSession(db, {
+			id: "s_team_blackboard_steer",
+			project_root: "/p",
+			worktree_path: "/w",
+			parent_agent_kind: "pi",
+		});
+		createTaskTeam(db, {
+			id: "tm_blackboard_steer",
+			session_id: "s_team_blackboard_steer",
+			title: "Team",
+		});
+		const worker = await runSubmitTask(ctx, {
+			objective: "worker",
+			agent_kind: "claude-code",
+			session_id: "s_team_blackboard_steer",
+			team_id: "tm_blackboard_steer",
+			position: "worker",
+		});
+		if (!worker.accepted) throw new Error("setup failed");
+		appendTeamEvent(db, {
+			id: "te_blackboard_decision",
+			team_id: "tm_blackboard_steer",
+			position: "coordinator",
+			event_type: "decision",
+			message: "Use the narrow migration fix.",
+		});
+
+		const before = runner.calls.length;
+		const ack = await runSteerTeam(ctx, {
+			team_id: "tm_blackboard_steer",
+			message: "Please continue.",
+			include_blackboard: true,
+			blackboard_event_types: ["decision"],
+		});
+
+		expect(ack.ok).toBe(true);
+		const sent = JSON.stringify(runner.calls.slice(before));
+		expect(sent).toContain("Please continue.");
+		expect(sent).toContain("[Team Blackboard — Recent Context]");
+		expect(sent).toContain("[coordinator] decision: Use the narrow migration fix.");
 	});
 
 	it("skips non-terminal tasks that do not support steering", async () => {
