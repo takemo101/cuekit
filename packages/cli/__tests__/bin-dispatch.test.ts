@@ -65,7 +65,9 @@ describe("cuekit CLI binary dispatch", () => {
 		expect(bundledBin).not.toContain("await import(TUI_PACKAGE_NAME)");
 		// npm publish: CLI package bundles everything; bin points to the bundle
 		expect(cliPackage.bin?.cuekit).toBe("./bin/cuekit.js");
-		expect(cliPackage.dependencies?.["@cuekit/mcp"]).toMatch(/^(\^|\~)?0\.0\./);
+		// Bundle is self-contained; dependencies are empty, optionalDependencies for TUI binaries only
+		expect(Object.keys(cliPackage.dependencies ?? {})).toHaveLength(0);
+		expect(cliPackage.optionalDependencies).toBeDefined();
 		expect(mcpPackage.bin?.cuekit).toBeUndefined();
 		expect(mcpPackage.dependencies?.["@cuekit/cli"]).toBeUndefined();
 	});

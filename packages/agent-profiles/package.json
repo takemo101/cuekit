@@ -1,6 +1,6 @@
 {
 	"name": "@cuekit/agent-profiles",
-	"version": "0.0.12",
+	"version": "0.0.11",
 	"private": true,
 	"type": "module",
 	"exports": {
@@ -11,18 +11,7 @@
 		"test": "bun test"
 	},
 	"dependencies": {
-		"@cuekit/core": "^0.0.12",
+		"@cuekit/core": "workspace:*",
 		"zod": "^4.3.6"
-	},
-	"publishConfig": {
-		"access": "public"
-	},
-	"engines": {
-		"bun": ">=1.2.0"
-	},
-	"license": "MIT",
-	"repository": {
-		"type": "git",
-		"url": "git+https://github.com/takemo101/cuekit.git"
 	}
 }

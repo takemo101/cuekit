@@ -1,6 +1,6 @@
 {
 	"name": "@cuekit/tui",
-	"version": "0.0.12",
+	"version": "0.0.11",
 	"private": true,
 	"type": "module",
 	"exports": {
@@ -11,7 +11,7 @@
 		"test": "bun test"
 	},
 	"dependencies": {
-		"@cuekit/core": "^0.0.12",
+		"@cuekit/core": "workspace:*",
 		"@opentui/core": "0.2.1",
 		"@opentui/react": "0.2.1",
 		"react": "19.2.5"
@@ -20,16 +20,5 @@
 		"@cuekit/adapters": "workspace:*",
 		"@cuekit/store": "workspace:*",
 		"@types/react": "19.2.14"
-	},
-	"publishConfig": {
-		"access": "public"
-	},
-	"engines": {
-		"bun": ">=1.2.0"
-	},
-	"license": "MIT",
-	"repository": {
-		"type": "git",
-		"url": "git+https://github.com/takemo101/cuekit.git"
 	}
 }
