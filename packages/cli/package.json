@@ -18,15 +18,7 @@
 		"typecheck": "tsc --noEmit",
 		"test": "bun test"
 	},
-	"dependencies": {
-		"@cuekit/adapters": "^0.0.12",
-		"@cuekit/agent-profiles": "^0.0.12",
-		"@cuekit/core": "^0.0.12",
-		"@cuekit/mcp": "^0.0.12",
-		"@cuekit/project-config": "^0.0.12",
-		"@cuekit/store": "^0.0.12",
-		"@cuekit/tui": "^0.0.12"
-	},
+	"dependencies": {},
 	"engines": {
 		"bun": ">=1.2.0"
 	},
@@ -49,5 +41,13 @@
 	"homepage": "https://github.com/takemo101/cuekit#readme",
 	"bugs": {
 		"url": "https://github.com/takemo101/cuekit/issues"
+	},
+	"optionalDependencies": {
+		"@opentui/core-darwin-arm64": "0.2.1",
+		"@opentui/core-darwin-x64": "0.2.1",
+		"@opentui/core-linux-arm64": "0.2.1",
+		"@opentui/core-linux-x64": "0.2.1",
+		"@opentui/core-win32-arm64": "0.2.1",
+		"@opentui/core-win32-x64": "0.2.1"
 	}
 }
