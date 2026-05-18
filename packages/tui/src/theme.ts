@@ -1,5 +1,7 @@
 export const theme = {
 	bg: "#2b2b2b",
+	headerBg: "#1a1a1a",
+	headerFg: "#76c7c8",
 	panel: "#303030",
 	panelAlt: "#242424",
 	row: "#1b1b1b",

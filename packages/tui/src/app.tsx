@@ -1,4 +1,17 @@
-import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react";
+import pkg from "../package.json" with { type: "json" };
+
+const CUEKIT_VERSION = pkg.version ?? "unknown";
+
+function Header({ mode }: { mode: string }): ReactNode {
+	const modeLabel = mode === "teams" ? "Teams" : mode === "parents" ? "Parent Sessions" : "Tasks";
+	return (
+		<box height={1} flexDirection="row" backgroundColor={theme.headerBg}>
+			<text fg={theme.headerFg}>
+				{` cuekit ${CUEKIT_VERSION} — ${modeLabel} `}
+			</text>
+		</box>
+	);
+}import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/react";
 import type { TaskSummary, TeamSummary } from "@cuekit/core";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { TuiContext } from "./context.ts";
@@ -116,7 +129,7 @@ export function App(props: {
 		[teamDetail, selectedMemberIndex],
 	);
 	const selectedTeamCounts = selectedTeam?.task_counts ?? teamDetail?.status?.task_counts;
-	const listRows = Math.max(1, terminal.height - 7);
+	const listRows = Math.max(1, terminal.height - 8);
 	const detailLoadDebounceMs = props.ctx.detailLoadDebounceMs ?? DEFAULT_DETAIL_LOAD_DEBOUNCE_MS;
 	const taskDetailLoading = Boolean(
 		(mode === "tasks" || mode === "parents") &&
@@ -650,6 +663,7 @@ export function App(props: {
 
 	return (
 		<box width="100%" height="100%" flexDirection="column" backgroundColor={theme.bg}>
+			<Header mode={mode} />
 			<box flexDirection="row" flexGrow={1} gap={1} backgroundColor={theme.bg}>
 				{mode === "teams" ? (
 					<>

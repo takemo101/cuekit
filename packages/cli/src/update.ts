@@ -30,11 +30,11 @@ export async function getLatestGitHubRelease(): Promise<UpdateLatestReleaseResul
 	}
 }
 
-function installCommand(tag: string): string {
-	return `bun install -g github:${REPO}#${tag}`;
+function installCommand(_tag: string): string {
+	return `npm install -g cuekit@latest`;
 }
 
-const REMOVE_COMMAND = "bun remove -g cuekit-workspace";
+const REMOVE_COMMAND = "npm uninstall -g cuekit";
 
 export async function runUpdate(options: RunUpdateOptions = {}): Promise<UpdateResult> {
 	const current =
@@ -53,7 +53,15 @@ export async function runUpdate(options: RunUpdateOptions = {}): Promise<UpdateR
 			`  ${REMOVE_COMMAND}`,
 			`  ${installCommand(latest.tag)}`,
 			"",
-			"Removing first avoids Bun global GitHub dependency-loop errors when upgrading from an older cuekit tag.",
+			"After installing, restart any MCP client using cuekit.",
+			"",
+			"Note: If you installed cuekit before v0.0.12 via GitHub directly",
+			"(bun install -g github:takemo101/cuekit#...), uninstall with:",
+			"  bun remove -g cuekit-workspace",
+			"",
+			"If you installed via Homebrew's npm (/opt/homebrew/bin/cuekit),",
+			"uninstall with:",
+			"  /opt/homebrew/bin/npm uninstall -g cuekit",
 			"",
 		);
 	} else {
@@ -65,8 +73,16 @@ export async function runUpdate(options: RunUpdateOptions = {}): Promise<UpdateR
 			"",
 			"Manual update pattern:",
 			`  ${REMOVE_COMMAND}`,
-			`  ${installCommand("<release-tag>")}`,
-			"(<release-tag> is a placeholder, not a discovered version.)",
+			`  npm install -g cuekit@<version>`,
+			"(<version> is a placeholder, e.g., 0.0.14)",
+			"",
+			"Note: If you installed cuekit before v0.0.12 via GitHub directly",
+			"(bun install -g github:takemo101/cuekit#...), uninstall with:",
+			"  bun remove -g cuekit-workspace",
+			"",
+			"If you installed via Homebrew's npm (/opt/homebrew/bin/cuekit),",
+			"uninstall with:",
+			"  /opt/homebrew/bin/npm uninstall -g cuekit",
 			"",
 		);
 	}
