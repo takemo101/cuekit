@@ -26,9 +26,7 @@ jobs:
           test -f packages/cli/README.md || (echo "README not found" && exit 1)
           echo "Bundle and README verified"
 
-      - name: Publish to npm
+      - name: Publish to npm with Trusted Publishing
         run: |
           cd packages/cli
           npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
