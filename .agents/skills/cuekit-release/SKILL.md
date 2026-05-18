@@ -13,8 +13,8 @@ These bugs have already occurred. The checklist below is designed to prevent the
 
 | Bug | Symptom | Root cause |
 |---|---|---|
-| Stale bundle | `bun install -g` installs old code | `bun run bundle` not run before tag |
-| Wrong `--version` output | `cuekit --version` shows old version | Only `packages/cli/package.json` bumped; `packages/mcp` and others still old. `mcp/src/cli.ts` reads its own `package.json` for the `--version` handler via `incur`. |
+| Stale bundle | `npm install -g` installs old code | `bun run bundle` not run before tag |
+| Wrong `--version` output | `cuekit --version` shows old version | `packages/mcp/package.json` not bumped; `mcp/src/cli.ts` reads its own `package.json` for the `--version` handler via `incur`. |
 | Bundle drift after Biome | `release:check` fails after `bun run fix` | Biome import reordering changes how bun resolves identifiers (e.g. `join` → `join2`), altering the bundle output |
 | Tag points to wrong commit | `bun install -g github:…#vX.Y.Z` installs partially-fixed code | Tag created before all fix PRs merged |
 
@@ -56,31 +56,27 @@ bun run fix
 
 After `bun run fix`, **do not commit yet** — the bundle will be regenerated later.
 
-### 4. Bump ALL packages
+### 4. Bump version
 
-**All 8 packages must be bumped together.** Only bumping `packages/cli` causes `cuekit --version` to report the old version.
-
-```bash
-for f in packages/adapters/package.json \
-          packages/agent-profiles/package.json \
-          packages/cli/package.json \
-          packages/core/package.json \
-          packages/mcp/package.json \
-          packages/project-config/package.json \
-          packages/store/package.json \
-          packages/tui/package.json; do
-  sed -i '' "s/\"version\": \".*\"/\"version\": \"NEW_VERSION\"/" "$f"
-  echo "$f: $(grep '\"version\"' $f)"
-done
-```
-
-Replace `NEW_VERSION` with the target version string (e.g. `0.0.7`).
-
-Verify all packages show the new version:
+Update `packages/cli/package.json`, `packages/mcp/package.json`, and `packages/tui/package.json` version fields.
 
 ```bash
-for f in packages/*/package.json; do echo "$f: $(grep '"version"' $f)"; done
+# Update CLI version (the published package)
+sed -i '' 's/"version": ".*"/"version": "NEW_VERSION"/' packages/cli/package.json
+echo "packages/cli/package.json: $(grep '\"version\"' packages/cli/package.json)"
+
+# Update MCP version (--version reads from here)
+sed -i '' 's/"version": ".*"/"version": "NEW_VERSION"/' packages/mcp/package.json
+echo "packages/mcp/package.json: $(grep '\"version\"' packages/mcp/package.json)"
+
+# Update TUI version (shown in TUI header)
+sed -i '' 's/"version": ".*"/"version": "NEW_VERSION"/' packages/tui/package.json
+echo "packages/tui/package.json: $(grep '\"version\"' packages/tui/package.json)"
 ```
+
+Replace `NEW_VERSION` with the target version string (e.g. `0.0.15`).
+
+**Why all three?** `cuekit --version` reads from `packages/mcp/package.json` (via `mcp/src/cli.ts`). The TUI header reads from `packages/tui/package.json`. npm publish uses `packages/cli/package.json`. If any of these drift, the version display will be inconsistent.
 
 ### 5. Regenerate bundle
 
@@ -118,28 +114,13 @@ bun packages/cli/src/bin.ts --version   # must show NEW_VERSION
 
 All must pass before creating any commits.
 
-### 8. Commit (GitButler)
-
-Stage and commit in logical groups. This project uses GitButler (`but`):
+### 8. Commit and push
 
 ```bash
-# Create a release branch
-but branch new release/vX.Y.Z
-
-# Stage all package.json files, Biome-fixed source files, and bin/cuekit.js
-but stage packages/adapters/package.json release/vX.Y.Z
-but stage packages/agent-profiles/package.json release/vX.Y.Z
-but stage packages/cli/package.json release/vX.Y.Z
-but stage packages/core/package.json release/vX.Y.Z
-but stage packages/mcp/package.json release/vX.Y.Z
-but stage packages/project-config/package.json release/vX.Y.Z
-but stage packages/store/package.json release/vX.Y.Z
-but stage packages/tui/package.json release/vX.Y.Z
-but stage bin/cuekit.js release/vX.Y.Z
+git add packages/cli/package.json packages/mcp/package.json packages/tui/package.json bin/cuekit.js packages/cli/bin/cuekit.js
 # Stage any Biome-fixed source files too
-but stage <biome-fixed-files> release/vX.Y.Z
-
-but commit release/vX.Y.Z -m "release: bump all packages to vX.Y.Z and regenerate bundle"
+git commit -m "release: bump version to vX.Y.Z and regenerate bundle"
+git push origin main
 ```
 
 After committing, run `bun run release:check` again to confirm it passes with committed changes:
@@ -149,25 +130,7 @@ bun run release:check
 # Must show: release-check passed for vX.Y.Z
 ```
 
-### 9. Push and merge PR
-
-```bash
-but push release/vX.Y.Z
-gh pr create --base main --head release/vX.Y.Z \
-  --title "release: vX.Y.Z" \
-  --body "Version bump for all packages, bundle regeneration, release:check passed."
-gh pr merge <PR_NUMBER> --squash --subject "release: vX.Y.Z"
-```
-
-Wait for merge and note the merge commit SHA:
-
-```bash
-gh pr view <PR_NUMBER> --json state,mergeCommit
-```
-
-### 10. Tag the merged commit — not before
-
-Always tag the FINAL `origin/main` HEAD after all PRs are merged. Never tag intermediate commits.
+### 9. Tag and push
 
 ```bash
 git fetch origin main
@@ -177,31 +140,21 @@ git tag vX.Y.Z $NEW_SHA
 git push origin vX.Y.Z
 ```
 
-### 11. Create GitHub release
+### 10. Publish to npm
 
 ```bash
-gh release create vX.Y.Z \
-  --title "vX.Y.Z — <short title>" \
-  --notes "$(cat <<'EOF'
-## What's new in vX.Y.Z
-...
-
-## Installation
-\`\`\`sh
-bun install -g github:takemo101/cuekit#vX.Y.Z
-\`\`\`
-EOF
-)"
+cd packages/cli
+npm publish --access public
 ```
 
-### 12. Verify the release
+### 11. Verify the release
 
 ```bash
-bun install -g github:takemo101/cuekit#vX.Y.Z
+npm install -g cuekit@X.Y.Z
 cuekit --version   # must show X.Y.Z
 ```
 
-If `--version` shows the old version, the bundle or package.json bump was incomplete. See "Re-releasing" below.
+If `--version` shows the old version, the bundle or package.json bump was incomplete.
 
 ---
 
@@ -210,8 +163,8 @@ If `--version` shows the old version, the bundle or package.json bump was incomp
 If a tag was already pushed but the release has issues:
 
 ```bash
-# Delete the GitHub release first (before the tag)
-gh release delete vX.Y.Z --yes
+# Delete the npm version first
+npm unpublish cuekit@X.Y.Z
 
 # Delete the local tag
 git tag -d vX.Y.Z
@@ -220,9 +173,9 @@ git tag -d vX.Y.Z
 git push origin --delete vX.Y.Z
 ```
 
-Then fix the issue, merge the fix to main, and repeat steps 10–12.
+Then fix the issue, merge the fix to main, and repeat steps 9–10.
 
-**Always delete the GitHub release before the tag** — `gh release delete` can fail if the release no longer has a tag to reference.
+**Always unpublish from npm before deleting the tag** — npm will reject re-publishing the same version.
 
 ---
 
@@ -230,7 +183,9 @@ Then fix the issue, merge the fix to main, and repeat steps 10–12.
 
 Before tagging, every item must be ✓:
 
-- [ ] All 8 `packages/*/package.json` at new version
+- [ ] `packages/cli/package.json` at new version
+- [ ] `packages/mcp/package.json` at new version (`--version` source)
+- [ ] `packages/tui/package.json` at new version (shown in TUI header)
 - [ ] `bun run typecheck` passes
 - [ ] `bun test` passes (0 failures)
 - [ ] `bun run check` passes (0 Biome errors)
@@ -239,13 +194,11 @@ Before tagging, every item must be ✓:
 - [ ] `bun packages/cli/src/bin.ts --version` shows new version
 - [ ] All fix/feature PRs merged to `main` before tagging
 - [ ] Tag points to final `origin/main` HEAD
-- [ ] `cuekit --version` after `bun install -g` confirms new version
+- [ ] `cuekit --version` after `npm install -g cuekit` confirms new version
 
 ---
 
 ## CLI Fallbacks
-
-If `but` is unavailable, fall back to git + the GitButler pre-commit hook bypass is NOT available — investigate why `but` is missing before proceeding.
 
 If `gh` is unavailable:
 ```bash
@@ -259,9 +212,9 @@ git push origin vX.Y.Z
 
 | File | Role |
 |---|---|
-| `packages/cli/package.json` | Canonical version source for `release:check` |
+| `packages/cli/package.json` | Published package version; canonical source for `release:check` |
 | `packages/mcp/package.json` | Version shown by `cuekit --version` (via `mcp/src/cli.ts` → `incur`) |
-| All other `packages/*/package.json` | Must match for consistency |
-| `bin/cuekit.js` | Committed bundle; what `bun install -g` actually installs |
+| `packages/tui/package.json` | Version shown in TUI header |
+| `bin/cuekit.js` | Committed bundle; what `npm install -g cuekit` actually installs |
+| `packages/cli/bin/cuekit.js` | Bundle copied for npm publish |
 | `scripts/release-check.ts` | Pre-tag validation script |
-| `justfile` | `just install` installs a dev-loop wrapper (not the bundle) |
