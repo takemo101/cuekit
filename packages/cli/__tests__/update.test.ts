@@ -53,7 +53,9 @@ describe("cuekit update", () => {
 		});
 
 		expect(result.exitCode).toBe(0);
-		expect(result.stdout).toContain("Note: If you installed cuekit before v0.0.12 via GitHub directly");
+		expect(result.stdout).toContain(
+			"Note: If you installed cuekit before v0.0.12 via GitHub directly",
+		);
 		expect(result.stdout).toContain("bun remove -g cuekit-workspace");
 		expect(result.stdout).toContain("Homebrew's npm");
 		expect(result.stdout).toContain("/opt/homebrew/bin/npm uninstall -g cuekit");

@@ -410,8 +410,7 @@ export async function runDoctor(options: RunDoctorOptions = {}): Promise<DoctorR
 	// PATH. This is especially common with herdr or when cuekit itself is
 	// already running inside a multiplexer session.
 	const anyAdapterFound = checks.some(
-		(c) =>
-			c.label.startsWith("adapter ") && c.level === "ok" && c.detail.includes("found"),
+		(c) => c.label.startsWith("adapter ") && c.level === "ok" && c.detail.includes("found"),
 	);
 	if (anyAdapterFound && requestedMultiplexer !== "tmux") {
 		checks.push({
