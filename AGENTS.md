@@ -48,6 +48,7 @@ Teams は関連子タスクの軽量ビュー、Strategies は開発の playbook
 - **Herdr pane ID コンパクション**: pane close 後に Herdr が ID をシフトするため、`closeTeamPane` は transcript 読み込みで taskId を検証しないと誤って別 pane を閉じる。 → [Herdr backend design](docs/designs/cuekit-herdr-multiplexer-backend-design.md)
 - **Herdr 同 position タブの混在リスク**: coordinator-spawned と手動 submit の worker が同じ `worker` タブに入ると、cancel/delete で pane identity が ambiguous になりうる。 → [Herdr backend design](docs/designs/cuekit-herdr-multiplexer-backend-design.md)
 - **Herdr team workspace 永続化**: `task_teams.metadata_json` の `multiplexer.herdr` に workspace handle を保存。クロスプロセス再利用の正とする。 → [Herdr backend design](docs/designs/cuekit-herdr-multiplexer-backend-design.md)
+- **バージョン bump の源**: `cuekit --version` は `packages/mcp/package.json` の version を表示する。リリース時は `packages/cli` / `packages/mcp` / `packages/tui` の 3 つを必ず揃えること。 → [詳細](docs/decisions/004-version-bump-strategy.md)
 
 ## パッケージ境界 (実装時に必ず確認)
 
