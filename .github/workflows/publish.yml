@@ -20,15 +20,6 @@ jobs:
         with:
           registry-url: 'https://registry.npmjs.org'
 
-      - name: Debug npm auth
-        run: |
-          echo "=== npm config ==="
-          npm config list
-          echo "=== npm whoami ==="
-          npm whoami || true
-          echo "=== package.json ==="
-          cat packages/cli/package.json
-
       - name: Verify bundle exists
         run: |
           test -f packages/cli/bin/cuekit.js || (echo "Bundle not found" && exit 1)
@@ -38,4 +29,4 @@ jobs:
       - name: Publish to npm
         run: |
           cd packages/cli
-          npm publish --provenance --access public --verbose
+          npm publish --provenance --access public
