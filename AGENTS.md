@@ -49,6 +49,7 @@ Teams は関連子タスクの軽量ビュー、Strategies は開発の playbook
 - **Herdr 同 position タブの混在リスク**: coordinator-spawned と手動 submit の worker が同じ `worker` タブに入ると、cancel/delete で pane identity が ambiguous になりうる。 → [Herdr backend design](docs/designs/cuekit-herdr-multiplexer-backend-design.md)
 - **Herdr team workspace 永続化**: `task_teams.metadata_json` の `multiplexer.herdr` に workspace handle を保存。クロスプロセス再利用の正とする。 → [Herdr backend design](docs/designs/cuekit-herdr-multiplexer-backend-design.md)
 - **バージョン bump の源**: `cuekit --version` は `packages/mcp/package.json` の version を表示する。リリース時は `packages/cli` / `packages/mcp` / `packages/tui` の 3 つを必ず揃えること。 → [詳細](docs/decisions/004-version-bump-strategy.md)
+- **npm Trusted Publishing の制約**: Trusted Publishing (OIDC) は既存パッケージの更新にのみ有効。初回 publish は手動 (`--otp`) が必須。 → [詳細](docs/decisions/005-npm-publish-operations.md)
 
 ## パッケージ境界 (実装時に必ず確認)
 
