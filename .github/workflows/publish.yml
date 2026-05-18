@@ -15,7 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node.js for npm publish
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           registry-url: 'https://registry.npmjs.org'
@@ -26,7 +26,7 @@ jobs:
           test -f packages/cli/README.md || (echo "README not found" && exit 1)
           echo "Bundle and README verified"
 
-      - name: Publish to npm
+      - name: Publish to npm with Trusted Publishing
         run: |
           cd packages/cli
           npm publish --provenance --access public
