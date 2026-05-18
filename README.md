@@ -19,48 +19,71 @@ cuekit is **not a workflow engine**. The parent agent stays the decision-maker; 
 
 ## Install
 
-Pinned to a specific release tag (recommended):
+Latest release from npm registry (recommended):
 
 ```sh
-bun install -g github:takemo101/cuekit#v0.0.8
+npm install -g cuekit@latest
 cuekit doctor
 cuekit mcp config   # prints the snippet to register cuekit with your MCP client
 ```
 
-Or resolve the most recent release tag at install time (no need to look up the version):
+Pinned to a specific version:
 
 ```sh
-# Option A — uses the GitHub CLI:
-bun install -g github:takemo101/cuekit#$(gh release view --repo takemo101/cuekit --json tagName -q .tagName)
-
-# Option B — curl-only:
-bun install -g github:takemo101/cuekit#$(curl -s https://api.github.com/repos/takemo101/cuekit/releases/latest | jq -r .tag_name)
+npm install -g cuekit@0.0.14
+cuekit doctor
 ```
 
-Bun has no `#latest` shorthand for GitHub installs, so the one-liners above resolve the tag at command-execution time and pin the install to that exact version. After install, `cuekit update` is the advisory-only command that prints the next install command when a newer release exists.
+Or install from GitHub source (development or pinned tag):
 
-When upgrading an existing global GitHub install, remove first and then install the new tag:
+```sh
+bun install -g github:takemo101/cuekit#v0.0.14
+```
+
+### Upgrading
+
+When upgrading from npm:
+
+```sh
+npm uninstall -g cuekit
+npm install -g cuekit@latest
+```
+
+After installing a newer version, restart MCP clients.
+
+### Legacy installs (before v0.0.12)
+
+If you installed cuekit before v0.0.12 via GitHub directly (`bun install -g github:takemo101/cuekit#...`):
 
 ```sh
 bun remove -g cuekit-workspace
-bun install -g github:takemo101/cuekit#v0.0.8
+npm install -g cuekit@latest
 ```
 
-This avoids Bun global-install dependency-loop errors that can occur when installing a newer `github:takemo101/cuekit#...` tag over an older one.
+If you installed via Homebrew's npm (`/opt/homebrew/bin/cuekit`):
 
-Use an immutable release tag for normal installs. Avoid floating `#main` outside development — Bun's caching semantics for branches are less explicit. After installing a newer tag, restart MCP clients.
-
-> **Naming gotcha**: the binary is named `cuekit` but the workspace `package.json#name` is `cuekit-workspace`. This matters when you uninstall (see below) and when you list installed packages (`bun pm ls -g | grep cuekit`).
+```sh
+/opt/homebrew/bin/npm uninstall -g cuekit
+npm install -g cuekit@latest
+```
 
 ### Uninstall
 
 ```sh
-bun remove -g cuekit-workspace
+npm uninstall -g cuekit
 ```
 
-`bun remove -g cuekit` is a **silent no-op** because no package by that name exists — Bun returns success without removing anything. Always remove by the package name `cuekit-workspace`. Verify with `which cuekit` (should report nothing) or `bun pm ls -g | grep cuekit-workspace` (should be empty).
+For legacy installs before v0.0.12:
 
-For a deeper cleanup including state, transcript, and tmux sessions, see the uninstall recipe at the bottom of this file.
+```sh
+# If installed via GitHub directly (bun install -g github:takemo101/cuekit#...)
+bun remove -g cuekit-workspace
+
+# If installed via Homebrew's npm (/opt/homebrew/bin/cuekit)
+/opt/homebrew/bin/npm uninstall -g cuekit
+```
+
+Verify with `which cuekit` (should report nothing) or `npm list -g cuekit` (should be empty).
 
 ### Local development
 
@@ -293,20 +316,21 @@ Adapter end-to-end checks against real runtimes are documented per adapter:
 
 ### Cutting a release
 
-Releases are GitHub-tagged (`v0.0.x`) and consumed via `bun install -g github:takemo101/cuekit#vX.Y.Z`. The published binary is the pre-built bundle at `bin/cuekit.js` — `package.json#bin.cuekit` points at it directly, so Bun installs it verbatim.
+Releases are published to the npm registry as `cuekit@X.Y.Z`. The published binary is the pre-built bundle at `bin/cuekit.js`.
 
 ```sh
-# 1. Bump version in every workspace package's package.json (and the
-#    project root if it tracks one). Update CHANGELOG.md.
+# 1. Bump version in packages/cli/package.json
 # 2. Verify the bundle is in sync with the new version:
 bun run release:check
 # 3. If `release:check` reports the bundle was stale, commit the
 #    regenerated bin/cuekit.js it produced, then re-run.
 # 4. Open the release PR and merge. After merge, tag the merge commit
 #    with `vX.Y.Z` and push.
+# 5. Publish to npm:
+cd packages/cli && npm publish --access public
 ```
 
-`release:check` rebuilds the bundle, fails if the committed `bin/cuekit.js` differs from the freshly-built output (= the bundle was stale), and double-checks that the bundle contains the expected version string. Without this gate v0.0.2 and v0.0.3 both shipped a stale bundle that reported `0.0.1` from its baked-in `package.json` copy — see [#388](https://github.com/takemo101/cuekit/issues/388).
+`release:check` rebuilds the bundle, fails if the committed `bin/cuekit.js` differs from the freshly-built output (= the bundle was stale), and double-checks that the bundle contains the expected version string.
 
 ## v0 scope
 
@@ -321,28 +345,29 @@ Full v0 protocol: [`docs/specs/README.md`](docs/specs/README.md).
 
 ## Full uninstall
 
-The basic `bun remove -g cuekit-workspace` (see [Uninstall](#uninstall)) removes only the binary. To wipe state, transcripts, and project artifacts as well:
+The basic `npm uninstall -g cuekit` (see [Uninstall](#uninstall)) removes only the binary. To wipe state, transcripts, and project artifacts as well:
 
 ```sh
-# 1. Binary + Bun cache
-bun remove -g cuekit-workspace
-rm -rf ~/.bun/install/cache/@GH@takemo101-cuekit-*
-rm -rf ~/.bun/install/global/node_modules/cuekit-workspace
+# 1. Binary
+npm uninstall -g cuekit
 
-# 2. Global state DB (task history, sessions, events)
+# 2. Legacy binary (if installed before v0.0.12 via GitHub)
+bun remove -g cuekit-workspace
+
+# 3. Global state DB (task history, sessions, events)
 rm -rf ~/.cuekit
 
-# 3. Per-project artifacts (run inside each repo that used cuekit)
+# 4. Per-project artifacts (run inside each repo that used cuekit)
 find . -name '.cuekit' -type d -prune -exec rm -rf {} +
 rm -f ./.cuekit.yaml          # if `cuekit init` was run
 
-# 4. Kill any remaining multiplexer sessions
+# 5. Kill any remaining multiplexer sessions
 # tmux:
 tmux ls 2>/dev/null | grep cuekit-task | cut -d: -f1 | xargs -I {} tmux kill-session -t {}
 # herdr:
 herdr workspace list 2>/dev/null | jq -r '.result.workspaces[].workspace_id' | xargs -I {} herdr workspace close {}
 
-# 5. Remove the cuekit entry from MCP client configs
+# 6. Remove the cuekit entry from MCP client configs
 #    Claude Code: `~/.claude.json` → `mcpServers.cuekit`
 #    Project:     `<repo>/.mcp.json` → `mcpServers.cuekit`
 #    Cursor / Claude Desktop: each client's MCP config
@@ -358,6 +383,4 @@ tmux ls 2>/dev/null | grep cuekit-  # should be empty
 herdr workspace list 2>/dev/null | grep cuekit  # should be empty
 ```
 
-Step 1 is enough for most cases. Steps 2 and 3 are destructive — back up `transcript.txt` files first if you need them for review or postmortem.
-
-Note: `bun remove -g cuekit` (without `-workspace`) returns success but removes nothing — the workspace package is named `cuekit-workspace` even though its binary is `cuekit`.
+Step 1 is enough for most cases. Steps 3 and 4 are destructive — back up `transcript.txt` files first if you need them for review or postmortem.
