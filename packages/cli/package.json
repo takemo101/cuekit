@@ -1,5 +1,5 @@
 {
-	"name": "@cuekit/cli",
+	"name": "cuekit",
 	"version": "0.0.14",
 	"description": "cuekit — delegation substrate for coding agents",
 	"type": "module",
