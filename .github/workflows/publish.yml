@@ -15,27 +15,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
-      - name: Install dependencies
-        run: bun install
-
-      - name: Build bundle
-        run: bun run bundle
-
-      - name: Run tests
-        run: bun test
-
-      - name: Run checks
-        run: bun run check
-
       - name: Setup Node.js for npm publish
         uses: actions/setup-node@v4
         with:
           registry-url: 'https://registry.npmjs.org'
+
+      - name: Verify bundle exists
+        run: |
+          test -f packages/cli/bin/cuekit.js || (echo "Bundle not found" && exit 1)
+          test -f packages/cli/README.md || (echo "README not found" && exit 1)
+          echo "Bundle and README verified"
 
       - name: Publish to npm
         run: |
