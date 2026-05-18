@@ -1,6 +1,6 @@
 {
 	"name": "cuekit",
-	"version": "0.0.14",
+	"version": "0.0.15",
 	"description": "cuekit — delegation substrate for coding agents",
 	"type": "module",
 	"exports": {
