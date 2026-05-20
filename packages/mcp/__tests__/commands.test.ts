@@ -1302,6 +1302,136 @@ describe("wait-team and cleanup-team", () => {
 		expect(result.team_sequence).toBe(0);
 	});
 
+	it("wait-team returns empty status for a team with no members even when since_team_sequence is set", async () => {
+		createSession(db, {
+			id: "s_wait_empty_team_since",
+			project_root: "/p",
+			worktree_path: "/w",
+			parent_agent_kind: "pi",
+		});
+		createTaskTeam(db, {
+			id: "tm_wait_empty_team_since",
+			session_id: "s_wait_empty_team_since",
+			title: "Team",
+		});
+
+		// Empty teams should short-circuit with `status: empty` and `done: true`
+		// before the since_team_sequence lightweight-timeout branch runs.
+		// Otherwise an empty team with since_team_sequence=0 would falsely
+		// surface as timed_out: true / done: false, which would loop the
+		// coordinator.
+		const result = await runWaitTeam(ctx, {
+			team_id: "tm_wait_empty_team_since",
+			timeout_ms: 0,
+			since_team_sequence: 0,
+		});
+
+		expect(result.status).toBe("empty");
+		expect(result.done).toBe(true);
+		expect(result.timed_out).toBe(false);
+		expect(result.tasks).toEqual([]);
+		expect(result.team_sequence).toBeUndefined();
+	});
+
+	it("wait-team treats pre-migration null team_sequence rows as max_seq=0", async () => {
+		createSession(db, {
+			id: "s_wait_team_null_seq",
+			project_root: "/p",
+			worktree_path: "/w",
+			parent_agent_kind: "pi",
+		});
+		createTaskTeam(db, {
+			id: "tm_wait_team_null_seq",
+			session_id: "s_wait_team_null_seq",
+			title: "Team",
+		});
+		createTask(db, {
+			id: "t_wait_team_null_seq",
+			session_id: "s_wait_team_null_seq",
+			agent_kind: "claude-code",
+			team_id: "tm_wait_team_null_seq",
+			team_position: "worker",
+			objective: "legacy",
+			status: "running",
+		});
+
+		// Simulate a pre-migration row by inserting a task_events row whose
+		// team_sequence column is explicitly NULL — appendTaskEvent now
+		// always backfills it, so we have to go through the raw db.
+		db.prepare(
+			`insert into task_events (id, task_id, type, message, payload_json, created_at, team_sequence)
+			values (?, ?, ?, ?, ?, ?, ?)`,
+		).run(
+			"e_wait_team_null_seq",
+			"t_wait_team_null_seq",
+			"started",
+			"legacy event",
+			null,
+			new Date().toISOString(),
+			null,
+		);
+
+		const result = await runWaitTeam(ctx, {
+			team_id: "tm_wait_team_null_seq",
+			timeout_ms: 0,
+			since_team_sequence: 0,
+		});
+
+		// max(NULL) collapses to 0 via coalesce, so the since check (0 <= 0)
+		// trips the lightweight-timeout branch and we get team_sequence=0
+		// without scanning task detail.
+		expect(result.timed_out).toBe(true);
+		expect(result.done).toBe(false);
+		expect(result.tasks).toEqual([]);
+		expect(result.team_sequence).toBe(0);
+	});
+
+	it("wait-team honours since_team_sequence even when follow_new_tasks is also requested", async () => {
+		createSession(db, {
+			id: "s_wait_since_follow",
+			project_root: "/p",
+			worktree_path: "/w",
+			parent_agent_kind: "pi",
+		});
+		createTaskTeam(db, {
+			id: "tm_wait_since_follow",
+			session_id: "s_wait_since_follow",
+			title: "Team",
+		});
+		createTask(db, {
+			id: "t_wait_since_follow",
+			session_id: "s_wait_since_follow",
+			agent_kind: "claude-code",
+			team_id: "tm_wait_since_follow",
+			team_position: "worker",
+			objective: "still running",
+			status: "running",
+		});
+		appendTaskEvent(db, {
+			id: "e_wait_since_follow_started",
+			task_id: "t_wait_since_follow",
+			type: "started",
+			message: "first event",
+		});
+
+		// follow_new_tasks would normally enter a polling loop. The
+		// since_team_sequence check runs before that loop, so callers can
+		// combine both knobs without follow_new_tasks burning the deadline
+		// when nothing has changed.
+		const result = await runWaitTeam(ctx, {
+			team_id: "tm_wait_since_follow",
+			timeout_ms: 30,
+			poll_interval_ms: 5,
+			follow_new_tasks: true,
+			since_team_sequence: 99,
+		});
+
+		expect(result.timed_out).toBe(true);
+		expect(result.done).toBe(false);
+		expect(result.tasks).toEqual([]);
+		expect(result.team_sequence).toBe(1);
+	});
+
 	it("wait-team hints when terminal members are waiting on a running coordinator", async () => {
 		createSession(db, {
 			id: "s_wait_finalize",
