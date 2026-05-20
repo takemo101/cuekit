@@ -28,7 +28,7 @@ export default defineConfig({
 			},
 			{ text: "API", link: "/api/mcp-tools" },
 			{
-				text: "v0.0.15",
+				text: "v0.0.16",
 				items: [
 					{
 						text: "Changelog",
