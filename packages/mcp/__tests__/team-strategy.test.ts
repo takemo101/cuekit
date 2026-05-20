@@ -163,4 +163,20 @@ describe("team strategy helpers", () => {
 		expect(prompt).toContain("coordinator only for orchestration");
 		expect(prompt).toContain("will not appear in worker/reviewer/finisher lanes");
 	});
+
+	it("nudges coordinators to attach team blackboard context when steering", () => {
+		const result = resolveTeamStrategy(config, "docs-polish");
+		if (!result.ok) throw new Error("setup failed");
+
+		const prompt = renderTeamStrategyPrompt({
+			strategy_name: result.strategy_name,
+			strategy: result.strategy,
+			objective: "Polish README wait guidance.",
+		});
+
+		expect(prompt).toContain("include_blackboard: true");
+		expect(prompt).toContain("recent team blackboard events");
+		expect(prompt).toContain("blackboard_event_types");
+		expect(prompt).toContain("blackboard_limit");
+	});
 });
