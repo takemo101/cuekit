@@ -18,6 +18,61 @@ still be affected.
   legacy field will be removed in a future minor release (Phase 5
   of the multiplexer backend abstraction, #423).
 
+## [0.0.16] — 2026-05-21
+
+A bugfix-and-polish release: two real install-blockers (herdr session
+bootstrap, CLI workspace deps), one coordinator-prompt tweak, the
+initial VitePress docs site, and two regression-test patches.
+
+### Added
+
+- **VitePress documentation site at `site/`** with Quickstart, Install,
+  MCP API reference, and guides for Project Config (`.cuekit.yaml`),
+  Team Strategies, and Agent Profiles. Deployed to GitHub Pages via
+  `.github/workflows/pages.yml` on push to main (#557).
+- **Coordinator prompt nudges `include_blackboard: true`** on team
+  steers. `renderTeamStrategyPrompt` now tells coordinators to attach
+  recent team blackboard context (handoffs, decisions, findings) when
+  steering, with optional `blackboard_event_types` and `blackboard_limit`
+  knobs to bound noise after long waits (#558).
+
+### Fixed
+
+- **`packages/cli` declares its `@cuekit/*` workspace deps.** The cli
+  package's `dependencies` map was empty even though `src/bin.ts` imports
+  `@cuekit/adapters`, `@cuekit/agent-profiles`, `@cuekit/core`,
+  `@cuekit/mcp`, `@cuekit/project-config`, `@cuekit/store`, and
+  `@cuekit/tui`. Bun therefore did not symlink them, so running cuekit
+  from source — including `just install` — failed with
+  `Cannot find module '@cuekit/adapters'`. Bundled releases were
+  unaffected because `bun build` inlines everything. Deps are now
+  declared as `devDependencies` (`workspace:*`) so the bundle-only
+  published shape is preserved (#559).
+- **`HerdrBackend` auto-bootstraps its named session on first spawn.**
+  cuekit's herdr backend hard-codes the session name `ck-cuekit` and
+  issues every operation as `herdr --session ck-cuekit ...`, but herdr
+  has no `session create` subcommand — named sessions only register
+  when the TUI is launched with `herdr --session <name>`. On any host
+  that had never attached to that session, every cuekit operation
+  failed with `Os { code: 2, kind: NotFound }`. The backend now lists
+  sessions and, if the configured name is missing, spawns
+  `herdr --session <name>` with stdio redirected so the server
+  registers the session while the ratatui client panics silently
+  (#560).
+
+### Tests
+
+- **TUI version/mode header format pinned by a smoke test.** Locks in
+  `CUEKIT_VERSION` sourced from `packages/tui/package.json` and the
+  template literal `` ` cuekit ${CUEKIT_VERSION} — ${modeLabel} ` ``
+  with mode labels `Tasks` / `Teams` / `Parent Sessions` so a future
+  edit cannot silently drop the version or rename a mode label (#561).
+- **`wait-team` edge-case coverage.** Three new regression tests cover
+  the empty-team + `since_team_sequence` short-circuit, pre-migration
+  null `team_sequence` rows (collapsed to max_seq=0 via `coalesce`),
+  and the `follow_new_tasks` + `since_team_sequence` combined path
+  (early return takes precedence over the polling loop) (#562).
+
 ## [0.0.4] — 2026-05-08
 
 A maintenance release: docs, tests, refactors, and release-engineering
