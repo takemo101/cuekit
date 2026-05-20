@@ -692,4 +692,50 @@ describe("HerdrBackend", () => {
 
 		expect(await backend.isAlive("t_coord")).toBe(true);
 	});
+
+	test("bootstraps the named session before the first spawn when it does not exist", async () => {
+		const runner = new FakeHerdrRunner();
+		const backend = new HerdrBackend({ runner, sessionName: "ck-fresh" });
+
+		await backend.spawnPane({ task_id: "t_first", cwd: "/repo", command: "echo first" });
+
+		const methods = runner.calls.map((call) => call.method);
+		const listIdx = methods.indexOf("listSessions");
+		const bootstrapIdx = methods.indexOf("bootstrapSession");
+		const createIdx = methods.indexOf("createWorkspace");
+		expect(listIdx).toBeGreaterThanOrEqual(0);
+		expect(bootstrapIdx).toBeGreaterThan(listIdx);
+		expect(createIdx).toBeGreaterThan(bootstrapIdx);
+		const bootstrapCall = runner.calls[bootstrapIdx];
+		expect(bootstrapCall?.params).toEqual({ name: "ck-fresh" });
+	});
+
+	test("skips bootstrap when the named session already exists", async () => {
+		const runner = new FakeHerdrRunner();
+		await runner.bootstrapSession("ck-existing");
+		runner.calls.length = 0;
+		const backend = new HerdrBackend({ runner, sessionName: "ck-existing" });
+
+		await backend.spawnPane({ task_id: "t_first", cwd: "/repo", command: "echo first" });
+
+		const methods = runner.calls.map((call) => call.method);
+		expect(methods).toContain("listSessions");
+		expect(methods).not.toContain("bootstrapSession");
+	});
+
+	test("coalesces concurrent bootstrap attempts into a single check", async () => {
+		const runner = new FakeHerdrRunner();
+		const backend = new HerdrBackend({ runner, sessionName: "ck-once" });
+
+		await Promise.all([
+			backend.spawnPane({ task_id: "t_a", cwd: "/repo", command: "echo a" }),
+			backend.spawnPane({ task_id: "t_b", cwd: "/repo", command: "echo b" }),
+			backend.spawnPane({ task_id: "t_c", cwd: "/repo", command: "echo c" }),
+		]);
+
+		const listCalls = runner.calls.filter((call) => call.method === "listSessions");
+		const bootstrapCalls = runner.calls.filter((call) => call.method === "bootstrapSession");
+		expect(listCalls.length).toBe(1);
+		expect(bootstrapCalls.length).toBe(1);
+	});
 });

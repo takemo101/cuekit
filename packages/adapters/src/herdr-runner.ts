@@ -35,6 +35,8 @@ function stringField(value: unknown): string {
 
 export interface HerdrRunner {
 	probe(): Promise<boolean>;
+	listSessions(): Promise<string[]>;
+	bootstrapSession(name: string): Promise<void>;
 	createWorkspace(params: {
 		session: string;
 		cwd: string;
@@ -94,6 +96,34 @@ class HerdrCliRunner implements HerdrRunner {
 	async probe(): Promise<boolean> {
 		const result = await this.run(["--version"]);
 		return result.exitCode === 0;
+	}
+
+	async listSessions(): Promise<string[]> {
+		const result = await this.run(["session", "list", "--json"]);
+		if (result.exitCode !== 0) {
+			throw new Error(result.stderr || "herdr session list failed");
+		}
+		const parsed = JSON.parse(result.stdout) as { sessions?: Array<{ name?: unknown }> };
+		const sessions = Array.isArray(parsed.sessions) ? parsed.sessions : [];
+		return sessions
+			.map((entry) => (typeof entry.name === "string" ? entry.name : ""))
+			.filter((name) => name.length > 0);
+	}
+
+	async bootstrapSession(name: string): Promise<void> {
+		// `herdr --session <name>` is the only way to register a named
+		// session — the `session` subcommand offers list/attach/stop/delete
+		// but no `create`. Running it without a TTY makes the ratatui client
+		// panic, but herdr's server registers the session *before* that
+		// panic, leaving it usable for non-interactive workspace/tab/pane
+		// operations. Redirect all stdio so the panic is silent.
+		const proc = Bun.spawn([this.herdrBin, "--session", name], {
+			stdin: "ignore",
+			stdout: "ignore",
+			stderr: "ignore",
+			env: this.env ? { ...process.env, ...this.env } : undefined,
+		});
+		await proc.exited;
 	}
 
 	async createWorkspace(params: {

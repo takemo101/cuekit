@@ -64,6 +64,7 @@ export class HerdrBackend implements MultiplexerBackend {
 	private readonly taskHandles = new Map<string, HerdrTaskHandle>();
 	private readonly teamWorkspaces = new Map<string, HerdrTeamWorkspace>();
 	private readonly teamSpawnLocks = new Map<string, Promise<void>>();
+	private bootstrapPromise: Promise<void> | undefined;
 
 	constructor(options: HerdrBackendOptions = {}) {
 		this.runner = options.runner ?? defaultHerdrRunner();
@@ -75,12 +76,32 @@ export class HerdrBackend implements MultiplexerBackend {
 		return this.taskHandles.get(task_id)?.session ?? this.sessionName;
 	}
 
+	// Herdr has no `session create` subcommand: named sessions only come
+	// into existence when `herdr --session <name>` is launched. Cuekit's
+	// non-interactive workspace/tab/pane operations require the session
+	// to already exist, so we check once on first spawn and bootstrap it
+	// if missing. The promise is cached so concurrent spawns coalesce.
+	private async ensureSessionBootstrapped(): Promise<void> {
+		if (!this.bootstrapPromise) {
+			this.bootstrapPromise = this.bootstrapSessionIfMissing();
+		}
+		return this.bootstrapPromise;
+	}
+
+	private async bootstrapSessionIfMissing(): Promise<void> {
+		const sessions = await this.runner.listSessions();
+		if (sessions.includes(this.sessionName)) return;
+		await this.runner.bootstrapSession(this.sessionName);
+	}
+
 	async spawnPane(params: SpawnPaneParams): Promise<PaneHandle> {
 		for (const key of Object.keys(params.env ?? {})) {
 			if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) {
 				throw new Error(`invalid herdr environment key '${key}'`);
 			}
 		}
+
+		await this.ensureSessionBootstrapped();
 
 		const prepared = params.env
 			? await this.prepareLaunchCommand(params)

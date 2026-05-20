@@ -134,6 +134,16 @@ export class FakeHerdrRunner implements HerdrRunner {
 		return true;
 	}
 
+	async listSessions(): Promise<string[]> {
+		this.calls.push({ method: "listSessions", params: {} });
+		return [...this.sessions.keys()];
+	}
+
+	async bootstrapSession(name: string): Promise<void> {
+		this.calls.push({ method: "bootstrapSession", params: { name } });
+		this.ensureSession(name);
+	}
+
 	async createWorkspace(params: {
 		session: string;
 		cwd: string;
