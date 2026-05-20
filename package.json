@@ -15,7 +15,10 @@
 		"typecheck": "bun run --filter '*' typecheck",
 		"test": "bun test",
 		"check": "biome check .",
-		"fix": "biome check --write ."
+		"fix": "biome check --write .",
+		"docs:dev": "vitepress dev site",
+		"docs:build": "vitepress build site",
+		"docs:preview": "vitepress preview site"
 	},
 	"optionalDependencies": {
 		"@opentui/core-darwin-arm64": "0.2.1",
@@ -28,7 +31,8 @@
 	"devDependencies": {
 		"@biomejs/biome": "^2.0.0",
 		"@types/bun": "latest",
-		"typescript": "^5.8.0"
+		"typescript": "^5.8.0",
+		"vitepress": "1.6.4"
 	},
 	"engines": {
 		"bun": ">=1.2.0"
