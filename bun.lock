@@ -42,6 +42,15 @@
       "bin": {
         "cuekit": "./bin/cuekit.js",
       },
+      "devDependencies": {
+        "@cuekit/adapters": "workspace:*",
+        "@cuekit/agent-profiles": "workspace:*",
+        "@cuekit/core": "workspace:*",
+        "@cuekit/mcp": "workspace:*",
+        "@cuekit/project-config": "workspace:*",
+        "@cuekit/store": "workspace:*",
+        "@cuekit/tui": "workspace:*",
+      },
       "optionalDependencies": {
         "@opentui/core-darwin-arm64": "0.2.1",
         "@opentui/core-darwin-x64": "0.2.1",

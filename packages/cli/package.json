@@ -19,6 +19,15 @@
 		"test": "bun test"
 	},
 	"dependencies": {},
+	"devDependencies": {
+		"@cuekit/adapters": "workspace:*",
+		"@cuekit/agent-profiles": "workspace:*",
+		"@cuekit/core": "workspace:*",
+		"@cuekit/mcp": "workspace:*",
+		"@cuekit/project-config": "workspace:*",
+		"@cuekit/store": "workspace:*",
+		"@cuekit/tui": "workspace:*"
+	},
 	"engines": {
 		"bun": ">=1.2.0"
 	},
