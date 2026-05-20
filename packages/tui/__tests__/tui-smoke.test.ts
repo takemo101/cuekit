@@ -26,6 +26,26 @@ describe("@cuekit/tui package smoke", () => {
 		expect(entrypoint).toContain("createCliRenderer");
 	});
 
+	it("renders the version + mode header from the tui package.json", async () => {
+		const app = await Bun.file(new URL("../src/app.tsx", import.meta.url)).text();
+		const pkg = (await Bun.file(new URL("../package.json", import.meta.url)).json()) as {
+			version?: string;
+		};
+		expect(typeof pkg.version).toBe("string");
+		expect(pkg.version).toMatch(/^\d+\.\d+\.\d+/);
+		// Version is sourced from this package's package.json so a release
+		// bump propagates without a separate hardcoded constant.
+		expect(app).toContain('import pkg from "../package.json"');
+		expect(app).toContain("const CUEKIT_VERSION = pkg.version");
+		// Header template renders `cuekit <version> — <modeLabel>` with the
+		// three known mode labels.
+		// biome-ignore lint/suspicious/noTemplateCurlyInString: matching the literal template-literal source in app.tsx
+		expect(app).toContain("` cuekit ${CUEKIT_VERSION} — ${modeLabel} `");
+		expect(app).toContain('"Teams"');
+		expect(app).toContain('"Parent Sessions"');
+		expect(app).toContain('"Tasks"');
+	});
+
 	it("documents and wires the automatic refresh interval", async () => {
 		const app = await Bun.file(new URL("../src/app.tsx", import.meta.url)).text();
 		const footer = await Bun.file(new URL("../src/components/footer.tsx", import.meta.url)).text();
