@@ -10,3 +10,5 @@ bun.lockb
 .env
 .env.*
 !.env.example
+site/.vitepress/cache
+site/.vitepress/dist
