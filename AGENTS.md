@@ -4,6 +4,7 @@
 
 ## 入口
 
+- 公開ドキュメントサイト: <https://takemo101.github.io/cuekit/> (Quickstart / Install / MCP API / Project Config / Team Strategies / Agent Profiles)。ソースは [`site/`](site/) で、`.github/workflows/pages.yml` が main push で GitHub Pages にデプロイする。
 - ドキュメント全体図: [docs/README.md](docs/README.md)
 - プロトコル / 状態モデル / MCP API / アダプタ契約: [docs/specs/](docs/specs/README.md)
 - 実装制約 (パッケージ境界、命名、エラー方針): [docs/architecture/](docs/architecture/README.md)
@@ -48,8 +49,10 @@ Teams は関連子タスクの軽量ビュー、Strategies は開発の playbook
 - **Herdr pane ID コンパクション**: pane close 後に Herdr が ID をシフトするため、`closeTeamPane` は transcript 読み込みで taskId を検証しないと誤って別 pane を閉じる。 → [Herdr backend design](docs/designs/cuekit-herdr-multiplexer-backend-design.md)
 - **Herdr 同 position タブの混在リスク**: coordinator-spawned と手動 submit の worker が同じ `worker` タブに入ると、cancel/delete で pane identity が ambiguous になりうる。 → [Herdr backend design](docs/designs/cuekit-herdr-multiplexer-backend-design.md)
 - **Herdr team workspace 永続化**: `task_teams.metadata_json` の `multiplexer.herdr` に workspace handle を保存。クロスプロセス再利用の正とする。 → [Herdr backend design](docs/designs/cuekit-herdr-multiplexer-backend-design.md)
+- **Herdr 名前付きセッションの bootstrap**: cuekit は `ck-cuekit` セッションを前提とするが、herdr には `session create` サブコマンドがなく、`herdr --session <name>` の TUI 起動でしか新規登録できない。`HerdrBackend.spawnPane` は初回呼び出しで `listSessions` → 未存在なら stdio をリダイレクトして `herdr --session <name>` を spawn し、ratatui が panic する前に server 側で session が登録される副作用に依存して bootstrap する。`bootstrapPromise` をキャッシュして並行 spawn は1回にまとめる。 → [Herdr backend design](docs/designs/cuekit-herdr-multiplexer-backend-design.md)
 - **バージョン bump の源**: `cuekit --version` は `packages/mcp/package.json` の version を表示する。リリース時は `packages/cli` / `packages/mcp` / `packages/tui` の 3 つを必ず揃えること。 → [詳細](docs/decisions/004-version-bump-strategy.md)
-- **npm Trusted Publishing の制約**: Trusted Publishing (OIDC) は既存パッケージの更新にのみ有効。初回 publish は手動 (`--otp`) が必須。 → [詳細](docs/decisions/005-npm-publish-operations.md)
+- **npm Trusted Publishing の制約**: 初回 publish はパッケージが registry に未登録のため手動 (`--otp`) 必須。それ以降の更新は OIDC で自動化されるが、**workflow の npm が 11.5.1 以上**である必要がある (publish 認証 OIDC 対応は npm 11.5.1+)。さらにパッケージ側の **Publishing access** を `Require two-factor authentication or a granular access token with bypass 2fa enabled` に保つこと (`disallow tokens (recommended)` に drift すると OIDC publish が 404 で弾かれる)。 → [詳細](docs/decisions/005-npm-publish-operations.md)
+- **`packages/cli` の workspace deps は devDependencies で宣言する**: 公開される `cuekit` package は self-contained な `bin/cuekit.js` を実行するため runtime deps を持たないが、source 実行 (`just install` や `bun packages/cli/src/bin.ts`) のために `@cuekit/*` を `devDependencies: workspace:*` で宣言する必要がある (`dependencies` だと publish 時に workspace 解決不能な参照が残る)。
 
 ## パッケージ境界 (実装時に必ず確認)
 

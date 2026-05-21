@@ -4,6 +4,8 @@ A child-agent delegation substrate for coding agents.
 
 cuekit gives a parent agent a stable way to spawn child coding agents, attach to them live via tmux, steer them, collect normalized results, and clean up. The same protocol surface is exposed as a grouped human CLI (`cuekit task ...`) and a grouped MCP tool surface for AI callers.
 
+Public documentation: **https://takemo101.github.io/cuekit/** (Quickstart, Install, MCP API reference, and guides for Project Config, Team Strategies, and Agent Profiles).
+
 ## Philosophy
 
 cuekit is **not a workflow engine**. The parent agent stays the decision-maker; cuekit is the substrate that makes delegation observable and steerable.
@@ -30,14 +32,14 @@ cuekit mcp config   # prints the snippet to register cuekit with your MCP client
 Pinned to a specific version:
 
 ```sh
-npm install -g cuekit@0.0.14
+npm install -g cuekit@0.0.16
 cuekit doctor
 ```
 
 Or install from GitHub source (development or pinned tag):
 
 ```sh
-bun install -g github:takemo101/cuekit#v0.0.14
+bun install -g github:takemo101/cuekit#v0.0.16
 ```
 
 ### Upgrading

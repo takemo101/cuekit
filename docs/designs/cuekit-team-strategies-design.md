@@ -254,6 +254,8 @@ Use cuekit tools to coordinate: inspect the strategy's recommended team skeleton
 
 When submitting team tasks, set a clear position whenever the lifecycle lane is known: worker for implementation/investigation, reviewer for review, finisher for PR/release/cleanup finishing, observer for monitoring, and coordinator only for orchestration. Unpositioned team tasks are allowed for ambiguous ad-hoc work, but they will not appear in worker/reviewer/finisher lanes.
 
+When steering team tasks via steer (kind=team, team_position, or team_tasks), prefer include_blackboard: true so the receiving task sees recent team blackboard events (handoffs, decisions, findings) alongside your steering message. Optionally narrow with blackboard_event_types and bound the count with blackboard_limit (default 5) to avoid noise after long waits.
+
 When team status or result includes attention_items, inspect them before deciding whether to continue, submit more tasks, steer a task, or emit your final report.
 
 After a `position: finisher` task completes, inspect the team result with get_team_result and immediately emit your own final completed report — do not wait for parent steering. If no finisher was submitted, the coordinator remains responsible for the final durable report.

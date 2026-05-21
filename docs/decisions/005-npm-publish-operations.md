@@ -48,6 +48,19 @@ GitHub Actions ワークフローに `id-token: write` を追加し、npm Web UI
 - **初回 publish（パッケージが npm に未登録の状態）は手動が必須**
 - この制約は npm の仕様であり、ワークフローや設定では回避できない
 
+### npm CLI のバージョン要件 (v0.0.16 で判明)
+
+- **workflow が使う npm は `>= 11.5.1` でなければならない**。`--provenance` 署名は npm 9.5+ で動くが、**publish 自体を OIDC で認証する機能は npm 11.5.1 以降のみ**。それ未満では `NODE_AUTH_TOKEN` への fallback が発動し、token が無いため `PUT https://registry.npmjs.org/<pkg>` が **404** を返す (npm の意図的な「あなたには見えない」レスポンス)。
+- `actions/setup-node@v4` を `node-version` 無指定で使うと現状の `ubuntu-latest` ランナーで Node 20 / npm 10.8.2 が選ばれて条件を満たさない。
+- 対策: `node-version: '24'` を pin した上で `npm install -g npm@latest` を必ず走らせる。`publish.yml` がこれを実装している。
+
+### パッケージレベル "Publishing access" の drift 注意
+
+- npm Web UI の `https://www.npmjs.com/package/cuekit/access` で **Publishing access** が以下のどちらかになっている必要がある:
+  - ✅ `Require two-factor authentication or a granular access token with bypass 2fa enabled` — Trusted Publishing が動く
+  - ❌ `Require two-factor authentication and disallow tokens (recommended)` — OIDC トークンも token 扱いで弾かれ、404 になる
+- v0.0.15 を手動 publish した直後にこの設定が `recommended` 側に戻ってしまい、v0.0.16 で再露呈した。`disallow tokens` を選んではいけない。Trusted Publisher entry を整えても Publishing access が strict だと publish 不能。
+
 ### バージョンbumpの源
 
 `cuekit --version` は `packages/mcp/package.json` の version を読む（`mcp/src/cli.ts` → `incur`）。TUI ヘッダーは `packages/tui/package.json` を読む。npm publish は `packages/cli/package.json` を使う。3 つを必ず揃えること。
