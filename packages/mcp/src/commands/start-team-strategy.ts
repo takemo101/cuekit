@@ -47,8 +47,56 @@ export const StartTeamStrategyInputSchema = z.object({
 	cwd: z.string().min(1).optional(),
 	session_id: z.string().min(1).optional(),
 	coordinator: CoordinatorInputSchema.optional(),
+	// AE Phase 1 (#569): flat coordinator override fields so AIs and humans
+	// don't have to construct a JSON-stringified object for the common case.
+	// When the explicit `coordinator` object is also provided, the object form
+	// wins (explicit beats inferred).
+	coordinator_agent_kind: z
+		.string()
+		.min(1)
+		.optional()
+		.describe("Flat coordinator override. Ignored when the `coordinator` object is also set."),
+	coordinator_model: z
+		.string()
+		.min(1)
+		.optional()
+		.describe("Flat coordinator override. Ignored when the `coordinator` object is also set."),
+	coordinator_role: z
+		.string()
+		.min(1)
+		.optional()
+		.describe("Flat coordinator override. Ignored when the `coordinator` object is also set."),
+	coordinator_timeout_ms: z
+		.union([z.number().int().positive(), z.null()])
+		.optional()
+		.describe(
+			"Flat coordinator override. Pass null to opt out of any timeout. Ignored when the `coordinator` object is also set.",
+		),
 });
 export type StartTeamStrategyInput = z.infer<typeof StartTeamStrategyInputSchema>;
+
+function buildCoordinatorFromFlatFields(
+	input: StartTeamStrategyInput,
+): z.infer<typeof CoordinatorObjectSchema> | undefined {
+	if (
+		input.coordinator_agent_kind === undefined &&
+		input.coordinator_model === undefined &&
+		input.coordinator_role === undefined &&
+		input.coordinator_timeout_ms === undefined
+	) {
+		return undefined;
+	}
+	return {
+		...(input.coordinator_role !== undefined ? { role: input.coordinator_role } : {}),
+		...(input.coordinator_agent_kind !== undefined
+			? { agent_kind: input.coordinator_agent_kind }
+			: {}),
+		...(input.coordinator_model !== undefined ? { model: input.coordinator_model } : {}),
+		...(input.coordinator_timeout_ms !== undefined
+			? { timeout_ms: input.coordinator_timeout_ms }
+			: {}),
+	};
+}
 
 export const StartTeamStrategyOutputSchema = z.discriminatedUnion("accepted", [
 	z.object({
@@ -113,6 +161,15 @@ export async function runStartTeamStrategy(
 		return failure("invalid_input", parsed.error.issues.map((issue) => issue.message).join("; "));
 	}
 	input = parsed.data;
+	// Object form wins when both are present; otherwise lift the flat
+	// coordinator_* fields into the same object the resolver below already
+	// uses.
+	if (input.coordinator === undefined) {
+		const lifted = buildCoordinatorFromFlatFields(input);
+		if (lifted !== undefined) {
+			input = { ...input, coordinator: lifted };
+		}
+	}
 
 	const loaded = loadProjectConfig(input.cwd ?? process.cwd());
 	if (!loaded.ok) return failure("invalid_project_config", loaded.error);

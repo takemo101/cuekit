@@ -4,7 +4,12 @@ import { runMigrations } from "../src/migrate.ts";
 import { createSession } from "../src/session-store.ts";
 import { createTask } from "../src/task-store.ts";
 import { createTaskTeam, deleteTaskTeam } from "../src/task-team-store.ts";
-import { appendTeamEvent, listTeamEvents, TeamEventTypeSchema } from "../src/team-event-store.ts";
+import {
+	appendTeamEvent,
+	KNOWN_TEAM_EVENT_TYPES,
+	listTeamEvents,
+	TeamEventTypeSchema,
+} from "../src/team-event-store.ts";
 
 let db: Database;
 
@@ -62,14 +67,27 @@ describe("team event store", () => {
 		expect(events[0]?.sequence).toBeLessThan(events[1]?.sequence ?? 0);
 	});
 
-	it("supports the minimal Swarm-lite event type set", () => {
-		expect(TeamEventTypeSchema.options).toEqual([
+	it("accepts the curated event types and any other non-empty string (AE Phase 1 / #568)", () => {
+		// The curated recommended set covers the original Swarm-lite values
+		// plus the new neutral process markers (note, checkpoint, progress,
+		// handoff). KNOWN_TEAM_EVENT_TYPES exposes them for the TUI / filtering.
+		expect(KNOWN_TEAM_EVENT_TYPES).toEqual([
 			"finding",
 			"decision",
 			"blocker",
 			"review_result",
+			"note",
+			"checkpoint",
+			"progress",
+			"handoff",
 		]);
-		expect(TeamEventTypeSchema.safeParse("handoff").success).toBe(false);
+		for (const known of KNOWN_TEAM_EVENT_TYPES) {
+			expect(TeamEventTypeSchema.safeParse(known).success).toBe(true);
+		}
+		// Permissive: any non-empty string now passes (custom project labels).
+		expect(TeamEventTypeSchema.safeParse("custom-label").success).toBe(true);
+		// Empty strings remain rejected.
+		expect(TeamEventTypeSchema.safeParse("").success).toBe(false);
 	});
 
 	it("cascades team events when the team is deleted", () => {

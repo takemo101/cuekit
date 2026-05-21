@@ -50,8 +50,14 @@ import { ListStrategiesOutputSchema, runListStrategies } from "../src/commands/l
 import { runListTaskEvents } from "../src/commands/list-task-events.ts";
 import { runListTasks } from "../src/commands/list-tasks.ts";
 import { runListTeams } from "../src/commands/list-teams.ts";
-import { runReportTaskEvent } from "../src/commands/report-task-event.ts";
-import { runReportTeamEvent } from "../src/commands/report-team-event.ts";
+import {
+	ReportTaskEventInputSchema,
+	runReportTaskEvent,
+} from "../src/commands/report-task-event.ts";
+import {
+	ReportTeamEventInputSchema,
+	runReportTeamEvent,
+} from "../src/commands/report-team-event.ts";
 import { runShowMcpConfig } from "../src/commands/show-mcp-config.ts";
 import { runStartTeamStrategy } from "../src/commands/start-team-strategy.ts";
 import { runSteerTask, SteerTaskInputSchema } from "../src/commands/steer-task.ts";
@@ -2415,6 +2421,75 @@ strategies:
 		}
 	});
 
+	it("accepts flat coordinator_* override fields alongside the object form (AE Phase 1)", async () => {
+		const root = mkdtempSync(join(tmpdir(), "cuekit-start-strategy-flat-coord-"));
+		try {
+			writeFileSync(
+				join(root, ".cuekit.yaml"),
+				`strategies:
+  docs-polish:
+    recommended_team:
+      coordinator:
+        position: coordinator
+        role: planner
+        agent: pi
+        model: k2p5
+`,
+			);
+
+			const result = await runStartTeamStrategy(ctx, {
+				cwd: root,
+				strategy: "docs-polish",
+				objective: "Polish README",
+				coordinator_agent_kind: "claude-code",
+				coordinator_model: "sonnet",
+				coordinator_role: "planner",
+			});
+
+			expect(result.accepted).toBe(true);
+			if (!result.accepted) return;
+			expect(result.agent_kind).toBe("claude-code");
+			expect(result.model).toBe("sonnet");
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("prefers the coordinator object when both flat and object overrides are provided", async () => {
+		const root = mkdtempSync(join(tmpdir(), "cuekit-start-strategy-both-coord-"));
+		try {
+			writeFileSync(
+				join(root, ".cuekit.yaml"),
+				`strategies:
+  docs-polish:
+    recommended_team:
+      coordinator:
+        position: coordinator
+        role: planner
+        agent: pi
+        model: k2p5
+`,
+			);
+
+			const result = await runStartTeamStrategy(ctx, {
+				cwd: root,
+				strategy: "docs-polish",
+				objective: "Polish README",
+				coordinator: { agent_kind: "claude-code", model: "sonnet" },
+				// Flat fields would set pi/k2p5 but the object form must win.
+				coordinator_agent_kind: "pi",
+				coordinator_model: "k2p5",
+			});
+
+			expect(result.accepted).toBe(true);
+			if (!result.accepted) return;
+			expect(result.agent_kind).toBe("claude-code");
+			expect(result.model).toBe("sonnet");
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
 	it("starts a pi coordinator with a strategy-selected model", async () => {
 		const root = mkdtempSync(join(tmpdir(), "cuekit-start-strategy-pi-model-"));
 		try {
@@ -3610,6 +3685,41 @@ describe("report-task-event", () => {
 		expect(result.ok).toBe(true);
 		expect(getTaskById(db, submit.task_id)?.status).toBe("completed");
 	});
+
+	it("accepts permissive type values like 'note' and 'checkpoint' beyond the curated set", async () => {
+		const task_id = await submitWithChildToken();
+
+		const noteAck = await runReportTaskEvent(ctx, {
+			task_id,
+			child_token: "data",
+			type: "note",
+			message: "free-form note from coordinator",
+		});
+		expect(noteAck.ok).toBe(true);
+
+		const checkpointAck = await runReportTaskEvent(ctx, {
+			task_id,
+			child_token: "data",
+			type: "checkpoint",
+			message: "pre-steer checkpoint",
+		});
+		expect(checkpointAck.ok).toBe(true);
+
+		const events = listTaskEvents(db, task_id);
+		expect(events.map((event) => event.type)).toEqual(["note", "checkpoint"]);
+		// Unknown types must not drive status transitions.
+		expect(getTaskById(db, task_id)?.status).toBe("running");
+	});
+
+	it("rejects empty type strings", () => {
+		const parsed = ReportTaskEventInputSchema.safeParse({
+			task_id: "t_1",
+			child_token: "token",
+			type: "",
+			message: "invalid",
+		});
+		expect(parsed.success).toBe(false);
+	});
 });
 
 describe("report-team-event", () => {
@@ -3703,7 +3813,47 @@ describe("report-team-event", () => {
 		if (!ack.ok) expect(ack.error.code).toBe("invalid_input");
 	});
 
-	it("exposes grouped report for team events without overloading report_task_event", () => {
+	it("accepts permissive event_type values like 'note' and 'checkpoint' beyond the curated set", async () => {
+		createSession(db, {
+			id: "s_team_event_permissive",
+			project_root: "/p",
+			worktree_path: "/w",
+			parent_agent_kind: "pi",
+		});
+		createTaskTeam(db, {
+			id: "tm_event_permissive",
+			session_id: "s_team_event_permissive",
+			title: "permissive events",
+		});
+
+		const noteAck = await runReportTeamEvent(ctx, {
+			team_id: "tm_event_permissive",
+			event_type: "note",
+			message: "pre-steer note from coordinator",
+		});
+		expect(noteAck.ok).toBe(true);
+
+		const checkpointAck = await runReportTeamEvent(ctx, {
+			team_id: "tm_event_permissive",
+			event_type: "checkpoint",
+			message: "validation checkpoint",
+		});
+		expect(checkpointAck.ok).toBe(true);
+
+		const events = listTeamEvents(db, "tm_event_permissive");
+		expect(events.map((event) => event.event_type)).toEqual(["note", "checkpoint"]);
+	});
+
+	it("rejects empty event_type strings", () => {
+		const parsed = ReportTeamEventInputSchema.safeParse({
+			team_id: "tm_1",
+			event_type: "",
+			message: "invalid",
+		});
+		expect(parsed.success).toBe(false);
+	});
+
+	it("exposes grouped report for team events that route the same vocabulary to either store", () => {
 		const report = CUEKIT_MCP_OPERATIONS.find((operation) => operation.mcpName === "report");
 		const reportTaskEvent = CUEKIT_MCP_OPERATIONS.find(
 			(operation) => operation.mcpName === "report_task_event",
@@ -3718,14 +3868,17 @@ describe("report-team-event", () => {
 				message: "Review complete.",
 			}).success,
 		).toBe(true);
+		// After the AE Phase 1 schema relaxation both surfaces accept the
+		// same permissive string vocabulary; routing happens at the grouped
+		// `report({kind})` dispatcher, not at schema rejection.
 		expect(
 			reportTaskEvent?.options.safeParse({
 				task_id: "t_1",
 				child_token: "token",
 				type: "finding",
-				message: "Not a task report type.",
+				message: "Free-form label routed to task_events.",
 			}).success,
-		).toBe(false);
+		).toBe(true);
 	});
 });
 
@@ -4749,6 +4902,92 @@ describe("steer-team", () => {
 		expect(sent).toContain("Please continue.");
 		expect(sent).toContain("[Team Blackboard — Recent Context]");
 		expect(sent).toContain("[coordinator] decision: Use the narrow migration fix.");
+	});
+
+	it("appends blackboard context by default when include_blackboard is omitted (AE Phase 1)", async () => {
+		createSession(db, {
+			id: "s_team_blackboard_default",
+			project_root: "/p",
+			worktree_path: "/w",
+			parent_agent_kind: "pi",
+		});
+		createTaskTeam(db, {
+			id: "tm_blackboard_default",
+			session_id: "s_team_blackboard_default",
+			title: "Team",
+		});
+		const worker = await runSubmitTask(ctx, {
+			objective: "worker",
+			agent_kind: "claude-code",
+			session_id: "s_team_blackboard_default",
+			team_id: "tm_blackboard_default",
+			position: "worker",
+		});
+		if (!worker.accepted) throw new Error("setup failed");
+		appendTeamEvent(db, {
+			id: "te_default_decision",
+			team_id: "tm_blackboard_default",
+			position: "coordinator",
+			event_type: "decision",
+			message: "Default-on blackboard attachment.",
+		});
+
+		const before = runner.calls.length;
+		const ack = await runSteerTeam(ctx, {
+			team_id: "tm_blackboard_default",
+			message: "Continue with default context.",
+		});
+
+		expect(ack.ok).toBe(true);
+		const sent = JSON.stringify(runner.calls.slice(before));
+		expect(sent).toContain("Continue with default context.");
+		// Default flipped: blackboard rides along without explicit
+		// include_blackboard: true so coordinators on smaller LLMs
+		// don't need to remember the flag.
+		expect(sent).toContain("[Team Blackboard — Recent Context]");
+		expect(sent).toContain("[coordinator] decision: Default-on blackboard attachment.");
+	});
+
+	it("honours explicit include_blackboard: false to opt out of the new default", async () => {
+		createSession(db, {
+			id: "s_team_blackboard_optout",
+			project_root: "/p",
+			worktree_path: "/w",
+			parent_agent_kind: "pi",
+		});
+		createTaskTeam(db, {
+			id: "tm_blackboard_optout",
+			session_id: "s_team_blackboard_optout",
+			title: "Team",
+		});
+		const worker = await runSubmitTask(ctx, {
+			objective: "worker",
+			agent_kind: "claude-code",
+			session_id: "s_team_blackboard_optout",
+			team_id: "tm_blackboard_optout",
+			position: "worker",
+		});
+		if (!worker.accepted) throw new Error("setup failed");
+		appendTeamEvent(db, {
+			id: "te_optout_decision",
+			team_id: "tm_blackboard_optout",
+			position: "coordinator",
+			event_type: "decision",
+			message: "Should not appear when opted out.",
+		});
+
+		const before = runner.calls.length;
+		const ack = await runSteerTeam(ctx, {
+			team_id: "tm_blackboard_optout",
+			message: "Quiet steer without blackboard.",
+			include_blackboard: false,
+		});
+
+		expect(ack.ok).toBe(true);
+		const sent = JSON.stringify(runner.calls.slice(before));
+		expect(sent).toContain("Quiet steer without blackboard.");
+		expect(sent).not.toContain("[Team Blackboard — Recent Context]");
+		expect(sent).not.toContain("Should not appear when opted out.");
 	});
 
 	it("skips non-terminal tasks that do not support steering", async () => {
@@ -5849,5 +6088,67 @@ describe("mixed-backend task safety", () => {
 		const herdrList = await runListTasks(herdrCtx, { session_id: "s_list", refresh_status: false });
 		if ("error" in herdrList) throw new Error("herdr list failed");
 		expect(herdrList.tasks).toHaveLength(2);
+	});
+});
+
+describe("mcp tool descriptions (AE Phase 1 / #571)", () => {
+	function descriptionOf(mcpName: string): string {
+		const op = CUEKIT_MCP_OPERATIONS.find((operation) => operation.mcpName === mcpName);
+		if (!op) throw new Error(`operation ${mcpName} not registered`);
+		return op.description;
+	}
+
+	it("leads grouped tool descriptions with 'Use when' or 'Use to' so AI picks the right tool", () => {
+		const grouped = [
+			"submit_task",
+			"submit_team_tasks",
+			"start_team_strategy",
+			"get_task_snapshot",
+			"get_team_snapshot",
+			"wait",
+			"list",
+			"steer",
+			"steer_task",
+			"steer_team",
+		];
+		for (const name of grouped) {
+			const description = descriptionOf(name);
+			expect(description).toMatch(/^Use (when|to|before|bounded)/);
+		}
+	});
+
+	it("submit_task description names submit_team_tasks and start_team_strategy as alternatives", () => {
+		const description = descriptionOf("submit_task");
+		expect(description).toContain("submit_team_tasks");
+		expect(description).toContain("start_team_strategy");
+	});
+
+	it("snapshot descriptions push callers to read before steering", () => {
+		expect(descriptionOf("get_task_snapshot")).toMatch(/before any task steer|before steering/i);
+		expect(descriptionOf("get_team_snapshot")).toMatch(/before steering/i);
+	});
+
+	it("steer descriptions cross-link the snapshot tools", () => {
+		expect(descriptionOf("steer")).toContain("get_task_snapshot");
+		expect(descriptionOf("steer_task")).toContain("get_task_snapshot");
+		expect(descriptionOf("steer_team")).toContain("get_team_snapshot");
+	});
+
+	it("steer_team description documents the include_blackboard default + opt-out", () => {
+		const description = descriptionOf("steer_team");
+		expect(description).toMatch(/blackboard.*automatically|attaches automatically/i);
+		expect(description).toContain("include_blackboard: false");
+	});
+
+	it("wait description recommends bounded polling and follow_new_tasks for coordinator teams", () => {
+		const description = descriptionOf("wait");
+		expect(description).toMatch(/bounded polling/i);
+		expect(description).toContain("follow_new_tasks");
+	});
+
+	it("start_team_strategy description points at list({kind:'strategies'}) for discovery", () => {
+		const description = descriptionOf("start_team_strategy");
+		expect(description).toContain("list({kind:'strategies'})");
+		expect(description).toContain("coordinator_agent_kind");
 	});
 });

@@ -1,7 +1,26 @@
 import { TeamPositionSchema } from "@cuekit/core";
 import { z } from "zod";
 
-export const TeamEventTypeSchema = z.enum(["finding", "decision", "blocker", "review_result"]);
+// Curated recommended set. Callers may use any non-empty string for
+// event_type; this constant is the vocabulary the TUI and grouping
+// utilities know about. Adding to it is non-breaking.
+export const KNOWN_TEAM_EVENT_TYPES = [
+	"finding",
+	"decision",
+	"blocker",
+	"review_result",
+	"note",
+	"checkpoint",
+	"progress",
+	"handoff",
+] as const;
+
+export const TeamEventTypeSchema = z
+	.string()
+	.min(1)
+	.describe(
+		"Team blackboard event type. Recommended values include 'finding', 'decision', 'blocker', 'review_result', 'note', 'checkpoint', 'progress', 'handoff', but any non-empty string is accepted.",
+	);
 export type TeamEventType = z.infer<typeof TeamEventTypeSchema>;
 
 export const TeamEventSchema = z.object({
