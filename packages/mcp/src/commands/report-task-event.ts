@@ -7,17 +7,21 @@ import { cleanupAdapterTask } from "../adapter-cleanup.ts";
 import type { CommandContext } from "../command-context.ts";
 import { fireTeamCompleteHookIfDone } from "../team-hooks.ts";
 
-const REPORT_TYPES = [
+// Curated recommended set. Callers may pass any non-empty string for `type`;
+// only the entries listed in TERMINAL_REPORT_STATUS drive a task status
+// transition. Unknown labels still persist as `task_events` rows.
+export const KNOWN_REPORT_TYPES = [
 	"progress",
 	"completed",
 	"failed",
 	"blocked",
 	"help_requested",
 	"log",
+	"note",
+	"checkpoint",
 ] as const;
-type ReportType = (typeof REPORT_TYPES)[number];
 
-const TERMINAL_REPORT_STATUS: Partial<Record<ReportType, TaskStatus>> = {
+const TERMINAL_REPORT_STATUS: Record<string, TaskStatus | undefined> = {
 	completed: "completed",
 	failed: "failed",
 	blocked: "blocked",
@@ -30,7 +34,12 @@ export const ReportTaskEventInputSchema = z.object({
 		.min(1)
 		.optional()
 		.describe("raw child reporting token. Defaults to CUEKIT_CHILD_TOKEN."),
-	type: z.enum(REPORT_TYPES).describe("child report event type."),
+	type: z
+		.string()
+		.min(1)
+		.describe(
+			"Child report event type. Use 'completed' / 'failed' / 'blocked' to drive task status transitions; 'progress' / 'help_requested' / 'log' / 'note' / 'checkpoint' are also recommended labels. Any non-empty string is accepted; unknown labels persist without transitioning task status.",
+		),
 	message: z.string().min(1).optional().describe("human-readable child report message."),
 	payload: z.unknown().optional().describe("optional JSON payload for structured report details."),
 });
@@ -42,7 +51,7 @@ export const ReportTaskEventOutputSchema = z.discriminatedUnion("ok", [
 		ok: z.literal(true),
 		task_id: z.string(),
 		event_id: z.string(),
-		type: z.enum(REPORT_TYPES),
+		type: z.string().min(1),
 		status: z.string().optional(),
 	}),
 	z.object({

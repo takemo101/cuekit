@@ -29,6 +29,10 @@ import teamEventsSql from "./sql/011-team-events.sql" with { type: "text" };
 import taskEventsTeamSequenceSql from "./sql/012-task-events-team-sequence.sql" with {
 	type: "text",
 };
+// @ts-expect-error Bun text loader imports SQL migration assets for bundled installs.
+import teamEventsRelaxEventTypeSql from "./sql/013-team-events-relax-event-type.sql" with {
+	type: "text",
+};
 
 const MIGRATIONS = [
 	["001-init.sql", initSql],
@@ -43,6 +47,7 @@ const MIGRATIONS = [
 	["010-project-config-identity.sql", projectConfigIdentitySql],
 	["011-team-events.sql", teamEventsSql],
 	["012-task-events-team-sequence.sql", taskEventsTeamSequenceSql],
+	["013-team-events-relax-event-type.sql", teamEventsRelaxEventTypeSql],
 ] as const;
 
 // Bootstrap table created outside the migration files so it can be relied on

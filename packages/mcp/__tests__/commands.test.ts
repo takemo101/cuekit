@@ -50,8 +50,14 @@ import { ListStrategiesOutputSchema, runListStrategies } from "../src/commands/l
 import { runListTaskEvents } from "../src/commands/list-task-events.ts";
 import { runListTasks } from "../src/commands/list-tasks.ts";
 import { runListTeams } from "../src/commands/list-teams.ts";
-import { runReportTaskEvent } from "../src/commands/report-task-event.ts";
-import { runReportTeamEvent } from "../src/commands/report-team-event.ts";
+import {
+	ReportTaskEventInputSchema,
+	runReportTaskEvent,
+} from "../src/commands/report-task-event.ts";
+import {
+	ReportTeamEventInputSchema,
+	runReportTeamEvent,
+} from "../src/commands/report-team-event.ts";
 import { runShowMcpConfig } from "../src/commands/show-mcp-config.ts";
 import { runStartTeamStrategy } from "../src/commands/start-team-strategy.ts";
 import { runSteerTask, SteerTaskInputSchema } from "../src/commands/steer-task.ts";
@@ -3610,6 +3616,41 @@ describe("report-task-event", () => {
 		expect(result.ok).toBe(true);
 		expect(getTaskById(db, submit.task_id)?.status).toBe("completed");
 	});
+
+	it("accepts permissive type values like 'note' and 'checkpoint' beyond the curated set", async () => {
+		const task_id = await submitWithChildToken();
+
+		const noteAck = await runReportTaskEvent(ctx, {
+			task_id,
+			child_token: "data",
+			type: "note",
+			message: "free-form note from coordinator",
+		});
+		expect(noteAck.ok).toBe(true);
+
+		const checkpointAck = await runReportTaskEvent(ctx, {
+			task_id,
+			child_token: "data",
+			type: "checkpoint",
+			message: "pre-steer checkpoint",
+		});
+		expect(checkpointAck.ok).toBe(true);
+
+		const events = listTaskEvents(db, task_id);
+		expect(events.map((event) => event.type)).toEqual(["note", "checkpoint"]);
+		// Unknown types must not drive status transitions.
+		expect(getTaskById(db, task_id)?.status).toBe("running");
+	});
+
+	it("rejects empty type strings", () => {
+		const parsed = ReportTaskEventInputSchema.safeParse({
+			task_id: "t_1",
+			child_token: "token",
+			type: "",
+			message: "invalid",
+		});
+		expect(parsed.success).toBe(false);
+	});
 });
 
 describe("report-team-event", () => {
@@ -3703,7 +3744,47 @@ describe("report-team-event", () => {
 		if (!ack.ok) expect(ack.error.code).toBe("invalid_input");
 	});
 
-	it("exposes grouped report for team events without overloading report_task_event", () => {
+	it("accepts permissive event_type values like 'note' and 'checkpoint' beyond the curated set", async () => {
+		createSession(db, {
+			id: "s_team_event_permissive",
+			project_root: "/p",
+			worktree_path: "/w",
+			parent_agent_kind: "pi",
+		});
+		createTaskTeam(db, {
+			id: "tm_event_permissive",
+			session_id: "s_team_event_permissive",
+			title: "permissive events",
+		});
+
+		const noteAck = await runReportTeamEvent(ctx, {
+			team_id: "tm_event_permissive",
+			event_type: "note",
+			message: "pre-steer note from coordinator",
+		});
+		expect(noteAck.ok).toBe(true);
+
+		const checkpointAck = await runReportTeamEvent(ctx, {
+			team_id: "tm_event_permissive",
+			event_type: "checkpoint",
+			message: "validation checkpoint",
+		});
+		expect(checkpointAck.ok).toBe(true);
+
+		const events = listTeamEvents(db, "tm_event_permissive");
+		expect(events.map((event) => event.event_type)).toEqual(["note", "checkpoint"]);
+	});
+
+	it("rejects empty event_type strings", () => {
+		const parsed = ReportTeamEventInputSchema.safeParse({
+			team_id: "tm_1",
+			event_type: "",
+			message: "invalid",
+		});
+		expect(parsed.success).toBe(false);
+	});
+
+	it("exposes grouped report for team events that route the same vocabulary to either store", () => {
 		const report = CUEKIT_MCP_OPERATIONS.find((operation) => operation.mcpName === "report");
 		const reportTaskEvent = CUEKIT_MCP_OPERATIONS.find(
 			(operation) => operation.mcpName === "report_task_event",
@@ -3718,14 +3799,17 @@ describe("report-team-event", () => {
 				message: "Review complete.",
 			}).success,
 		).toBe(true);
+		// After the AE Phase 1 schema relaxation both surfaces accept the
+		// same permissive string vocabulary; routing happens at the grouped
+		// `report({kind})` dispatcher, not at schema rejection.
 		expect(
 			reportTaskEvent?.options.safeParse({
 				task_id: "t_1",
 				child_token: "token",
 				type: "finding",
-				message: "Not a task report type.",
+				message: "Free-form label routed to task_events.",
 			}).success,
-		).toBe(false);
+		).toBe(true);
 	});
 });
 
