@@ -481,7 +481,8 @@ export const CUEKIT_MCP_OPERATIONS = [
 	defineMcpOperation({
 		mcpName: "submit_task",
 		cliPath: ["task", "submit"],
-		description: "Submit one task to an adapter.",
+		description:
+			"Use when delegating one bounded, well-defined sub-task to a child agent. For multiple parallel sub-tasks under a team, use submit_team_tasks. For mission-shaped work with multiple roles, use start_team_strategy.",
 		options: SubmitTaskInputSchema,
 		output: SubmitTaskOutputSchema,
 		run: runSubmitTask,
@@ -489,7 +490,8 @@ export const CUEKIT_MCP_OPERATIONS = [
 	defineMcpOperation({
 		mcpName: "submit_team_tasks",
 		cliPath: ["team", "submit"],
-		description: "Submit multiple tasks into an existing team with best-effort per-task results.",
+		description:
+			"Use when submitting multiple tasks under an existing team in one call. Reports per-task accept/reject so partial success is visible. For a single task, use submit_task; to start a team from a strategy, use start_team_strategy first.",
 		options: SubmitTeamTasksInputSchema,
 		output: SubmitTeamTasksOutputSchema,
 		run: runSubmitTeamTasks,
@@ -497,7 +499,8 @@ export const CUEKIT_MCP_OPERATIONS = [
 	defineMcpOperation({
 		mcpName: "start_team_strategy",
 		cliPath: ["team", "start"],
-		description: "Create a team and submit a coordinator task using a project Team Strategy.",
+		description:
+			"Use when the objective matches a project Team Strategy (e.g. feature, refactor, bugfix). Creates a team and spawns a coordinator with the strategy's rendered prompt. List available strategies first with list({kind:'strategies'}). Override the coordinator with coordinator_agent_kind / coordinator_model flat fields or a coordinator object.",
 		options: StartTeamStrategyInputSchema,
 		output: StartTeamStrategyOutputSchema,
 		run: runStartTeamStrategy,
@@ -521,7 +524,8 @@ export const CUEKIT_MCP_OPERATIONS = [
 	defineMcpOperation({
 		mcpName: "get_task_snapshot",
 		cliPath: ["task", "snapshot"],
-		description: "Fetch a deterministic context snapshot for a task before intervening.",
+		description:
+			"Use before any task steer or HANDOFF to read recent events, latest handoffs, and transcript tail in one call. Safer than blind steering. For team-wide context use get_team_snapshot.",
 		options: GetTaskSnapshotInputSchema,
 		output: GetTaskSnapshotOutputSchema,
 		run: runGetTaskSnapshot,
@@ -546,7 +550,7 @@ export const CUEKIT_MCP_OPERATIONS = [
 		mcpName: "get_team_snapshot",
 		cliPath: ["team", "snapshot"],
 		description:
-			"Fetch a high-signal team snapshot with members, recent events, attention items, handoffs, observability, blockers, and manual guidance before intervening.",
+			"Use before steering, adding tasks, or finalising a team. Returns members, recent events, attention_items, handoffs, blockers, and guidance in one call. If the response includes attention_items, inspect them before any further action.",
 		options: GetTeamSnapshotInputSchema,
 		output: GetTeamSnapshotOutputSchema,
 		run: runGetTeamSnapshot,
@@ -555,7 +559,7 @@ export const CUEKIT_MCP_OPERATIONS = [
 		mcpName: "wait",
 		cliPath: ["wait", "target"],
 		description:
-			"Wait for tasks or a team. Set kind to 'tasks' or 'team'. Team waits are snapshot-based by default; set follow_new_tasks for coordinator-led teams. Long MCP waits are capped to avoid client request timeouts; call wait again to continue polling.",
+			"Use bounded polling (timeout_ms ≤ 30000) instead of one long request. Set kind='tasks' for explicit ids or kind='team' with follow_new_tasks: true for coordinator-led teams. A timeout does not cancel child work — call wait again to keep polling.",
 		options: WaitInputSchema,
 		output: WaitOutputSchema,
 		run: runWait,
@@ -572,7 +576,7 @@ export const CUEKIT_MCP_OPERATIONS = [
 		mcpName: "list",
 		cliPath: ["list", "resources"],
 		description:
-			"List resources. Set kind to 'tasks', 'teams', 'events', 'adapters', 'agent_profiles', or 'strategies'. Pass cwd explicitly for reliable project-local strategy discovery.",
+			"Use to discover resources before acting. Set kind='strategies' before submit_task to surface project strategies, 'agent_profiles' to pick a role, 'adapters' to see runtime capabilities, 'tasks' / 'teams' / 'events' for current state. Pass cwd explicitly for reliable project-local lookups.",
 		options: ListInputSchema,
 		output: ListOutputSchema,
 		run: runList,
@@ -598,7 +602,7 @@ export const CUEKIT_MCP_OPERATIONS = [
 		mcpName: "steer",
 		cliPath: ["steer", "target"],
 		description:
-			"Send a steering message to a task, an entire team, one team position, or an explicit team task subset. Set kind to 'task', 'team', 'team_position', or 'team_tasks'.",
+			"Use when a running task or team has stalled, misunderstood, or needs new context. Always inspect get_task_snapshot or get_team_snapshot first. Set kind='task' for one task, 'team' for all non-terminal members, 'team_position' for one position only, or 'team_tasks' for a chosen subset. Team-kind steers attach recent blackboard context by default.",
 		options: SteerInputSchema,
 		output: SteerOutputSchema,
 		run: runSteer,
@@ -606,7 +610,8 @@ export const CUEKIT_MCP_OPERATIONS = [
 	defineMcpOperation({
 		mcpName: "steer_task",
 		cliPath: ["task", "steer"],
-		description: "Send a steering message to a running task (best-effort).",
+		description:
+			"Use to send a steering message to one running task. Inspect get_task_snapshot first to avoid blind steering. For team-wide steering use steer({kind:'team'}).",
 		options: SteerTaskInputSchema,
 		output: SteerTaskOutputSchema,
 		run: runSteerTask,
@@ -615,7 +620,7 @@ export const CUEKIT_MCP_OPERATIONS = [
 		mcpName: "steer_team",
 		cliPath: ["team", "steer"],
 		description:
-			"Send one steering message to every currently non-terminal task in a team (best-effort).",
+			"Use to broadcast one steering message to every non-terminal task in a team. Recent blackboard context attaches automatically (pass include_blackboard: false to opt out). Inspect get_team_snapshot first.",
 		options: SteerTeamInputSchema,
 		output: SteerTeamOutputSchema,
 		run: runSteerTeam,

@@ -6090,3 +6090,65 @@ describe("mixed-backend task safety", () => {
 		expect(herdrList.tasks).toHaveLength(2);
 	});
 });
+
+describe("mcp tool descriptions (AE Phase 1 / #571)", () => {
+	function descriptionOf(mcpName: string): string {
+		const op = CUEKIT_MCP_OPERATIONS.find((operation) => operation.mcpName === mcpName);
+		if (!op) throw new Error(`operation ${mcpName} not registered`);
+		return op.description;
+	}
+
+	it("leads grouped tool descriptions with 'Use when' or 'Use to' so AI picks the right tool", () => {
+		const grouped = [
+			"submit_task",
+			"submit_team_tasks",
+			"start_team_strategy",
+			"get_task_snapshot",
+			"get_team_snapshot",
+			"wait",
+			"list",
+			"steer",
+			"steer_task",
+			"steer_team",
+		];
+		for (const name of grouped) {
+			const description = descriptionOf(name);
+			expect(description).toMatch(/^Use (when|to|before|bounded)/);
+		}
+	});
+
+	it("submit_task description names submit_team_tasks and start_team_strategy as alternatives", () => {
+		const description = descriptionOf("submit_task");
+		expect(description).toContain("submit_team_tasks");
+		expect(description).toContain("start_team_strategy");
+	});
+
+	it("snapshot descriptions push callers to read before steering", () => {
+		expect(descriptionOf("get_task_snapshot")).toMatch(/before any task steer|before steering/i);
+		expect(descriptionOf("get_team_snapshot")).toMatch(/before steering/i);
+	});
+
+	it("steer descriptions cross-link the snapshot tools", () => {
+		expect(descriptionOf("steer")).toContain("get_task_snapshot");
+		expect(descriptionOf("steer_task")).toContain("get_task_snapshot");
+		expect(descriptionOf("steer_team")).toContain("get_team_snapshot");
+	});
+
+	it("steer_team description documents the include_blackboard default + opt-out", () => {
+		const description = descriptionOf("steer_team");
+		expect(description).toMatch(/blackboard.*automatically|attaches automatically/i);
+		expect(description).toContain("include_blackboard: false");
+	});
+
+	it("wait description recommends bounded polling and follow_new_tasks for coordinator teams", () => {
+		const description = descriptionOf("wait");
+		expect(description).toMatch(/bounded polling/i);
+		expect(description).toContain("follow_new_tasks");
+	});
+
+	it("start_team_strategy description points at list({kind:'strategies'}) for discovery", () => {
+		const description = descriptionOf("start_team_strategy");
+		expect(description).toContain("list({kind:'strategies'})");
+		expect(description).toContain("coordinator_agent_kind");
+	});
+});

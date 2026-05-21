@@ -8,7 +8,7 @@ import {
 } from "./team-event.ts";
 
 export type { TeamEvent, TeamEventType } from "./team-event.ts";
-export { TeamEventSchema, TeamEventTypeSchema } from "./team-event.ts";
+export { KNOWN_TEAM_EVENT_TYPES, TeamEventSchema, TeamEventTypeSchema } from "./team-event.ts";
 
 export interface AppendTeamEventInput {
 	id: string;
