@@ -2421,6 +2421,75 @@ strategies:
 		}
 	});
 
+	it("accepts flat coordinator_* override fields alongside the object form (AE Phase 1)", async () => {
+		const root = mkdtempSync(join(tmpdir(), "cuekit-start-strategy-flat-coord-"));
+		try {
+			writeFileSync(
+				join(root, ".cuekit.yaml"),
+				`strategies:
+  docs-polish:
+    recommended_team:
+      coordinator:
+        position: coordinator
+        role: planner
+        agent: pi
+        model: k2p5
+`,
+			);
+
+			const result = await runStartTeamStrategy(ctx, {
+				cwd: root,
+				strategy: "docs-polish",
+				objective: "Polish README",
+				coordinator_agent_kind: "claude-code",
+				coordinator_model: "sonnet",
+				coordinator_role: "planner",
+			});
+
+			expect(result.accepted).toBe(true);
+			if (!result.accepted) return;
+			expect(result.agent_kind).toBe("claude-code");
+			expect(result.model).toBe("sonnet");
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("prefers the coordinator object when both flat and object overrides are provided", async () => {
+		const root = mkdtempSync(join(tmpdir(), "cuekit-start-strategy-both-coord-"));
+		try {
+			writeFileSync(
+				join(root, ".cuekit.yaml"),
+				`strategies:
+  docs-polish:
+    recommended_team:
+      coordinator:
+        position: coordinator
+        role: planner
+        agent: pi
+        model: k2p5
+`,
+			);
+
+			const result = await runStartTeamStrategy(ctx, {
+				cwd: root,
+				strategy: "docs-polish",
+				objective: "Polish README",
+				coordinator: { agent_kind: "claude-code", model: "sonnet" },
+				// Flat fields would set pi/k2p5 but the object form must win.
+				coordinator_agent_kind: "pi",
+				coordinator_model: "k2p5",
+			});
+
+			expect(result.accepted).toBe(true);
+			if (!result.accepted) return;
+			expect(result.agent_kind).toBe("claude-code");
+			expect(result.model).toBe("sonnet");
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
 	it("starts a pi coordinator with a strategy-selected model", async () => {
 		const root = mkdtempSync(join(tmpdir(), "cuekit-start-strategy-pi-model-"));
 		try {
