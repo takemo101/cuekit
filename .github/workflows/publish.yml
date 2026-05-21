@@ -18,7 +18,20 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
+          node-version: '24'
           registry-url: 'https://registry.npmjs.org'
+
+      - name: Ensure npm supports Trusted Publishing (>= 11.5.1)
+        # actions/setup-node bundles whatever npm ships with the requested
+        # Node LTS, which can lag behind. npm Trusted Publishing (publish
+        # authenticated via the GitHub Actions OIDC token, no
+        # NODE_AUTH_TOKEN) needs npm >= 11.5.1 — older versions sign
+        # provenance via OIDC but then fall back to token-based publish
+        # auth, which fails with a misleading 404 from registry.npmjs.org.
+        run: |
+          npm install -g npm@latest
+          node --version
+          npm --version
 
       - name: Verify bundle exists
         run: |
