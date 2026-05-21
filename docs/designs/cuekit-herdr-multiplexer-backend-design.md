@@ -292,6 +292,20 @@ Close the team workspace when it is empty or when cleanup explicitly asks to rem
 
 After a successful close, clear the Herdr team workspace handle from `task_teams.metadata_json`. If the workspace is already gone, treat cleanup as idempotent success and still clear the metadata.
 
+## Session bootstrap
+
+cuekit always operates against a named herdr session (default `ck-cuekit`). Herdr's surface has no `session create` subcommand — named sessions only register when the TUI launcher `herdr --session <name>` runs. If the caller's environment has never attached to `ck-cuekit`, every `herdr --session ck-cuekit workspace|tab|pane ...` call returns `Os { code: 2, kind: NotFound }`.
+
+`HerdrBackend` bootstraps the session lazily on the first `spawnPane`:
+
+1. `HerdrRunner.listSessions()` parses `herdr session list --json` and returns the registered session names.
+2. If the configured `sessionName` is not in that list, `HerdrRunner.bootstrapSession(name)` spawns `herdr --session <name>` with `stdin`/`stdout`/`stderr` all set to `"ignore"`. The ratatui client inside herdr panics immediately when it cannot initialize a terminal, but the herdr server still registers the session before the panic. The runner awaits process exit and treats the panic as expected — the side effect is what matters.
+3. The bootstrap promise is cached on the backend (`bootstrapPromise`) so concurrent `spawnPane` calls produce exactly one `listSessions` + one `bootstrapSession` pair.
+
+This trick relies on herdr's "register session, then start client" ordering. If a future herdr release adds a real `herdr session create <name>` subcommand, the bootstrap can switch to that without changing the surrounding flow.
+
+`cuekit doctor` does not currently verify session existence — the session is created on demand, and surfacing a "session missing" warning when bootstrap is automatic would only add noise.
+
 ## Socket/CLI integration layer
 
 Add a focused runner module, analogous to `tmux-runner.ts` and `zellij-runner.ts`:
