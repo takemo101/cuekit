@@ -4835,6 +4835,92 @@ describe("steer-team", () => {
 		expect(sent).toContain("[coordinator] decision: Use the narrow migration fix.");
 	});
 
+	it("appends blackboard context by default when include_blackboard is omitted (AE Phase 1)", async () => {
+		createSession(db, {
+			id: "s_team_blackboard_default",
+			project_root: "/p",
+			worktree_path: "/w",
+			parent_agent_kind: "pi",
+		});
+		createTaskTeam(db, {
+			id: "tm_blackboard_default",
+			session_id: "s_team_blackboard_default",
+			title: "Team",
+		});
+		const worker = await runSubmitTask(ctx, {
+			objective: "worker",
+			agent_kind: "claude-code",
+			session_id: "s_team_blackboard_default",
+			team_id: "tm_blackboard_default",
+			position: "worker",
+		});
+		if (!worker.accepted) throw new Error("setup failed");
+		appendTeamEvent(db, {
+			id: "te_default_decision",
+			team_id: "tm_blackboard_default",
+			position: "coordinator",
+			event_type: "decision",
+			message: "Default-on blackboard attachment.",
+		});
+
+		const before = runner.calls.length;
+		const ack = await runSteerTeam(ctx, {
+			team_id: "tm_blackboard_default",
+			message: "Continue with default context.",
+		});
+
+		expect(ack.ok).toBe(true);
+		const sent = JSON.stringify(runner.calls.slice(before));
+		expect(sent).toContain("Continue with default context.");
+		// Default flipped: blackboard rides along without explicit
+		// include_blackboard: true so coordinators on smaller LLMs
+		// don't need to remember the flag.
+		expect(sent).toContain("[Team Blackboard — Recent Context]");
+		expect(sent).toContain("[coordinator] decision: Default-on blackboard attachment.");
+	});
+
+	it("honours explicit include_blackboard: false to opt out of the new default", async () => {
+		createSession(db, {
+			id: "s_team_blackboard_optout",
+			project_root: "/p",
+			worktree_path: "/w",
+			parent_agent_kind: "pi",
+		});
+		createTaskTeam(db, {
+			id: "tm_blackboard_optout",
+			session_id: "s_team_blackboard_optout",
+			title: "Team",
+		});
+		const worker = await runSubmitTask(ctx, {
+			objective: "worker",
+			agent_kind: "claude-code",
+			session_id: "s_team_blackboard_optout",
+			team_id: "tm_blackboard_optout",
+			position: "worker",
+		});
+		if (!worker.accepted) throw new Error("setup failed");
+		appendTeamEvent(db, {
+			id: "te_optout_decision",
+			team_id: "tm_blackboard_optout",
+			position: "coordinator",
+			event_type: "decision",
+			message: "Should not appear when opted out.",
+		});
+
+		const before = runner.calls.length;
+		const ack = await runSteerTeam(ctx, {
+			team_id: "tm_blackboard_optout",
+			message: "Quiet steer without blackboard.",
+			include_blackboard: false,
+		});
+
+		expect(ack.ok).toBe(true);
+		const sent = JSON.stringify(runner.calls.slice(before));
+		expect(sent).toContain("Quiet steer without blackboard.");
+		expect(sent).not.toContain("[Team Blackboard — Recent Context]");
+		expect(sent).not.toContain("Should not appear when opted out.");
+	});
+
 	it("skips non-terminal tasks that do not support steering", async () => {
 		createSession(db, {
 			id: "s_team_unsteerable",

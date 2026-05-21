@@ -23,7 +23,9 @@ export const SteerTeamInputSchema = z.object({
 	include_blackboard: z
 		.boolean()
 		.optional()
-		.describe("Append recent team blackboard events to the steering message."),
+		.describe(
+			"Append recent team blackboard events to the steering message. Defaults to true for team-kind steers so coordinators do not need to remember the flag; pass false to opt out.",
+		),
 	blackboard_event_types: z
 		.array(z.string().min(1))
 		.optional()
@@ -94,7 +96,13 @@ export async function runSteerTeam(
 	}
 
 	let message = input.message;
-	if (input.include_blackboard) {
+	// AE Phase 1 (#570): default include_blackboard to true for team-kind
+	// steers. Today this command implements `steer({kind: "team" |
+	// "team_position" | "team_tasks"})` and the prior prompt nudge in
+	// renderTeamStrategyPrompt was probabilistic — moving the default to
+	// the API removes the dependency on LLM prompt-following.
+	const includeBlackboard = input.include_blackboard ?? true;
+	if (includeBlackboard) {
 		const blackboardAttachment = buildBlackboardAttachment(ctx.db, team.id, {
 			event_types: input.blackboard_event_types,
 			limit: input.blackboard_limit ?? 5,
